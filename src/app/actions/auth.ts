@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -43,14 +43,37 @@ export async function getCurrentUser() {
 
   if (!userId) return null
 
-  return await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      studentClasses: {
-        include: {
-          classInfo: true
+  try {
+    return await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true,
+        avatarUrl: true,
+        waliClasses: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          }
+        },
+        studentClasses: {
+          include: {
+            classInfo: true
+          }
+        },
+        teacherClasses: {
+          include: {
+            classInfo: true,
+            subject: true
+          }
         }
       }
-    }
-  })
+    })
+  } catch (err) {
+    console.error("Failed to get current user:", err)
+    return null
+  }
 }

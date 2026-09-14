@@ -1,7 +1,8 @@
-﻿"use client"
+"use client"
 
-import React from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
+import { getCurrentUser, logout } from "@/app/actions/auth"
 import { 
   Building2, 
   MapPin, 
@@ -10,6 +11,18 @@ import {
 } from "lucide-react"
 
 export default function DudiDashboard() {
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  useEffect(() => {
+    async function loadUser() {
+      const user = await getCurrentUser()
+      if (user) {
+        setCurrentUser(user)
+      }
+    }
+    loadUser()
+  }, [])
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header Profile Mitra DUDI */}
@@ -20,9 +33,13 @@ export default function DudiDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Mitra Industri</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {currentUser?.name || "Mitra Industri"}
+              </h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Pembimbing Lapangan DUDI</p>
+            <p className="text-xs text-slate-500 font-medium">
+              {currentUser?.username ? `@${currentUser.username} • Pembimbing Industri` : "Pembimbing Lapangan DUDI"}
+            </p>
           </div>
         </div>
 
@@ -30,13 +47,13 @@ export default function DudiDashboard() {
           <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-1 rounded-lg">
             Mitra DUDI
           </span>
-          <Link
-            href="/login"
+          <button
+            onClick={() => logout()}
             className="p-2 rounded-xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
-            title="Keluar"
+            title="Keluar / Logout"
           >
             <LogOut className="w-3.5 h-3.5" />
-          </Link>
+          </button>
         </div>
       </div>
 

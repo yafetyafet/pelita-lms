@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { submitAttendance, submitCheckOut, getTodayAttendance } from "@/app/actions/student"
+import { getCurrentUser, logout } from "@/app/actions/auth"
 import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
@@ -25,6 +26,7 @@ import {
 } from "lucide-react"
 
 export default function StudentDashboard() {
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [attended, setAttended] = useState(false)
   const [attendanceTime, setAttendanceTime] = useState<string | null>(null)
   const [checkedOut, setCheckedOut] = useState(false)
@@ -37,7 +39,10 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const data = await getTodayAttendance()
+      const [data, user] = await Promise.all([getTodayAttendance(), getCurrentUser()])
+      if (user) {
+        setCurrentUser(user)
+      }
       if (data) {
         setAttended(true)
         setAttendanceTime(new Date(data.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
@@ -165,34 +170,55 @@ export default function StudentDashboard() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-blue-500/20 ring-2 ring-white">
-              FP
+              {currentUser?.name
+                ? currentUser.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()
+                : "S"}
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Profil Siswa</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {currentUser?.name || "Profil Siswa"}
+              </h2>
               <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-md">
-                Belum Ada Rombel
+                {currentUser?.studentClasses?.[0]?.classInfo?.name || "Belum Ada Rombel"}
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium">SMKN 1 Kemangkon • TA 2026/2027</p>
+            <p className="text-xs text-slate-500 font-medium">
+              {currentUser?.username ? `@${currentUser.username} • Siswa` : "SMKN 1 Kemangkon • TA 2026/2027"}
+            </p>
           </div>
         </div>
 
-        <button 
-          onClick={() => {
-            setShowNotif(true)
-            setHasUnreadNotif(false)
-          }}
-          className="relative p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
-          title="Notifikasi"
-        >
-          <Bell className="w-4 h-4" />
-          {hasUnreadNotif && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              setShowNotif(true)
+              setHasUnreadNotif(false)
+            }}
+            className="relative p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
+            title="Notifikasi"
+          >
+            <Bell className="w-4 h-4" />
+            {hasUnreadNotif && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            )}
+          </button>
+          <button
+            onClick={() => logout()}
+            className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition shadow-sm flex items-center gap-1 text-xs font-bold"
+            title="Keluar / Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Geotagging Attendance Live Card */}

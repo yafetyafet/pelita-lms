@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
+import { getCurrentUser, logout } from "@/app/actions/auth"
 import { 
   Bell, 
   BookOpen, 
@@ -21,10 +22,25 @@ import {
   Clock,
   Send,
   AlertTriangle,
-  Calendar
+  Calendar,
+  LogOut
 } from "lucide-react"
 
 export default function TeacherDashboard() {
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [hasLoadedUser, setHasLoadedUser] = useState(false)
+
+  useEffect(() => {
+    async function loadUser() {
+      const user = await getCurrentUser()
+      if (user) {
+        setCurrentUser(user)
+      }
+      setHasLoadedUser(true)
+    }
+    loadUser()
+  }, [])
+
   const [showJournalModal, setShowJournalModal] = useState(false)
   const [showViolationModal, setShowViolationModal] = useState(false)
   const [journalSaved, setJournalSaved] = useState(false)
@@ -86,25 +102,50 @@ export default function TeacherDashboard() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-emerald-600/20 ring-2 ring-white">
-              KS
+              {currentUser?.name
+                ? currentUser.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()
+                : "G"}
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-blue-500 ring-2 ring-white"></span>
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Guru / Tenaga Pendidik</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {currentUser?.name || (hasLoadedUser ? "Bapak/Ibu Guru" : "Memuat...")}
+              </h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Belum ditugaskan sebagai wali kelas</p>
+            <p className="text-xs text-slate-500 font-medium">
+              {currentUser?.waliClasses?.[0]
+                ? `Wali Kelas ${currentUser.waliClasses[0].name}`
+                : currentUser?.username
+                ? `@${currentUser.username} • Tenaga Pendidik`
+                : "Belum ditugaskan sebagai wali kelas"}
+            </p>
           </div>
         </div>
 
-        <Link
-          href="/teacher/profile"
-          className="p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
-          title="Profil Guru"
-        >
-          <Bell className="w-4 h-4" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/teacher/profile"
+            className="p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
+            title="Profil Guru"
+          >
+            <Bell className="w-4 h-4" />
+          </Link>
+          <button
+            onClick={() => logout()}
+            className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition shadow-sm flex items-center gap-1 text-xs font-bold"
+            title="Keluar / Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Jurnal Administrasi Guru Alert Banner */}
@@ -155,21 +196,25 @@ export default function TeacherDashboard() {
             </div>
             <div>
               <h3 className="text-xs font-bold text-slate-900">Radar Presensi Geotagging</h3>
-              <p className="text-[10px] text-slate-500">Pemantauan Kelas Binaan</p>
+              <p className="text-[10px] text-slate-500">
+                {currentUser?.waliClasses?.[0] ? `Kelas Binaan: ${currentUser.waliClasses[0].name}` : "Pemantauan Kelas Binaan"}
+              </p>
             </div>
           </div>
           <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-            0 Siswa
+            {currentUser?.waliClasses?.[0] ? "Aktif" : "0 Siswa"}
           </span>
         </div>
 
         {/* Empty State Progress Bar */}
         <div className="flex flex-col gap-1.5">
           <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-            <div className="bg-slate-300 h-full" style={{ width: "0%" }}></div>
+            <div className="bg-emerald-500 h-full" style={{ width: currentUser?.waliClasses?.[0] ? "100%" : "0%" }}></div>
           </div>
           <div className="flex items-center justify-center text-[11px] font-medium text-slate-400 italic pt-1">
-            Belum ada data siswa terdaftar di kelas binaan Anda.
+            {currentUser?.waliClasses?.[0] 
+              ? `Terhubung dengan kelas binaan ${currentUser.waliClasses[0].name}` 
+              : "Belum ada data siswa terdaftar di kelas binaan Anda."}
           </div>
         </div>
       </Link>
