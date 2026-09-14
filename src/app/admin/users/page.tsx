@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -47,7 +47,7 @@ export default function AdminUsersPage() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(\Apakah Anda yakin ingin menghapus \?\)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus ${name}?`)) {
       const res = await deleteUser(id)
       if (res.error) alert(res.error)
       else loadUsers()
@@ -97,7 +97,7 @@ export default function AdminUsersPage() {
                   <div>
                     <h4 className="text-sm font-bold text-slate-900">{u.name}</h4>
                     <p className="text-[10px] text-slate-500 font-medium">
-                      @{u.username} • <span className={\ont-bold \\}>{u.role}</span>
+                      @{u.username} � <span className={`font-bold ${u.role === 'ADMIN' ? 'text-purple-600' : u.role === 'TEACHER' ? 'text-emerald-600' : 'text-blue-600'}`}>{u.role}</span>
                     </p>
                   </div>
                 </div>

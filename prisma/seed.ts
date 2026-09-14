@@ -1,65 +1,26 @@
-import { PrismaClient } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client"
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Memulai proses seeding database...')
-
-  // 1. Buat User Admin
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin', password: '123' },
+  console.log("Seeding admin user...")
+  await prisma.user.upsert({
+    where: { username: "admin" },
     update: {},
     create: {
-      username: 'admin', password: '123',
-      name: 'Super Administrator',
-      role: 'ADMIN',
-    },
-  })
-  console.log('✅ Admin dibuat:', admin.name)
-
-  // 2. Buat User Guru & Siswa
-  const guru = await prisma.user.upsert({
-    where: { username: 'kurniawan', password: '123' },
-    update: {},
-    create: {
-      username: 'kurniawan', password: '123',
-      name: 'Bpk. Kurniawan S, S.Kom',
-      role: 'TEACHER',
+      username: "admin",
+      password: "skansakon",
+      name: "Super Admin",
+      role: "ADMIN"
     }
   })
-  
-  const siswa = await prisma.user.upsert({
-    where: { username: 'fajar', password: '123' },
-    update: {},
-    create: {
-      username: 'fajar', password: '123',
-      name: 'Fajar Pratama',
-      role: 'STUDENT',
-    }
-  })
-  console.log('✅ Guru & Siswa dibuat')
-
-  // 3. Buat Kelas / Rombel
-  const kelas = await prisma.class.create({
-    data: { name: 'XII RPL 1', level: 12 }
-  })
-  console.log('✅ Rombel (Kelas) dibuat')
-
-  // 4. Buat Mata Pelajaran
-  const mapel = await prisma.subject.upsert({
-    where: { code: 'RPL01' },
-    update: {},
-    create: { code: 'RPL01', name: 'Pemrograman Web & Perangkat Bergerak' },
-  })
-  console.log('✅ Mata Pelajaran dibuat')
-
-  console.log('🎉 Seeding selesai! Database siap digunakan oleh 500+ user.')
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect()
+  })
+  .catch(async (e) => {
+    console.error(e)
+    await prisma.$disconnect()
+    process.exit(1)
   })

@@ -18,21 +18,29 @@ model User {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   assignments    Assignment[]
+  userAssignments UserAssignment[]
   attendances    Attendance[]
   studentClasses ClassStudent[]
   teacherClasses ClassTeacher[]
-  discussions    Discussion[]
-  replies        DiscussionReply[]
   journals       Journal[]
   materials      Material[]
-  submissions    Submission[]
-  violations     Violation[]
+  waliClasses    Class[]           @relation("WaliKelas")
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+  DUDI
 }
 
 model Class {
   id          String         @id @default(uuid())
   name        String
-  level       Int
+  description String?
+  level       Int?
+  waliId      String?
+  wali        User?          @relation("WaliKelas", fields: [waliId], references: [id], onDelete: SetNull)
   createdAt   DateTime       @default(now())
   assignments Assignment[]
   attendances Attendance[]
@@ -44,11 +52,11 @@ model Class {
 
 model Subject {
   id          String         @id @default(uuid())
-  code        String         @unique
+  code        String?
   name        String
+  description String?
   assignments Assignment[]
   teachers    ClassTeacher[]
-  discussions Discussion[]
   journals    Journal[]
   materials   Material[]
 }
@@ -78,114 +86,74 @@ model Material {
   title       String
   description String?
   url         String?
-  isEmbed     Boolean  @default(false)
-  teacherId   String
+  authorId    String
   classId     String
   subjectId   String
   createdAt   DateTime @default(now())
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   classInfo   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher     User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 }
 
 model Assignment {
-  id          String       @id @default(uuid())
+  id          String           @id @default(uuid())
   title       String
   description String?
-  deadline    DateTime
-  teacherId   String
+  dueDate     DateTime
+  authorId    String
   classId     String
   subjectId   String
-  createdAt   DateTime     @default(now())
-  classInfo   Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher     User         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  submissions Submission[]
+  createdAt   DateTime         @default(now())
+  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  classInfo   Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions UserAssignment[]
 }
 
-model Submission {
-  id           String     @id @default(uuid())
+model UserAssignment {
+  userId       String
   assignmentId String
-  studentId    String
-  fileUrl      String?
   score        Float?
-  submittedAt  DateTime   @default(now())
+  submittedAt  DateTime?
+  status       String     @default("PENDING")
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([assignmentId, studentId])
+  @@id([userId, assignmentId])
 }
 
 model Attendance {
-  id           String           @id @default(uuid())
-  studentId    String
-  classId      String
-  date         DateTime         @default(now())
-  status       AttendanceStatus @default(PRESENT)
-  latitude     Float?
-  longitude    Float?
+  id        String    @id @default(uuid())
+  userId    String
+  classId   String?
+  date      DateTime  @default(now())
+  status    String
+  lat       Float?
+  lng       Float?
+  createdAt DateTime  @default(now())
   checkOutTime DateTime?
-  createdAt    DateTime         @default(now())
+  classInfo Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-  student      User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  classInfo    Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+model Journal {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  classId   String
+  subjectId String
+  createdAt DateTime @default(now())
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  classInfo Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 }
 
 model Violation {
   id          String   @id @default(uuid())
   studentId   String
+  reporterId  String
   description String
-  points      Int      @default(0)
-  date        DateTime @default(now())
-  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-}
-
-model Journal {
-  id        String   @id @default(uuid())
-  teacherId String
-  classId   String
-  subjectId String
-  date      DateTime @default(now())
-  topic     String
-  summary   String
-  classInfo Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-}
-
-model Discussion {
-  id        String            @id @default(uuid())
-  title     String
-  content   String
-  authorId  String
-  subjectId String
-  createdAt DateTime          @default(now())
-  author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  subject   Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  replies   DiscussionReply[]
-}
-
-model DiscussionReply {
-  id           String     @id @default(uuid())
-  discussionId String
-  authorId     String
-  content      String
-  createdAt    DateTime   @default(now())
-  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  discussion   Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-}
-
-enum Role {
-  ADMIN
-  TEACHER
-  STUDENT
-  PARENT
-  DUDI
-}
-
-enum AttendanceStatus {
-  PRESENT
-  LATE
-  ABSENT
-  EXCUSED
+  points      Int
+  createdAt   DateTime @default(now())
 }

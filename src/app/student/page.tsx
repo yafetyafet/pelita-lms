@@ -435,7 +435,7 @@ export default function StudentDashboard() {
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
                 <span className="text-[10px] font-bold text-blue-600 block mb-1">Baru saja</span>
                 <span className="text-xs font-bold text-slate-800 block">Tidak Ada Tugas</span>
-                <span className="text-[11px] text-slate-600">Belum ada tugas atau materi baru yang ditugaskan.
+                <span className="text-[11px] text-slate-600">Belum ada tugas atau materi baru yang ditugaskan.</span>
               </div>
               <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
                 <span className="text-[10px] font-bold text-slate-500 block mb-1">2 jam yang lalu</span>

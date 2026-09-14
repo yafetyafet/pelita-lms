@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -45,7 +45,7 @@ export default function AdminSubjectsPage() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(\Apakah Anda yakin ingin menghapus mapel \?\)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus mapel ${name}?`)) {
       const res = await deleteSubject(id)
       if (res.error) alert(res.error)
       else loadData()

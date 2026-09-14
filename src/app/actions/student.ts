@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
-export async function submitAttendance(latitude: number, longitude: number) {
+export async function submitAttendance(lat: number, lng: number) {
   const cookieStore = await cookies()
   const userId = cookieStore.get('userId')?.value
 
@@ -23,7 +23,7 @@ export async function submitAttendance(latitude: number, longitude: number) {
   
   const existing = await prisma.attendance.findFirst({
     where: {
-      studentId: userId,
+      userId: userId,
       classId: studentClass.classId,
       date: {
         gte: today
@@ -38,11 +38,11 @@ export async function submitAttendance(latitude: number, longitude: number) {
   // Create attendance record
   await prisma.attendance.create({
     data: {
-      studentId: userId,
+      userId: userId,
       classId: studentClass.classId,
       status: "PRESENT",
-      latitude,
-      longitude,
+      lat,
+      lng,
     }
   })
 
@@ -62,7 +62,7 @@ export async function getTodayAttendance() {
 
   return await prisma.attendance.findFirst({
     where: {
-      studentId: userId,
+      userId: userId,
       date: {
         gte: today
       }
@@ -96,7 +96,7 @@ export async function getStudentSchedule() {
     guru: t.user.name,
   }))
 }
-export async function submitCheckOut(latitude: number, longitude: number) {
+export async function submitCheckOut(lat: number, lng: number) {
   const cookieStore = await cookies()
   const userId = cookieStore.get('userId')?.value
 
@@ -107,7 +107,7 @@ export async function submitCheckOut(latitude: number, longitude: number) {
   
   const existing = await prisma.attendance.findFirst({
     where: {
-      studentId: userId,
+      userId: userId,
       date: {
         gte: today
       }

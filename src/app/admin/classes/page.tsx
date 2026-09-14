@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -48,7 +48,7 @@ export default function AdminClassesPage() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(\Apakah Anda yakin ingin menghapus kelas \ beserta seluruh datanya?\)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus kelas ${name} beserta seluruh datanya?`)) {
       const res = await deleteClass(id)
       if (res.error) alert(res.error)
       else loadData()

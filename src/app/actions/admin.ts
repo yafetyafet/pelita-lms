@@ -90,30 +90,20 @@ export async function createClass(data: { name: string, description?: string, wa
     const existing = await prisma.class.findFirst({ where: { name: data.name } })
     if (existing) return { error: "Nama kelas sudah ada!" }
 
-    const newClass = await prisma.class.create({
+    await prisma.class.create({
       data: {
         name: data.name,
-        description: data.description || ""
+        description: data.description || "",
+        waliId: data.waliKelasId || null
       }
     })
-
-    if (data.waliKelasId) {
-      await prisma.classTeacher.create({
-        data: {
-          classId: newClass.id,
-          userId: data.waliKelasId
-        }
-      })
-    }
     
     revalidatePath('/admin/classes')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
   }
-}
-
-export async function deleteClass(id: string) {
+}export async function deleteClass(id: string) {
   try {
     await prisma.classTeacher.deleteMany({ where: { classId: id } })
     await prisma.classStudent.deleteMany({ where: { classId: id } })
@@ -163,3 +153,4 @@ export async function deleteSubject(id: string) {
     return { error: err.message }
   }
 }
+
