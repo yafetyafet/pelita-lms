@@ -142,37 +142,12 @@ export default function LoginPage() {
               <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
             ) : (
               <>
-                <span>Masuk sebagai {currentRoleConfig.label}</span>
+                <span>Masuk ke LMS</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
-
-        {/* Demo Fast Access Pills */}
-        <div className="mt-6 pt-4 border-t border-slate-800/80 flex flex-col gap-2">
-          <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
-            <span>Akses Cepat Demo:</span>
-            <span className="text-emerald-400 flex items-center gap-0.5">
-              <CheckCircle2 className="w-3 h-3" /> Siap Uji Coba
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {roles.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => {
-                  handleSelectRole(r.id as any)
-                  router.push(r.target)
-                }}
-                className="py-1.5 px-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 text-[10px] text-slate-300 text-left flex items-center justify-between group transition"
-              >
-                <span className="font-medium">{r.label}</span>
-                <ArrowRight className="w-3 h-3 text-slate-500 group-hover:text-blue-400 transition" />
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )
