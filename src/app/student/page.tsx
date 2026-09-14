@@ -171,9 +171,9 @@ export default function StudentDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Fajar Pratama</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">Profil Siswa</h2>
               <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-md">
-                XII RPL 1
+                Belum Ada Rombel
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">SMKN 1 Kemangkon • TA 2026/2027</p>
@@ -235,7 +235,7 @@ export default function StudentDashboard() {
           </div>
           <div className="flex items-center justify-between text-blue-200 text-[11px]">
             <span>Radius Validasi:</span>
-            <span className="font-mono text-emerald-300 font-bold">18 Meter (Dalam Area)</span>
+            <span className="font-mono text-emerald-300 font-bold">Harap buka Detail GPS untuk memverifikasi lokasi</span>
           </div>
         </div>
 
@@ -292,8 +292,8 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-3 gap-2.5">
         <Link href="/student/attendance" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
           <span className="text-[11px] font-semibold text-slate-500">Kehadiran</span>
-          <span className="text-lg font-bold text-slate-900 mt-0.5">98.5%</span>
-          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">Sangat Baik</span>
+          <span className="text-lg font-bold text-slate-900 mt-0.5">-</span>
+          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">Data Kosong</span>
         </Link>
 
         <Link href="/student/discipline" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
@@ -374,7 +374,7 @@ export default function StudentDashboard() {
 
             <div className="flex-1 pr-14">
               <h4 className="text-xs font-bold text-slate-900">
-                Pemrograman Web & Perangkat Bergerak
+                PemrogrData Kosong Web & Perangkat Bergerak
               </h4>
               <p className="text-[11px] text-slate-500 mt-0.5">Bpk. Kurniawan S, S.Kom</p>
               
@@ -434,8 +434,8 @@ export default function StudentDashboard() {
             <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
                 <span className="text-[10px] font-bold text-blue-600 block mb-1">Baru saja</span>
-                <span className="text-xs font-bold text-slate-800 block">Tugas Matematika Ditambahkan</span>
-                <span className="text-[11px] text-slate-600">Bpk. Budi Santoso memberikan tugas baru. Tenggat besok.</span>
+                <span className="text-xs font-bold text-slate-800 block">Tidak Ada Tugas</span>
+                <span className="text-[11px] text-slate-600">Belum ada tugas atau materi baru yang ditugaskan.
               </div>
               <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
                 <span className="text-[10px] font-bold text-slate-500 block mb-1">2 jam yang lalu</span>

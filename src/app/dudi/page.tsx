@@ -1,33 +1,15 @@
-"use client"
+﻿"use client"
 
-import React, { useState } from "react"
+import React from "react"
 import Link from "next/link"
 import { 
   Building2, 
   MapPin, 
-  FileSpreadsheet, 
-  Award, 
-  CheckCircle2, 
-  UserCheck, 
-  Clock, 
-  Calendar,
-  ChevronRight,
   Sparkles,
   LogOut
 } from "lucide-react"
 
 export default function DudiDashboard() {
-  const [approvedList, setApprovedList] = useState<string[]>([])
-
-  const handleApprove = (name: string) => {
-    setApprovedList((prev) => [...prev, name])
-  }
-
-  const pklStudents = [
-    { name: "Fajar Pratama", nisn: "0067821943", divisi: "Software Development", time: "07:45 WIB", status: "Presensi Tepat Waktu", distance: "Kantor Pusat Telkom Purbalingga (Radius 12m)" },
-    { name: "Siti Rahmawati", nisn: "0067821990", divisi: "Network Operations", time: "07:50 WIB", status: "Presensi Tepat Waktu", distance: "Kantor Pusat Telkom Purbalingga (Radius 25m)" },
-  ]
-
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header Profile Mitra DUDI */}
@@ -38,9 +20,9 @@ export default function DudiDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Ir. Hendra Kusuma</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">Mitra Industri</h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Pembimbing Lapangan • PT Telkom Indonesia</p>
+            <p className="text-xs text-slate-500 font-medium">Pembimbing Lapangan DUDI</p>
           </div>
         </div>
 
@@ -67,20 +49,20 @@ export default function DudiDashboard() {
               Monitoring Praktik Kerja Lapangan (PKL)
             </span>
           </div>
-          <span className="text-xs text-purple-300 font-medium">Periode 2026/2027</span>
+          <span className="text-xs text-purple-300 font-medium">Periode Terkini</span>
         </div>
-        <h3 className="text-sm font-bold text-white mb-1">SMKN 1 Kemangkon • Jurusan RPL & TKJ</h3>
+        <h3 className="text-sm font-bold text-white mb-1">Pusat Industri • Prakerin</h3>
         <p className="text-xs text-purple-200/90 leading-relaxed mb-3">
-          Memantau presensi geotagging di lokasi industri, memeriksa logbook harian, dan memberikan penilaian kinerja industri.
+          Sistem belum menemukan data siswa magang (PKL) yang ditugaskan ke industri Anda saat ini.
         </p>
         <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/10">
           <div className="bg-white/10 rounded-xl p-2 text-center">
             <span className="text-[10px] text-purple-200 block">Siswa Bimbingan</span>
-            <span className="text-base font-bold text-white">4 Siswa</span>
+            <span className="text-base font-bold text-white">0 Siswa</span>
           </div>
           <div className="bg-white/10 rounded-xl p-2 text-center">
             <span className="text-[10px] text-purple-200 block">Presensi Hari Ini</span>
-            <span className="text-base font-bold text-emerald-300">100% Hadir</span>
+            <span className="text-base font-bold text-slate-300">-</span>
           </div>
         </div>
       </div>
@@ -99,46 +81,8 @@ export default function DudiDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2.5">
-          {pklStudents.map((s) => {
-            const isApproved = approvedList.includes(s.name)
-
-            return (
-              <div key={s.name} className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">{s.name}</h4>
-                    <p className="text-[10px] text-slate-500">{s.divisi} • {s.nisn}</p>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {s.time}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-600 bg-white p-2 rounded-xl border border-slate-200/60">
-                  <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                  <span className="truncate">{s.distance}</span>
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-500">Jurnal: Integrasi Database API</span>
-                  {isApproved ? (
-                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Disetujui
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleApprove(s.name)}
-                      className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] shadow-sm transition"
-                    >
-                      Validasi Logbook
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+        <div className="flex flex-col gap-2.5 mt-2">
+           <div className="text-center text-xs text-slate-400 italic py-4">Belum ada siswa PKL yang terdaftar di lokasi industri Anda.</div>
         </div>
       </div>
     </div>

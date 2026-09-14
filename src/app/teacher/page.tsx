@@ -92,9 +92,9 @@ export default function TeacherDashboard() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Bpk. Kurniawan S, S.Kom</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">Guru / Tenaga Pendidik</h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Guru Produktif RPL • Wali Kelas XII RPL 1</p>
+            <p className="text-xs text-slate-500 font-medium">Belum ditugaskan sebagai wali kelas</p>
           </div>
         </div>
 
@@ -125,7 +125,7 @@ export default function TeacherDashboard() {
         </div>
 
         <p className="text-xs text-emerald-100/90 leading-relaxed mb-3">
-          Sesi 1 di kelas <strong>XII RPL 1</strong> (07:15 - 09:30) belum memiliki catatan jurnal materi dan ketercapaian kompetensi.
+          Sistem belum mendeteksi jadwal mengajar Anda untuk hari ini. Tambahkan jadwal atau isi jurnal insidental secara manual.
         </p>
 
         <div className="grid grid-cols-2 gap-2">
@@ -155,29 +155,21 @@ export default function TeacherDashboard() {
             </div>
             <div>
               <h3 className="text-xs font-bold text-slate-900">Radar Presensi Geotagging</h3>
-              <p className="text-[10px] text-slate-500">Kelas Binaan: XII Rekayasa Perangkat Lunak 1</p>
+              <p className="text-[10px] text-slate-500">Pemantauan Kelas Binaan</p>
             </div>
           </div>
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-            94.4% Hadir
+          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+            0 Siswa
           </span>
         </div>
 
-        {/* Progress Bar Attendance */}
+        {/* Empty State Progress Bar */}
         <div className="flex flex-col gap-1.5">
           <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-            <div className="bg-emerald-500 h-full" style={{ width: "94.4%" }} title="34 Hadir"></div>
-            <div className="bg-amber-400 h-full" style={{ width: "5.6%" }} title="2 Izin"></div>
+            <div className="bg-slate-300 h-full" style={{ width: "0%" }}></div>
           </div>
-          <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-              34 Siswa (Radius Kampus)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
-              2 Siswa (Izin / Sakit)
-            </span>
+          <div className="flex items-center justify-center text-[11px] font-medium text-slate-400 italic pt-1">
+            Belum ada data siswa terdaftar di kelas binaan Anda.
           </div>
         </div>
       </Link>
@@ -190,7 +182,7 @@ export default function TeacherDashboard() {
             Modul Manajemen Guru
           </h3>
           <span className="text-[11px] font-semibold text-emerald-600">
-            8 Modul Aktif
+            Modul Utama
           </span>
         </div>
 
