@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useState } from "react"
 import Link from "next/link"
@@ -71,12 +71,12 @@ export default function TeacherDashboard() {
   const teacherMenus = [
     { id: "jurnal", title: "Jurnal Mengajar", desc: "Isi Administrasi", icon: PenTool, color: "from-emerald-600 to-teal-600", count: "Wajib", href: "/teacher/journal" },
     { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: "12 Modul", action: "scroll-materi" },
-    { id: "absensi", title: "Radar Presensi", desc: "Geotagging Siswa", icon: MapPin, color: "from-cyan-600 to-blue-700", count: "34/36 Hadir", href: "/teacher/classes" },
-    { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: "Atur Slot", href: "/teacher/schedule" },
-    { id: "ujian", title: "Ujian CBT PTS", desc: "Khusus Tengah/Akhir", icon: Timer, color: "from-rose-600 to-red-600", count: "Jadwal", href: "/student/exams" },
-    { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: "BK Terpadu", action: "modal-violation" },
-    { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: "e-Rapor", href: "/teacher/grades" },
-    { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: "4 Baru", href: "/student/materials" },
+    { id: "absensi", title: "Radar Presensi", desc: "Geotagging Siswa", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/classes" },
+    { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
+    { id: "ujian", title: "Ujian CBT PTS", desc: "Khusus Tengah/Akhir", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
+    { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
+    { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
+    { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
   ]
 
   return (
@@ -94,7 +94,7 @@ export default function TeacherDashboard() {
             <div className="flex items-center gap-1.5">
               <h2 className="text-base font-bold text-slate-900 leading-tight">Bpk. Kurniawan S, S.Kom</h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Guru Produktif RPL • Wali Kelas XII RPL 1</p>
+            <p className="text-xs text-slate-500 font-medium">Guru Produktif RPL â€¢ Wali Kelas XII RPL 1</p>
           </div>
         </div>
 
@@ -303,7 +303,7 @@ export default function TeacherDashboard() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Form Jurnal Mengajar Harian</h3>
-                <p className="text-[11px] text-slate-500">Kelas XII RPL 1 • Sesi 1</p>
+                <p className="text-[11px] text-slate-500">Kelas XII RPL 1 â€¢ Sesi 1</p>
               </div>
               <button 
                 onClick={() => setShowJournalModal(false)}
@@ -436,3 +436,4 @@ export default function TeacherDashboard() {
     </div>
   )
 }
+

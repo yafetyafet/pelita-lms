@@ -16,8 +16,8 @@ export function StudentBottomNav() {
   const navItems = [
     { name: "Beranda", href: "/student", icon: Home, badge: null },
     { name: "Jadwal", href: "/student/schedule", icon: CalendarDays, badge: null },
-    { name: "Tugas", href: "/student/assignments", icon: ClipboardCheck, badge: "2" },
-    { name: "Ujian", href: "/student/exams", icon: FileCheck2, badge: "UTS" },
+    { name: "Tugas", href: "/student/assignments", icon: ClipboardCheck, badge: null },
+    { name: "Ujian", href: "/student/exams", icon: FileCheck2, badge: null },
     { name: "Profil", href: "/student/profile", icon: UserRound, badge: null },
   ]
 

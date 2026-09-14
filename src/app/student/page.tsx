@@ -32,6 +32,7 @@ export default function StudentDashboard() {
   
   const [activeTab, setActiveTab] = useState<"hari-ini" | "minggu-ini">("hari-ini")
   const [showNotif, setShowNotif] = useState(false)
+  const [hasUnreadNotif, setHasUnreadNotif] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function StudentDashboard() {
       subtitle: "Embed & Modul", 
       icon: Video, 
       color: "from-sky-500 to-blue-600", 
-      badge: "Baru",
+      badge: null,
       href: "/student/materials"
     },
     { 
@@ -107,7 +108,7 @@ export default function StudentDashboard() {
       subtitle: "Latihan Harian", 
       icon: FileText, 
       color: "from-emerald-500 to-teal-600", 
-      badge: "2",
+      badge: null,
       href: "/student/assignments"
     },
     { 
@@ -116,7 +117,7 @@ export default function StudentDashboard() {
       subtitle: "PTS & PAS Khusus", 
       icon: Timer, 
       color: "from-rose-500 to-red-600", 
-      badge: "PTS",
+      badge: null,
       href: "/student/exams"
     },
     { 
@@ -180,12 +181,17 @@ export default function StudentDashboard() {
         </div>
 
         <button 
-          onClick={() => setShowNotif(true)}
+          onClick={() => {
+            setShowNotif(true)
+            setHasUnreadNotif(false)
+          }}
           className="relative p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
           title="Notifikasi"
         >
           <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          {hasUnreadNotif && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          )}
         </button>
       </div>
 
