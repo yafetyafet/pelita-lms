@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+  DUDI
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String
+  role       Role     @default(STUDENT)
+  avatarUrl  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  studentClasses ClassStudent[]
+  teacherClasses ClassTeacher[]
+  materials      Material[]
+  assignments    Assignment[]
+  submissions    Submission[]
+  attendances    Attendance[]
+  violations     Violation[]
+  journals       Journal[]
+  discussions    Discussion[]
+  replies        DiscussionReply[]
+}
+
+model Class {
+  id        String   @id @default(uuid())
+  name      String   // e.g., "X IPA 1"
+  level     Int      // e.g., 10, 11, 12
+  createdAt DateTime @default(now())
+
+  // Relations
+  students    ClassStudent[]
+  teachers    ClassTeacher[]
+  materials   Material[]
+  assignments Assignment[]
+  attendances Attendance[]
+  journals    Journal[]
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g., "MTK01"
+  name      String   // e.g., "Matematika"
+
+  // Relations
+  teachers    ClassTeacher[]
+  materials   Material[]
+  assignments Assignment[]
+  journals    Journal[]
+  discussions Discussion[]
+}
+
+model ClassStudent {
+  userId    String
+  classId   String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classInfo Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([userId, classId])
+}
+
+model ClassTeacher {
+  userId    String
+  classId   String
+  subjectId String
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classInfo Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, classId, subjectId])
+}
+
+model Material {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  url         String?  // Can be a drive link or supabase storage url
+  isEmbed     Boolean  @default(false)
+  
+  teacherId   String
+  classId     String
+  subjectId   String
+  createdAt   DateTime @default(now())
+
+  teacher     User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classInfo   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  deadline    DateTime
+  
+  teacherId   String
+  classId     String
+  subjectId   String
+  createdAt   DateTime @default(now())
+
+  teacher     User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classInfo   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+}
+
+model Submission {
+  id           String   @id @default(uuid())
+  assignmentId String
+  studentId    String
+  fileUrl      String?
+  score        Float?
+  submittedAt  DateTime @default(now())
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  studentId String
+  classId   String
+  date      DateTime         @default(now())
+  status    AttendanceStatus @default(PRESENT)
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime         @default(now())
+
+  student   User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classInfo Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+}
+
+model Violation {
+  id          String   @id @default(uuid())
+  studentId   String
+  description String
+  points      Int      @default(0)
+  date        DateTime @default(now())
+
+  student     User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Journal {
+  id          String   @id @default(uuid())
+  teacherId   String
+  classId     String
+  subjectId   String
+  date        DateTime @default(now())
+  topic       String
+  summary     String
+
+  teacher     User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classInfo   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+model Discussion {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  subjectId String
+  createdAt DateTime @default(now())
+
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  replies   DiscussionReply[]
+}
+
+model DiscussionReply {
+  id           String   @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime @default(now())
+
+  discussion   Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
