@@ -6,10 +6,10 @@ async function main() {
 
   // 1. Buat User Admin
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@smkn1kemangkon.sch.id' },
+    where: { username: 'admin', password: '123' },
     update: {},
     create: {
-      email: 'admin@smkn1kemangkon.sch.id',
+      username: 'admin', password: '123',
       name: 'Super Administrator',
       role: 'ADMIN',
     },
@@ -18,20 +18,20 @@ async function main() {
 
   // 2. Buat User Guru & Siswa
   const guru = await prisma.user.upsert({
-    where: { email: 'kurniawan@smkn1kemangkon.sch.id' },
+    where: { username: 'kurniawan', password: '123' },
     update: {},
     create: {
-      email: 'kurniawan@smkn1kemangkon.sch.id',
+      username: 'kurniawan', password: '123',
       name: 'Bpk. Kurniawan S, S.Kom',
       role: 'TEACHER',
     }
   })
   
   const siswa = await prisma.user.upsert({
-    where: { email: 'fajar@smkn1kemangkon.sch.id' },
+    where: { username: 'fajar', password: '123' },
     update: {},
     create: {
-      email: 'fajar@smkn1kemangkon.sch.id',
+      username: 'fajar', password: '123',
       name: 'Fajar Pratama',
       role: 'STUDENT',
     }
