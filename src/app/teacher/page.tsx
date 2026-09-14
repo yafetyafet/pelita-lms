@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState } from "react"
 import Link from "next/link"
@@ -94,7 +94,7 @@ export default function TeacherDashboard() {
             <div className="flex items-center gap-1.5">
               <h2 className="text-base font-bold text-slate-900 leading-tight">Bpk. Kurniawan S, S.Kom</h2>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Guru Produktif RPL â€¢ Wali Kelas XII RPL 1</p>
+            <p className="text-xs text-slate-500 font-medium">Guru Produktif RPL • Wali Kelas XII RPL 1</p>
           </div>
         </div>
 
@@ -194,7 +194,7 @@ export default function TeacherDashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-2.5">
           {teacherMenus.map((menu) => {
             const Icon = menu.icon
 
@@ -303,7 +303,7 @@ export default function TeacherDashboard() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Form Jurnal Mengajar Harian</h3>
-                <p className="text-[11px] text-slate-500">Kelas XII RPL 1 â€¢ Sesi 1</p>
+                <p className="text-[11px] text-slate-500">Kelas XII RPL 1 • Sesi 1</p>
               </div>
               <button 
                 onClick={() => setShowJournalModal(false)}

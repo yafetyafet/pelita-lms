@@ -15,8 +15,8 @@ export function TeacherBottomNav() {
 
   const navItems = [
     { name: "Beranda", href: "/teacher", icon: Home, badge: null },
-    { name: "Kelas", href: "/teacher/classes", icon: UsersRound, badge: "3" },
-    { name: "Jurnal", href: "/teacher/journal", icon: PenTool, badge: "!" },
+    { name: "Kelas", href: "/teacher/classes", icon: UsersRound, badge: null },
+    { name: "Jurnal", href: "/teacher/journal", icon: PenTool, badge: null },
     { name: "Penilaian", href: "/teacher/grades", icon: BookCheck, badge: null },
     { name: "Profil", href: "/teacher/profile", icon: UserCog, badge: null },
   ]
