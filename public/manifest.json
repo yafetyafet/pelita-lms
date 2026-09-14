@@ -1,0 +1,17 @@
+﻿{
+  "name": "PELITA LMS",
+  "short_name": "PELITA",
+  "description": "Pusat Ekselensi, Literasi, Iman, Teknologi dan Akademik",
+  "start_url": "/student",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/globe.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

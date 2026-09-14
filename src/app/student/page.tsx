@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { submitAttendance, getTodayAttendance } from "@/app/actions/student"
+import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
   Bell, 
@@ -398,6 +399,9 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+
+      {/* PWA Installer Prompt */}
+      <PwaInstaller />
     </div>
   )
 }
