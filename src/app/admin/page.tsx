@@ -77,14 +77,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <button
-          onClick={() => logout()}
-          className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition flex items-center gap-1 text-xs font-bold"
-          title="Keluar dari Admin"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Keluar</span>
-        </button>
+        <button onClick={() => logout()} className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition flex items-center gap-1 text-xs font-bold" title="Keluar dari Admin"><LogOut className="w-3.5 h-3.5" /><span className="hidden sm:inline">Keluar</span></button>
       </div>
 
       {/* Stats Grid */}
@@ -127,9 +120,9 @@ export default function AdminDashboard() {
           {quickActions.map((action) => {
             const Icon = action.icon
             return (
-              <button
+              <Link
                 key={action.id}
-                onClick={() => alert("Modul ini sedang disiapkan untuk tahap pengembangan selanjutnya.")}
+                href={`/admin/${action.id}`}
                 className="group bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm flex items-center gap-3 hover:border-blue-300 hover:shadow-md transition-all text-left w-full"
               >
                 <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
@@ -140,7 +133,7 @@ export default function AdminDashboard() {
                   <p className="text-[10px] text-slate-500 truncate mt-0.5">{action.desc}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
-              </button>
+              </Link>
             )
           })}
         </div>
@@ -151,3 +144,4 @@ export default function AdminDashboard() {
     </div>
   )
 }
+
