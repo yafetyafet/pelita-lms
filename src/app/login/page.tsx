@@ -19,33 +19,19 @@ import {
 
 export default function LoginPage() {
   const router = useRouter()
-  const [role, setRole] = useState<"student" | "teacher" | "dudi" | "admin">("student")
-  const [identifier, setIdentifier] = useState("fajar@smkn1kemangkon.sch.id")
-  const [password, setPassword] = useState("••••••••")
+  const [identifier, setIdentifier] = useState("")
+  const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const roles = [
-    { id: "student", label: "Siswa", icon: GraduationCap, placeholder: "Email Siswa", defaultId: "fajar@smkn1kemangkon.sch.id", target: "/student" },
-    { id: "teacher", label: "Guru", icon: Layers, placeholder: "Email Guru", defaultId: "kurniawan@smkn1kemangkon.sch.id", target: "/teacher" },
-    { id: "dudi", label: "Mitra DUDI", icon: Briefcase, placeholder: "Email Pembimbing", defaultId: "dudi.telkom@smkn1kemangkon.sch.id", target: "/dudi" },
-    { id: "admin", label: "Admin", icon: ShieldCheck, placeholder: "Email Admin", defaultId: "admin@smkn1kemangkon.sch.id", target: "/admin" },
-  ]
-
-  const currentRoleConfig = roles.find((r) => r.id === role) || roles[0]
-
-  const handleSelectRole = (roleId: "student" | "teacher" | "dudi" | "admin") => {
-    setRole(roleId)
-    const target = roles.find((r) => r.id === roleId)
-    if (target) {
-      setIdentifier(target.defaultId)
-      setError("")
-    }
-  }
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!identifier) {
+      setError("Email harus diisi")
+      return
+    }
+
     setIsLoading(true)
     setError("")
     
@@ -57,7 +43,13 @@ export default function LoginPage() {
         return
       }
       
-      router.push(currentRoleConfig.target)
+      const role = res?.role
+      if (role === "STUDENT") router.push("/student")
+      else if (role === "TEACHER") router.push("/teacher")
+      else if (role === "ADMIN") router.push("/admin")
+      else if (role === "DUDI") router.push("/dudi")
+      else router.push("/")
+      
     } catch (err) {
       setError("Terjadi kesalahan jaringan.")
       setIsLoading(false)
@@ -66,14 +58,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 selection:bg-blue-600 selection:text-white">
-      {/* Smartphone Container Mockup on Desktop, Full on Mobile */}
-      <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-[36px] p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_0_8px_#1e293b] flex flex-col relative overflow-hidden">
+      {/* Container */}
+      <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-[36px] p-6 shadow-2xl flex flex-col relative overflow-hidden">
         {/* Ambient Glow */}
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mt-2 mb-6">
+        <div className="flex flex-col items-center text-center mt-2 mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/30 ring-4 ring-blue-500/20 mb-3">
             P
           </div>
@@ -89,29 +81,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Role Switcher Tabs (Segmented Control) */}
-        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 mb-5">
-          {roles.map((r) => {
-            const Icon = r.icon
-            const isActive = role === r.id
-
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => handleSelectRole(r.id as any)}
-                className={`flex flex-col items-center py-2 px-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                }`}
-              >
-                <Icon className="w-4 h-4 mb-0.5" />
-                <span className="truncate w-full text-center">{r.label}</span>
-              </button>
-            )
-          })}
-        </div>
 
         {/* Login Form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
@@ -122,8 +91,7 @@ export default function LoginPage() {
           )}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-              <span>Identitas Akun</span>
-              <span className="text-[10px] text-blue-400 font-normal capitalize">{role}</span>
+              <span>Email Akun</span>
             </label>
             <div className="relative flex items-center">
               <User className="absolute left-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
@@ -131,7 +99,7 @@ export default function LoginPage() {
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={currentRoleConfig.placeholder}
+                placeholder="Masukkan email terdaftar"
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                 required
               />

@@ -5,22 +5,27 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
 export async function login(email: string) {
-  // Find user by email
-  const user = await prisma.user.findUnique({
-    where: { email },
-  })
+  try {
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+    })
 
-  if (!user) {
-    return { error: 'Email tidak ditemukan di sistem.' }
+    if (!user) {
+      return { error: 'Email tidak ditemukan di sistem.' }
+    }
+
+    // Set cookies
+    const cookieStore = await cookies()
+    cookieStore.set('userId', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
+    cookieStore.set('userRole', user.role, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
+
+    // Return success info
+    return { success: true, role: user.role }
+  } catch (err: any) {
+    console.error("Login Error:", err)
+    return { error: `Database Error: ${err.message || 'Terjadi kesalahan sistem'}` }
   }
-
-  // Set cookies
-  const cookieStore = await cookies()
-  cookieStore.set('userId', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
-  cookieStore.set('userRole', user.role, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
-
-  // Return success info
-  return { success: true, role: user.role }
 }
 
 export async function logout() {
