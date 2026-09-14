@@ -1,18 +1,21 @@
-'use server'
+﻿'use server'
 
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
-export async function login(email: string) {
+export async function login(username: string, password?: string) {
   try {
-    // Find user by email
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { username },
     })
 
     if (!user) {
-      return { error: 'Email tidak ditemukan di sistem.' }
+      return { error: 'Username tidak ditemukan di sistem.' }
+    }
+
+    if (password && user.password !== password) {
+      return { error: 'Password salah.' }
     }
 
     // Set cookies
@@ -20,7 +23,6 @@ export async function login(email: string) {
     cookieStore.set('userId', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
     cookieStore.set('userRole', user.role, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' })
 
-    // Return success info
     return { success: true, role: user.role }
   } catch (err: any) {
     console.error("Login Error:", err)

@@ -1,20 +1,15 @@
-"use client"
+﻿"use client"
 
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import { login } from "@/app/actions/auth"
 import { 
-  GraduationCap, 
-  Layers, 
-  Briefcase, 
-  ShieldCheck, 
-  Lock, 
   User, 
+  Lock, 
   ArrowRight, 
   Eye, 
   EyeOff, 
-  Sparkles,
-  CheckCircle2
+  Sparkles
 } from "lucide-react"
 
 export default function LoginPage() {
@@ -27,8 +22,8 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!identifier) {
-      setError("Email harus diisi")
+    if (!identifier || !password) {
+      setError("Username dan Password harus diisi")
       return
     }
 
@@ -36,7 +31,7 @@ export default function LoginPage() {
     setError("")
     
     try {
-      const res = await login(identifier)
+      const res = await login(identifier, password)
       if (res?.error) {
         setError(res.error)
         setIsLoading(false)
@@ -81,7 +76,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-
         {/* Login Form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
           {error && (
@@ -91,7 +85,7 @@ export default function LoginPage() {
           )}
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-              <span>Email Akun</span>
+              <span>Username</span>
             </label>
             <div className="relative flex items-center">
               <User className="absolute left-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
@@ -99,19 +93,16 @@ export default function LoginPage() {
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Masukkan email terdaftar"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                required
+                placeholder="Masukkan username"
+                className="w-full bg-slate-950/50 border border-slate-800 text-slate-100 text-sm rounded-2xl pl-10 pr-4 py-3.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
+                autoComplete="off"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
-              <label>Kata Sandi</label>
-              <a href="#forgot" className="text-[10px] text-blue-400 hover:underline">
-                Lupa Sandi?
-              </a>
+          <div className="flex flex-col gap-1.5 mb-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-slate-300">Password</label>
             </div>
             <div className="relative flex items-center">
               <Lock className="absolute left-3.5 w-4 h-4 text-slate-500 pointer-events-none" />
@@ -119,14 +110,14 @@ export default function LoginPage() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Masukkan kata sandi"
-                className="w-full pl-10 pr-10 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
-                required
+                placeholder="••••••••"
+                className="w-full bg-slate-950/50 border border-slate-800 text-slate-100 text-sm rounded-2xl pl-10 pr-12 py-3.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
               />
-              <button
-                type="button"
+              <button 
+                type="button" 
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 text-slate-500 hover:text-slate-300"
+                className="absolute right-3.5 p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+                tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -136,18 +127,18 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-lg shadow-blue-600/30 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed mt-2"
           >
-            {isLoading ? (
-              <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-            ) : (
-              <>
-                <span>Masuk ke LMS</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            <span>{isLoading ? "Memproses..." : "Masuk ke Sistem"}</span>
+            {!isLoading && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
           </button>
         </form>
+
+        {/* Footer */}
+        <p className="text-center text-[10px] text-slate-500 font-medium mt-8">
+          Sistem Informasi Manajemen Pembelajaran<br/>
+          © 2026 TIM IT SMK Negeri 1 Kemangkon
+        </p>
       </div>
     </div>
   )
