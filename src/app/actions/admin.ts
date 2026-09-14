@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
@@ -60,6 +60,77 @@ export async function deleteUser(id: string) {
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
+  }
+}
+
+export async function bulkCreateUsers(users: { username: string, password?: string, name: string, role?: string }[]) {
+  try {
+    if (!users || users.length === 0) {
+      return { error: "Data kosong atau format tidak sesuai!" }
+    }
+
+    const existingUsers = await prisma.user.findMany({
+      select: { username: true }
+    })
+    const existingSet = new Set(existingUsers.map(u => u.username.toLowerCase()))
+
+    const validRoles = ['STUDENT', 'TEACHER', 'ADMIN', 'DUDI']
+    const toInsert: { username: string, password: string, name: string, role: any }[] = []
+    let skippedCount = 0
+    const seenInBatch = new Set<string>()
+
+    for (const u of users) {
+      const username = String(u.username || '').trim()
+      const name = String(u.name || '').trim()
+      if (!username || !name) {
+        skippedCount++
+        continue
+      }
+      const lowerUser = username.toLowerCase()
+      if (existingSet.has(lowerUser) || seenInBatch.has(lowerUser)) {
+        skippedCount++
+        continue
+      }
+      seenInBatch.add(lowerUser)
+
+      let role = String(u.role || 'STUDENT').toUpperCase().trim()
+      if (!validRoles.includes(role)) {
+        if (role.includes('GURU')) role = 'TEACHER'
+        else if (role.includes('SISWA')) role = 'STUDENT'
+        else if (role.includes('INDUSTRI') || role.includes('DUDI')) role = 'DUDI'
+        else if (role.includes('ADMIN')) role = 'ADMIN'
+        else role = 'STUDENT'
+      }
+
+      toInsert.push({
+        username,
+        name,
+        password: String(u.password || '123456').trim(),
+        role: role as any
+      })
+    }
+
+    if (toInsert.length === 0) {
+      return { 
+        error: "Tidak ada data baru yang dapat diimpor (semua username sudah terdaftar atau format kosong)." 
+      }
+    }
+
+    await prisma.user.createMany({
+      data: toInsert,
+      skipDuplicates: true
+    })
+
+    revalidatePath('/admin/users')
+    revalidatePath('/admin')
+
+    return { 
+      success: true, 
+      count: toInsert.length, 
+      skipped: skippedCount 
+    }
+  } catch (err: any) {
+    return { error: err.message || "Terjadi kesalahan saat impor massal." }
   }
 }
 

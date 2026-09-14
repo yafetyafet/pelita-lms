@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -18,8 +18,10 @@ import {
   Bell,
   Clock,
   BookMarked,
-  LogOut,
-  UserCheck
+  UserCheck,
+  FileSpreadsheet,
+  UploadCloud,
+  LogOut
 } from "lucide-react"
 
 export default function AdminDashboard() {
@@ -107,6 +109,32 @@ export default function AdminDashboard() {
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-amber-800 text-xs mt-2">
         <strong className="block mb-1">Informasi Database</strong>
         Tampilan ini sudah terhubung ke database langsung. Jika angka di atas menunjukkan 0, artinya sistem benar-benar telah dikosongkan dan siap digunakan untuk pendataan sesungguhnya.
+      </div>
+
+      {/* Banner Import Data Massal */}
+      <div className="rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 p-4 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center shrink-0">
+            <FileSpreadsheet className="w-6 h-6 text-emerald-100" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold bg-white/20 text-emerald-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+              Fitur Baru
+            </span>
+            <h3 className="text-sm font-bold text-white mt-1">Import Data Pengguna Massal (Excel / CSV)</h3>
+            <p className="text-[11px] text-emerald-100/90 mt-0.5">
+              Daftarkan ratusan akun Siswa, Guru, dan Mitra DUDI sekaligus menggunakan file spreadsheet Dapodik.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/admin/users"
+          className="bg-white text-emerald-800 hover:bg-emerald-50 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition whitespace-nowrap self-stretch sm:self-auto justify-center"
+        >
+          <UploadCloud className="w-4 h-4 text-emerald-600" />
+          <span>Buka Menu Import</span>
+        </Link>
       </div>
 
       {/* Grid Manajemen Master Data */}
