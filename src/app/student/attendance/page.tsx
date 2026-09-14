@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -8,15 +8,13 @@ import {
   CheckCircle2, 
   AlertCircle, 
   RefreshCw, 
-  History, 
   Navigation,
-  Radio,
-  Clock,
   ShieldCheck,
-  Building2
+  Building2,
+  LogOut
 } from "lucide-react"
+import { submitAttendance, submitCheckOut, getTodayAttendance } from "@/app/actions/student"
 
-// Titik Koordinat Pusat SMKN 1 Kemangkon
 const SCHOOL_COORDS = {
   lat: -7.472145,
   lng: 109.381210,
@@ -24,9 +22,8 @@ const SCHOOL_COORDS = {
   name: "Kampus SMKN 1 Kemangkon"
 }
 
-// Rumus Haversine untuk menghitung jarak akurat dalam meter
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371e3 // radius bumi dalam meter
+  const R = 6371e3
   const dLat = ((lat2 - lat1) * Math.PI) / 180
   const dLon = ((lon2 - lon1) * Math.PI) / 180
   const a =
@@ -45,29 +42,34 @@ export default function StudentAttendancePage() {
   const [distance, setDistance] = useState<number | null>(null)
   const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null)
   const [statusMessage, setStatusMessage] = useState<string>("Menunggu pendeteksian lokasi...")
-  const [attendedSuccess, setAttendedSuccess] = useState(false)
+  
+  // Real DB state
+  const [attended, setAttended] = useState(false)
   const [attendedTime, setAttendedTime] = useState<string | null>(null)
-  const [useSimulation, setUseSimulation] = useState(false)
+  const [checkedOut, setCheckedOut] = useState(false)
+  const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Fungsi deteksi GPS
+  // Initial load
+  useEffect(() => {
+    async function fetchAttendance() {
+      const data = await getTodayAttendance()
+      if (data) {
+        setAttended(true)
+        setAttendedTime(new Date(data.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+        if (data.checkOutTime) {
+          setCheckedOut(true)
+          setCheckOutTimeStr(new Date(data.checkOutTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+        }
+      }
+    }
+    fetchAttendance()
+    detectLocation()
+  }, [])
+
   const detectLocation = () => {
     setLoading(true)
     setStatusMessage("Mendeteksi sinyal satelit GPS...")
-
-    if (useSimulation) {
-      // Mode simulasi langsung di dalam sekolah untuk kemudahan pengujian
-      setTimeout(() => {
-        const simLat = SCHOOL_COORDS.lat + 0.0001
-        const simLng = SCHOOL_COORDS.lng + 0.0001
-        const dist = calculateDistance(simLat, simLng, SCHOOL_COORDS.lat, SCHOOL_COORDS.lng)
-        setCurrentCoords({ lat: simLat, lng: simLng, accuracy: 3.5 })
-        setDistance(dist)
-        setIsWithinRadius(dist <= SCHOOL_COORDS.maxRadiusMeters)
-        setStatusMessage("Lokasi terverifikasi (Mode Uji Coba Sekolah)")
-        setLoading(false)
-      }, 700)
-      return
-    }
 
     if (!navigator.geolocation) {
       setStatusMessage("Browser Anda tidak mendukung deteksi lokasi.")
@@ -92,32 +94,38 @@ export default function StudentAttendancePage() {
       },
       (err) => {
         console.error(err)
-        // Jika izin ditolak atau error, tawarkan opsi simulasi
-        setStatusMessage("Izin GPS tidak diberikan atau GPS belum aktif. Mengaktifkan koordinat default uji coba.")
-        setUseSimulation(true)
+        setStatusMessage("Izin GPS tidak diberikan atau GPS belum aktif. Pastikan izinkan lokasi di peramban Anda.")
         setLoading(false)
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
 
-  useEffect(() => {
-    detectLocation()
-  }, [useSimulation])
-
-  const handlePresensi = () => {
-    const now = new Date()
-    const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB"
-    setAttendedSuccess(true)
-    setAttendedTime(timeStr)
+  const handlePresensi = async () => {
+    if (!currentCoords || !isWithinRadius || isSubmitting) return
+    setIsSubmitting(true)
+    
+    if (!attended) {
+      const res = await submitAttendance(currentCoords.lat, currentCoords.lng)
+      if (res.success) {
+        const now = new Date()
+        setAttended(true)
+        setAttendedTime(now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+      } else {
+        alert(res.error || "Gagal melakukan presensi")
+      }
+    } else if (!checkedOut) {
+      const res = await submitCheckOut(currentCoords.lat, currentCoords.lng)
+      if (res.success) {
+        const now = new Date()
+        setCheckedOut(true)
+        setCheckOutTimeStr(now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+      } else {
+        alert(res.error || "Gagal melakukan presensi pulang")
+      }
+    }
+    setIsSubmitting(false)
   }
-
-  const attendanceHistory = [
-    { date: "Senin, 14 Sept 2026", time: attendedTime || "07:18 WIB", status: "Hadir Tepat Waktu", distance: "18 meter", valid: true },
-    { date: "Jumat, 11 Sept 2026", time: "07:10 WIB", status: "Hadir Tepat Waktu", distance: "24 meter", valid: true },
-    { date: "Kamis, 10 Sept 2026", time: "07:14 WIB", status: "Hadir Tepat Waktu", distance: "12 meter", valid: true },
-    { date: "Rabu, 09 Sept 2026", time: "07:22 WIB", status: "Hadir Tepat Waktu", distance: "31 meter", valid: true },
-  ]
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -143,24 +151,6 @@ export default function StudentAttendancePage() {
           title="Segarkan Titik GPS"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
-
-      {/* Simulator / Real GPS Toggle Bar */}
-      <div className="bg-slate-900 text-white rounded-2xl p-2.5 flex items-center justify-between text-[11px]">
-        <span className="text-slate-300 font-medium flex items-center gap-1.5">
-          <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-          Mode Pengujian Lokasi:
-        </span>
-        <button
-          onClick={() => setUseSimulation(!useSimulation)}
-          className={`px-2.5 py-1 rounded-xl font-bold transition ${
-            useSimulation 
-              ? "bg-emerald-500 text-white shadow-sm" 
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-          }`}
-        >
-          {useSimulation ? "Simulasi di Sekolah (Aktif)" : "Pakai GPS Asli"}
         </button>
       </div>
 
@@ -221,76 +211,70 @@ export default function StudentAttendancePage() {
         </div>
 
         {/* 1-Tap Action Button */}
-        {!attendedSuccess ? (
-          <button
-            onClick={handlePresensi}
-            disabled={!isWithinRadius || loading}
-            className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
-              isWithinRadius && !loading
-                ? "bg-white text-blue-700 hover:bg-blue-50 active:scale-[0.98] shadow-white/20"
-                : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700"
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 text-blue-600" />
-            <span>
-              {isWithinRadius 
-                ? "Kirim Presensi Hadir Sekarang (1-Tap)" 
-                : "Belum Memenuhi Radius (Dekati Area Sekolah)"}
-            </span>
-          </button>
-        ) : (
-          <div className="w-full py-3 px-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Presensi Berhasil Dicatat Pukul {attendedTime}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Info Tanpa Foto Sesuai Permintaan */}
-      <div className="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
-        <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-        <p className="leading-relaxed text-[11px]">
-          Sistem presensi PELITA menggunakan verifikasi koordinat GPS Geofencing berkecepatan tinggi <strong>tanpa memerlukan unggah foto</strong> agar proses lebih cepat dan hemat data.
-        </p>
-      </div>
-
-      {/* Riwayat Presensi Pekan Ini */}
-      <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 uppercase tracking-wider text-slate-600">
-            <History className="w-3.5 h-3.5 text-blue-600" />
-            Riwayat Presensi Pekan Ini
-          </h3>
-          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-            100% Hadir
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {attendanceHistory.map((item, idx) => (
-            <div 
-              key={idx}
-              className="p-3 rounded-2xl bg-slate-50 border border-slate-200/60 flex items-center justify-between text-xs"
+        <div className="flex flex-col gap-2 mt-1">
+          {!attended ? (
+            <button
+              onClick={handlePresensi}
+              disabled={!isWithinRadius || loading || isSubmitting}
+              className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
+                isWithinRadius && !loading
+                  ? "bg-white text-blue-700 hover:bg-blue-50 active:scale-[0.98] shadow-white/20"
+                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700"
+              }`}
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs">{item.date}</h4>
-                  <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                    <Clock className="w-3 h-3 text-slate-400" /> {item.time} • Radius: {item.distance}
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-1 rounded-lg">
-                Tepat Waktu
+              <ShieldCheck className="w-4 h-4" />
+              <span>
+                {isSubmitting ? "Memproses..." : (isWithinRadius ? "Kirim Presensi Hadir (1-Tap)" : "Belum Memenuhi Radius")}
               </span>
+            </button>
+          ) : (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Masuk Berhasil: {attendedTime}</span>
             </div>
-          ))}
+          )}
+
+          {attended && !checkedOut && (
+            <button
+              onClick={handlePresensi}
+              disabled={!isWithinRadius || loading || isSubmitting}
+              className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
+                isWithinRadius && !loading
+                  ? "bg-rose-500 text-white hover:bg-rose-600 active:scale-[0.98] shadow-rose-500/30"
+                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700"
+              }`}
+            >
+              <LogOut className="w-4 h-4" />
+              <span>
+                {isSubmitting ? "Memproses..." : (isWithinRadius ? "Kirim Presensi Pulang (1-Tap)" : "Belum Memenuhi Radius")}
+              </span>
+            </button>
+          )}
+
+          {checkedOut && (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center gap-2 shadow-lg">
+              <LogOut className="w-4 h-4" />
+              <span>Pulang Berhasil: {checkOutTimeStr}</span>
+            </div>
+          )}
         </div>
       </div>
+
+      <div className="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
+        <Navigation className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+        <div>
+          <span className="font-bold block mb-1">Catatan Penting GPS</span>
+          <p className="opacity-90 leading-relaxed mb-1">
+            Presensi ini murni memverifikasi koordinat GPS ponsel Anda tanpa perlu mengunggah foto selfie.
+          </p>
+          <p className="opacity-90 leading-relaxed">
+            Pastikan memberikan **Izin Lokasi (Allow Location)** pada peramban/browser Anda agar sistem dapat mendeteksi radius kampus secara akurat.
+          </p>
+        </div>
+      </div>
+      
+      {/* Bottom padding */}
+      <div className="h-20"></div>
     </div>
   )
 }

@@ -8,10 +8,12 @@ export default function StudentLayout({
 }) {
   return (
     <MobileShell currentRole="student">
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative">
         {children}
       </div>
-      <StudentBottomNav />
+      <div className="flex-none">
+        <StudentBottomNav />
+      </div>
     </MobileShell>
   )
 }

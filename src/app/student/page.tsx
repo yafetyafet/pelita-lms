@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { submitAttendance, getTodayAttendance } from "@/app/actions/student"
+import { submitAttendance, submitCheckOut, getTodayAttendance } from "@/app/actions/student"
 import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
@@ -20,12 +20,16 @@ import {
   ChevronRight,
   Clock,
   Sparkle,
-  Radio
+  Radio,
+  LogOut
 } from "lucide-react"
 
 export default function StudentDashboard() {
   const [attended, setAttended] = useState(false)
   const [attendanceTime, setAttendanceTime] = useState<string | null>(null)
+  const [checkedOut, setCheckedOut] = useState(false)
+  const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(null)
+  
   const [activeTab, setActiveTab] = useState<"hari-ini" | "minggu-ini">("hari-ini")
   const [showNotif, setShowNotif] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -36,6 +40,10 @@ export default function StudentDashboard() {
       if (data) {
         setAttended(true)
         setAttendanceTime(new Date(data.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+        if (data.checkOutTime) {
+          setCheckedOut(true)
+          setCheckOutTimeStr(new Date(data.checkOutTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
+        }
       }
       setIsLoading(false)
     }
@@ -43,21 +51,33 @@ export default function StudentDashboard() {
   }, [])
 
   const handleAttendance = async () => {
-    if (isLoading || attended) return
+    if (isLoading || (attended && checkedOut)) return
     setIsLoading(true)
     
     // Simulate GPS fetch
     const lat = -7.34
     const lng = 109.34
     
-    const res = await submitAttendance(lat, lng)
-    if (res.success) {
-      const now = new Date()
-      const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB"
-      setAttended(true)
-      setAttendanceTime(timeStr)
-    } else {
-      alert(res.error || "Gagal melakukan presensi")
+    if (!attended) {
+      const res = await submitAttendance(lat, lng)
+      if (res.success) {
+        const now = new Date()
+        const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB"
+        setAttended(true)
+        setAttendanceTime(timeStr)
+      } else {
+        alert(res.error || "Gagal melakukan presensi")
+      }
+    } else if (!checkedOut) {
+      const res = await submitCheckOut(lat, lng)
+      if (res.success) {
+        const now = new Date()
+        const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB"
+        setCheckedOut(true)
+        setCheckOutTimeStr(timeStr)
+      } else {
+        alert(res.error || "Gagal melakukan presensi pulang")
+      }
     }
     setIsLoading(false)
   }
@@ -214,30 +234,51 @@ export default function StudentDashboard() {
         </div>
 
         {/* Action Button & Link to Dedicated Page */}
-        <div className="flex gap-2">
-          {!attended ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            {!attended ? (
+              <button
+                onClick={handleAttendance}
+                disabled={isLoading}
+                className="flex-1 py-3 px-4 rounded-2xl bg-white text-blue-700 font-bold text-xs shadow-md hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 className="w-4 h-4 text-blue-600 transition-transform group-hover:scale-110" />
+                <span>{isLoading ? "Memproses..." : "Presensi Masuk"}</span>
+              </button>
+            ) : (
+              <div className="flex-1 py-2.5 px-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 font-semibold text-xs flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <span>Masuk: {attendanceTime}</span>
+              </div>
+            )}
+
+            <Link
+              href="/student/attendance"
+              className="px-3 py-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs flex items-center justify-center transition"
+              title="Buka Peta & Radar Presensi"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Checkout Button */}
+          {attended && !checkedOut && (
             <button
               onClick={handleAttendance}
               disabled={isLoading}
-              className="flex-1 py-3 px-4 rounded-2xl bg-white text-blue-700 font-bold text-xs shadow-md hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-3 px-4 rounded-2xl bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-500/20 hover:bg-rose-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-4 h-4 text-blue-600 transition-transform group-hover:scale-110" />
-              <span>{isLoading ? "Memproses..." : "Presensi Hadir (1-Tap)"}</span>
+              <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+              <span>{isLoading ? "Memproses..." : "Presensi Pulang"}</span>
             </button>
-          ) : (
-            <div className="flex-1 py-2.5 px-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 font-semibold text-xs flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>Hadir Pukul {attendanceTime}</span>
-            </div>
           )}
 
-          <Link
-            href="/student/attendance"
-            className="px-3 py-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs flex items-center justify-center transition"
-            title="Buka Peta & Radar Presensi"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          {checkedOut && (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-slate-300 font-semibold text-xs flex items-center justify-center gap-2">
+              <LogOut className="w-4 h-4" />
+              <span>Pulang: {checkOutTimeStr}</span>
+            </div>
+          )}
         </div>
       </div>
 

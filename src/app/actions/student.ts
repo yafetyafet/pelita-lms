@@ -96,3 +96,40 @@ export async function getStudentSchedule() {
     guru: t.user.name,
   }))
 }
+export async function submitCheckOut(latitude: number, longitude: number) {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+
+  if (!userId) return { error: "Belum login" }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  const existing = await prisma.attendance.findFirst({
+    where: {
+      studentId: userId,
+      date: {
+        gte: today
+      }
+    }
+  })
+
+  if (!existing) {
+    return { error: "Anda belum melakukan presensi masuk hari ini." }
+  }
+
+  if (existing.checkOutTime) {
+    return { error: "Anda sudah melakukan presensi pulang hari ini." }
+  }
+
+  await prisma.attendance.update({
+    where: { id: existing.id },
+    data: {
+      checkOutTime: new Date()
+    }
+  })
+
+  revalidatePath('/student')
+  
+  return { success: true }
+}
