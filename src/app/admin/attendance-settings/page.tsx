@@ -10,6 +10,7 @@ export default function AdminAttendanceSettingsPage() {
   const [lng, setLng] = useState("109.34")
   const [radius, setRadius] = useState("50")
   const [timeLimit, setTimeLimit] = useState("07:00")
+  const [checkOutTime, setCheckOutTime] = useState("15:00")
   
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -18,17 +19,19 @@ export default function AdminAttendanceSettingsPage() {
   useEffect(() => {
     async function loadSettings() {
       setIsLoading(true)
-      const [savedLat, savedLng, savedRadius, savedTimeLimit] = await Promise.all([
+      const [savedLat, savedLng, savedRadius, savedTimeLimit, savedCheckOutTime] = await Promise.all([
         getAppSetting("SCHOOL_LATITUDE"),
         getAppSetting("SCHOOL_LONGITUDE"),
         getAppSetting("ATTENDANCE_RADIUS"),
-        getAppSetting("ATTENDANCE_TIME_LIMIT")
+        getAppSetting("ATTENDANCE_TIME_LIMIT"),
+        getAppSetting("ATTENDANCE_CHECKOUT_TIME")
       ])
       
       if (savedLat) setLat(savedLat)
       if (savedLng) setLng(savedLng)
       if (savedRadius) setRadius(savedRadius)
       if (savedTimeLimit) setTimeLimit(savedTimeLimit)
+      if (savedCheckOutTime) setCheckOutTime(savedCheckOutTime)
       
       setIsLoading(false)
     }
@@ -44,7 +47,8 @@ export default function AdminAttendanceSettingsPage() {
       setAppSetting("SCHOOL_LATITUDE", lat),
       setAppSetting("SCHOOL_LONGITUDE", lng),
       setAppSetting("ATTENDANCE_RADIUS", radius),
-      setAppSetting("ATTENDANCE_TIME_LIMIT", timeLimit)
+      setAppSetting("ATTENDANCE_TIME_LIMIT", timeLimit),
+      setAppSetting("ATTENDANCE_CHECKOUT_TIME", checkOutTime)
     ])
     
     setToast("Pengaturan presensi dan koordinat berhasil disimpan!")
@@ -182,6 +186,20 @@ export default function AdminAttendanceSettingsPage() {
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
                     Waktu maksimal siswa dapat presensi tepat waktu. Jika melebihi ini, akan dianggap Terlambat.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Mulai Waktu Pulang (Opsional)</label>
+                  <input
+                    type="time"
+                    required
+                    value={checkOutTime}
+                    onChange={e => setCheckOutTime(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white transition-all font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Waktu paling awal siswa diizinkan melakukan presensi pulang.
                   </p>
                 </div>
               </div>

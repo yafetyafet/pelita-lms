@@ -45,17 +45,16 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const [data, user, mats, assigns, viols, broads] = await Promise.all([
+      // 1. Fetch fast-loading essential data first
+      const [data, user] = await Promise.all([
         getTodayAttendance(), 
-        getCurrentUser(),
-        getStudentMaterials(),
-        getStudentAssignments(),
-        getStudentViolations(),
-        getBroadcasts()
+        getCurrentUser()
       ])
+      
       if (user) {
         setCurrentUser(user)
       }
+      
       if (data) {
         setAttended(true)
         setAttendanceTime(new Date(data.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
@@ -64,11 +63,22 @@ export default function StudentDashboard() {
           setCheckOutTimeStr(new Date(data.checkOutTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
         }
       }
+      
+      // Stop the loading state so UI renders instantly for identity
+      setIsLoading(false)
+
+      // 2. Fetch the heavier/additional data in background
+      const [mats, assigns, viols, broads] = await Promise.all([
+        getStudentMaterials(),
+        getStudentAssignments(),
+        getStudentViolations(),
+        getBroadcasts()
+      ])
+      
       setMaterials(mats || [])
       setAssignments(assigns || [])
       setViolations(viols || [])
       setBroadcasts((broads || []).filter(b => ["Semua Pengguna", "Siswa", "ALL"].includes(b.target)))
-      setIsLoading(false)
     }
     loadData()
   }, [])

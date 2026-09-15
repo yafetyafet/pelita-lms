@@ -179,6 +179,51 @@ export async function submitCheckOut(lat: number, lng: number) {
     return { error: "Anda sudah melakukan presensi pulang hari ini." }
   }
 
+  // Fetch settings for checkout
+  const [schoolLat, schoolLng, radiusStr, checkoutTimeStr] = await Promise.all([
+    prisma.appSetting.findUnique({ where: { key: "SCHOOL_LATITUDE" } }),
+    prisma.appSetting.findUnique({ where: { key: "SCHOOL_LONGITUDE" } }),
+    prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_RADIUS" } }),
+    prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_CHECKOUT_TIME" } })
+  ])
+
+  // Verify Geofence
+  if (schoolLat?.value && schoolLng?.value && radiusStr?.value) {
+    const sLat = parseFloat(schoolLat.value)
+    const sLng = parseFloat(schoolLng.value)
+    const maxRadius = parseInt(radiusStr.value, 10)
+    
+    if (!isNaN(sLat) && !isNaN(sLng) && !isNaN(maxRadius)) {
+      const R = 6371e3
+      const phi1 = lat * Math.PI/180
+      const phi2 = sLat * Math.PI/180
+      const dPhi = (sLat-lat) * Math.PI/180
+      const dLam = (sLng-lng) * Math.PI/180
+
+      const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(dLam/2) * Math.sin(dLam/2)
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+      const distance = R * c
+
+      if (distance > maxRadius) {
+        return { error: `Gagal presensi pulang. Anda berada di luar zona sekolah (Jarak Anda: ${Math.round(distance)} meter, Maksimal: ${maxRadius} meter).` }
+      }
+    }
+  }
+
+  // Verify Checkout Time
+  if (checkoutTimeStr?.value) {
+    const now = new Date()
+    const currentMins = now.getHours() * 60 + now.getMinutes()
+    const [limitHour, limitMin] = checkoutTimeStr.value.split(':').map(Number)
+    const limitMins = limitHour * 60 + limitMin
+    
+    if (currentMins < limitMins) {
+      return { error: `Belum waktunya pulang. Presensi pulang baru dapat dilakukan mulai pukul ${checkoutTimeStr.value} WIB.` }
+    }
+  }
+
   await prisma.attendance.update({
     where: { id: existing.id },
     data: {
