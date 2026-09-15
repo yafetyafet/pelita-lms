@@ -82,7 +82,17 @@ export async function getStudentSchedule() {
 
   if (!studentClass) return []
 
-  // Fetch subjects taught in this class
+  // Fetch from Schedule table
+  const schedules = await prisma.schedule.findMany({
+    where: { classId: studentClass.classId },
+    orderBy: [{ day: 'asc' }, { sessionStart: 'asc' }]
+  })
+
+  if (schedules.length > 0) {
+    return schedules
+  }
+
+  // Fallback: fetch from ClassTeacher
   const teachers = await prisma.classTeacher.findMany({
     where: { classId: studentClass.classId },
     include: {
@@ -96,6 +106,7 @@ export async function getStudentSchedule() {
     guru: t.user.name,
   }))
 }
+
 export async function submitCheckOut(lat: number, lng: number) {
   const cookieStore = await cookies()
   const userId = cookieStore.get('userId')?.value
@@ -132,4 +143,72 @@ export async function submitCheckOut(lat: number, lng: number) {
   revalidatePath('/student')
   
   return { success: true }
+}
+
+export async function getStudentMaterials() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  const studentClass = await prisma.classStudent.findFirst({ where: { userId } })
+  if (!studentClass) return []
+
+  return await prisma.material.findMany({
+    where: { classId: studentClass.classId },
+    include: {
+      author: { select: { name: true } },
+      subject: { select: { name: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
+export async function getStudentAssignments() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  const studentClass = await prisma.classStudent.findFirst({ where: { userId } })
+  if (!studentClass) return []
+
+  const assignments = await prisma.assignment.findMany({
+    where: { classId: studentClass.classId },
+    include: {
+      subject: { select: { name: true } },
+      author: { select: { name: true } },
+      submissions: {
+        where: { userId },
+        select: { score: true, status: true, submittedAt: true, description: true }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  return assignments.map(a => ({
+    ...a,
+    mySubmission: a.submissions[0] || null
+  }))
+}
+
+export async function getStudentViolations() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  return await prisma.violation.findMany({
+    where: { studentId: userId },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
+export async function getAttendanceHistory() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  return await prisma.attendance.findMany({
+    where: { userId },
+    orderBy: { date: 'desc' },
+    take: 30
+  })
 }

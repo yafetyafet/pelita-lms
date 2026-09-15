@@ -116,6 +116,7 @@ model UserAssignment {
   score        Float?
   submittedAt  DateTime?
   status       String     @default("PENDING")
+  description  String?
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -156,4 +157,53 @@ model Violation {
   description String
   points      Int
   createdAt   DateTime @default(now())
+}
+
+model Exam {
+  id          String           @id @default(uuid())
+  title       String
+  type        String           @default("PG")
+  classId     String
+  subjectId   String
+  authorId    String
+  duration    Int              @default(60)
+  createdAt   DateTime         @default(now())
+  questions   ExamQuestion[]
+  submissions ExamSubmission[]
+}
+
+model ExamQuestion {
+  id            String  @id @default(uuid())
+  examId        String
+  question      String
+  imageUrl      String?
+  type          String  @default("PG")
+  options       String?
+  correctAnswer String?
+  points        Int     @default(10)
+  exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model ExamSubmission {
+  id          String    @id @default(uuid())
+  examId      String
+  userId      String
+  answers     String?
+  score       Float?
+  submittedAt DateTime  @default(now())
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id           String   @id @default(uuid())
+  day          String
+  sessionStart String
+  sessionEnd   String
+  classId      String
+  subjectId    String?
+  teacherId    String?
+  room         String?
+  type         String   @default("REGULAR")
+  label        String?
+  createdAt    DateTime @default(now())
 }

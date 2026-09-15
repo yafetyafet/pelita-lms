@@ -1,26 +1,48 @@
 "use client"
 
-import React from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { getCurrentUser, logout } from "@/app/actions/auth"
 import { 
   ArrowLeft, 
   User, 
-  Mail, 
-  Award, 
   LogOut, 
   CheckCircle2, 
-  Clock, 
   ShieldCheck, 
-  Layers
+  Loader2
 } from "lucide-react"
 
 export default function TeacherProfilePage() {
-  const router = useRouter()
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const handleLogout = () => {
-    router.push("/login")
+  useEffect(() => {
+    async function load() {
+      const user = await getCurrentUser()
+      setCurrentUser(user)
+      setIsLoading(false)
+    }
+    load()
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+        <span className="text-xs text-slate-500">Memuat profil...</span>
+      </div>
+    )
   }
+
+  const initials = currentUser?.name
+    ? currentUser.name.split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
+    : "G"
+
+  const subjects = currentUser?.teacherClasses?.map((tc: any) => tc.subject.name) || []
+  const uniqueSubjects = [...new Set(subjects)]
+  const classNames = currentUser?.teacherClasses?.map((tc: any) => tc.classInfo.name) || []
+  const uniqueClasses = [...new Set(classNames)]
+  const waliKelas = currentUser?.waliClasses?.[0]?.name || "Tidak ada"
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -40,7 +62,7 @@ export default function TeacherProfilePage() {
         </div>
 
         <button
-          onClick={handleLogout}
+          onClick={() => logout()}
           className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition flex items-center gap-1 text-xs font-bold"
           title="Keluar"
         >
@@ -52,19 +74,21 @@ export default function TeacherProfilePage() {
       {/* Profile Card */}
       <div className="rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-800 to-slate-950 p-5 text-white shadow-xl flex flex-col items-center text-center relative overflow-hidden">
         <div className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur-md flex items-center justify-center font-black text-2xl border-2 border-white/30 shadow-lg ring-4 ring-white/10 mb-3">
-          KS
+          {initials}
         </div>
 
-        <h3 className="text-base font-black text-white">Bpk. Kurniawan S, S.Kom</h3>
-        <p className="text-xs text-emerald-200 mt-0.5">NIP: 198204152008011009 • Guru Ahli Pertama</p>
+        <h3 className="text-base font-black text-white">{currentUser?.name || "Guru"}</h3>
+        <p className="text-xs text-emerald-200 mt-0.5">@{currentUser?.username || "-"} • Tenaga Pendidik</p>
 
-        <div className="flex items-center gap-2 mt-3">
+        <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
           <span className="text-[10px] font-bold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 px-3 py-0.5 rounded-full flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" /> Pendidik Tersertifikasi
+            <CheckCircle2 className="w-3 h-3" /> Pendidik Aktif
           </span>
-          <span className="text-[10px] font-bold bg-white/20 text-white px-3 py-0.5 rounded-full">
-            24 Jam Pelajaran / Pekan
-          </span>
+          {currentUser?.waliClasses?.[0] && (
+            <span className="text-[10px] font-bold bg-white/20 text-white px-3 py-0.5 rounded-full">
+              Wali Kelas {currentUser.waliClasses[0].name}
+            </span>
+          )}
         </div>
       </div>
 
@@ -77,21 +101,29 @@ export default function TeacherProfilePage() {
 
         <div className="p-2.5 bg-slate-50 rounded-xl flex justify-between border border-slate-100">
           <span className="text-slate-500">Mata Pelajaran Diampu:</span>
-          <span className="font-bold text-slate-900">Pemrograman Web & Basis Data</span>
+          <span className="font-bold text-slate-900 text-right">
+            {uniqueSubjects.length > 0 ? uniqueSubjects.join(", ") : "Belum ditugaskan"}
+          </span>
+        </div>
+        <div className="p-2.5 bg-slate-50 rounded-xl flex justify-between border border-slate-100">
+          <span className="text-slate-500">Kelas yang Diajar:</span>
+          <span className="font-bold text-slate-900 text-right">
+            {uniqueClasses.length > 0 ? uniqueClasses.join(", ") : "Belum ditugaskan"}
+          </span>
         </div>
         <div className="p-2.5 bg-slate-50 rounded-xl flex justify-between border border-slate-100">
           <span className="text-slate-500">Tugas Tambahan:</span>
-          <span className="font-bold text-slate-900">Wali Kelas XII RPL 1</span>
+          <span className="font-bold text-slate-900">Wali Kelas {waliKelas}</span>
         </div>
         <div className="p-2.5 bg-slate-50 rounded-xl flex justify-between border border-slate-100">
-          <span className="text-slate-500">Email Sekolah:</span>
-          <span className="font-bold text-emerald-600 font-mono text-[11px]">kurniawan@smkn1.sch.id</span>
+          <span className="text-slate-500">Username:</span>
+          <span className="font-bold text-emerald-600 font-mono text-[11px]">@{currentUser?.username || "-"}</span>
         </div>
       </div>
 
       {/* Logout */}
       <button
-        onClick={handleLogout}
+        onClick={() => logout()}
         className="w-full py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
       >
         <LogOut className="w-4 h-4" />

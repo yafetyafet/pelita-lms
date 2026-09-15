@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
+import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass } from "@/app/actions/teacher"
 import { 
   Bell, 
   BookOpen, 
@@ -15,27 +16,34 @@ import {
   Link as LinkIcon, 
   CheckCircle2, 
   MapPin, 
-  Search, 
   ChevronRight,
   Sparkles,
   Award,
   Clock,
   Send,
-  AlertTriangle,
   Calendar,
-  LogOut
+  LogOut,
+  Loader2,
+  Eye
 } from "lucide-react"
 
 export default function TeacherDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [hasLoadedUser, setHasLoadedUser] = useState(false)
+  const [teacherClasses, setTeacherClasses] = useState<any[]>([])
+  const [materials, setMaterials] = useState<any[]>([])
+  const [classStudents, setClassStudents] = useState<any[]>([])
 
   useEffect(() => {
     async function loadUser() {
-      const user = await getCurrentUser()
-      if (user) {
-        setCurrentUser(user)
-      }
+      const [user, cls, mats] = await Promise.all([
+        getCurrentUser(),
+        getTeacherClasses(),
+        getTeacherMaterials()
+      ])
+      if (user) setCurrentUser(user)
+      setTeacherClasses(cls)
+      setMaterials(mats)
       setHasLoadedUser(true)
     }
     loadUser()
@@ -48,12 +56,34 @@ export default function TeacherDashboard() {
 
   const [materiTitle, setMateriTitle] = useState("")
   const [embedLink, setEmbedLink] = useState("")
+  const [materiClassId, setMateriClassId] = useState("")
+  const [materiSubjectId, setMateriSubjectId] = useState("")
   const [materiAdded, setMateriAdded] = useState(false)
+  const [materiSaving, setMateriSaving] = useState(false)
 
   // State Pelanggaran
-  const [selectedStudent, setSelectedStudent] = useState("Fajar Pratama")
+  const [selectedStudentId, setSelectedStudentId] = useState("")
   const [violationType, setViolationType] = useState("Keterlambatan Hadir (> 07:15 WIB)")
   const [violationPoints, setViolationPoints] = useState(5)
+  const [violationClassId, setViolationClassId] = useState("")
+  const [violationSaving, setViolationSaving] = useState(false)
+
+  // Load students when violation class changes
+  useEffect(() => {
+    if (violationClassId) {
+      getStudentsByClass(violationClassId).then(setClassStudents)
+    }
+  }, [violationClassId])
+
+  // Set default class/subject when teacherClasses load
+  useEffect(() => {
+    if (teacherClasses.length > 0) {
+      const first = teacherClasses[0]
+      if (!materiClassId) setMateriClassId(first.classId)
+      if (!materiSubjectId) setMateriSubjectId(first.subjectId)
+      if (!violationClassId) setViolationClassId(first.classId)
+    }
+  }, [teacherClasses])
 
   const handleSaveJournal = (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,32 +94,59 @@ export default function TeacherDashboard() {
     }, 1200)
   }
 
-  const handleSaveViolation = (e: React.FormEvent) => {
+  const handleSaveViolation = async (e: React.FormEvent) => {
     e.preventDefault()
-    setViolationSaved(true)
-    setTimeout(() => {
-      setShowViolationModal(false)
-      setViolationSaved(false)
-    }, 1200)
+    if (!selectedStudentId) return alert("Pilih siswa terlebih dahulu")
+    setViolationSaving(true)
+    const res = await createViolation({
+      studentId: selectedStudentId,
+      description: violationType,
+      points: violationPoints
+    })
+    setViolationSaving(false)
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setViolationSaved(true)
+      setTimeout(() => {
+        setShowViolationModal(false)
+        setViolationSaved(false)
+      }, 1200)
+    }
   }
 
-  const handleSaveMateri = (e: React.FormEvent) => {
+  const handleSaveMateri = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!materiTitle) return
-    setMateriAdded(true)
-    setTimeout(() => {
-      setMateriAdded(false)
-      setMateriTitle("")
-      setEmbedLink("")
-    }, 2000)
+    if (!materiTitle || !materiClassId || !materiSubjectId) return
+    setMateriSaving(true)
+    const res = await createMaterial({
+      title: materiTitle,
+      url: embedLink,
+      classId: materiClassId,
+      subjectId: materiSubjectId
+    })
+    setMateriSaving(false)
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setMateriAdded(true)
+      // Reload materials
+      const mats = await getTeacherMaterials()
+      setMaterials(mats)
+      setTimeout(() => {
+        setMateriAdded(false)
+        setMateriTitle("")
+        setEmbedLink("")
+      }, 2000)
+    }
   }
 
   const teacherMenus = [
     { id: "jurnal", title: "Jurnal Mengajar", desc: "Isi Administrasi", icon: PenTool, color: "from-emerald-600 to-teal-600", count: "Wajib", href: "/teacher/journal" },
-    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: "12 Modul", action: "scroll-materi" },
-    { id: "absensi", title: "Radar Presensi", desc: "Geotagging Siswa", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/classes" },
+    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, action: "scroll-materi" },
+    { id: "absensi", title: "Presensi Kelas", desc: "Lihat Data Siswa", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/classes" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
-    { id: "ujian", title: "Ujian CBT PTS", desc: "Khusus Tengah/Akhir", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
+    { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
     { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
     { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
     { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
@@ -162,11 +219,15 @@ export default function TeacherDashboard() {
               <h3 className="text-sm font-bold text-white mt-1">Jurnal Pembelajaran Hari Ini</h3>
             </div>
           </div>
-          <span className="text-xs text-emerald-200 font-medium">Senin, 14 Sept</span>
+          <span className="text-xs text-emerald-200 font-medium">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+          </span>
         </div>
 
         <p className="text-xs text-emerald-100/90 leading-relaxed mb-3">
-          Sistem belum mendeteksi jadwal mengajar Anda untuk hari ini. Tambahkan jadwal atau isi jurnal insidental secara manual.
+          {teacherClasses.length > 0
+            ? `Anda mengampu ${teacherClasses.length} kelas. Isi jurnal mengajar untuk setiap sesi tatap muka hari ini.`
+            : "Belum ada kelas yang ditugaskan. Hubungi admin untuk pengaturan kelas."}
         </p>
 
         <div className="grid grid-cols-2 gap-2">
@@ -187,35 +248,39 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* Quick Monitor: Presensi Kelas Radar */}
+      {/* Quick Monitor: Kelas Binaan */}
       <Link href="/teacher/classes" className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3 hover:border-emerald-300 transition">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-xl bg-blue-50 text-blue-600">
-              <MapPin className="w-4 h-4" />
+              <Users className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-xs font-bold text-slate-900">Radar Presensi Geotagging</h3>
+              <h3 className="text-xs font-bold text-slate-900">Kelas yang Diampu</h3>
               <p className="text-[10px] text-slate-500">
-                {currentUser?.waliClasses?.[0] ? `Kelas Binaan: ${currentUser.waliClasses[0].name}` : "Pemantauan Kelas Binaan"}
+                {currentUser?.waliClasses?.[0] ? `Wali Kelas: ${currentUser.waliClasses[0].name}` : "Daftar kelas dan siswa binaan"}
               </p>
             </div>
           </div>
           <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-            {currentUser?.waliClasses?.[0] ? "Aktif" : "0 Siswa"}
+            {teacherClasses.length} Kelas
           </span>
         </div>
 
-        {/* Empty State Progress Bar */}
         <div className="flex flex-col gap-1.5">
-          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-            <div className="bg-emerald-500 h-full" style={{ width: currentUser?.waliClasses?.[0] ? "100%" : "0%" }}></div>
-          </div>
-          <div className="flex items-center justify-center text-[11px] font-medium text-slate-400 italic pt-1">
-            {currentUser?.waliClasses?.[0] 
-              ? `Terhubung dengan kelas binaan ${currentUser.waliClasses[0].name}` 
-              : "Belum ada data siswa terdaftar di kelas binaan Anda."}
-          </div>
+          {teacherClasses.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {teacherClasses.map((tc: any, i: number) => (
+                <span key={i} className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  {tc.classInfo.name} — {tc.subject.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] font-medium text-slate-400 italic text-center py-2">
+              Belum ada kelas yang ditugaskan.
+            </div>
+          )}
         </div>
       </Link>
 
@@ -285,7 +350,7 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* Fitur Administrasi: Cepat Upload Materi (Support Embed Link YouTube & Google Drive) */}
+      {/* Fitur Upload Materi + Daftar Materi Terupload */}
       <div id="materi-section" className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -300,6 +365,28 @@ export default function TeacherDashboard() {
         </div>
 
         <form onSubmit={handleSaveMateri} className="flex flex-col gap-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={materiClassId}
+              onChange={(e) => setMateriClassId(e.target.value)}
+              className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
+            >
+              <option value="">Pilih Kelas</option>
+              {teacherClasses.map((tc: any, i: number) => (
+                <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
+              ))}
+            </select>
+            <select
+              value={materiSubjectId}
+              onChange={(e) => setMateriSubjectId(e.target.value)}
+              className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
+            >
+              <option value="">Pilih Mapel</option>
+              {teacherClasses.map((tc: any, i: number) => (
+                <option key={i} value={tc.subjectId}>{tc.subject.name}</option>
+              ))}
+            </select>
+          </div>
           <input
             type="text"
             value={materiTitle}
@@ -317,9 +404,10 @@ export default function TeacherDashboard() {
             />
             <button
               type="submit"
-              className="px-3.5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 active:scale-95 transition flex items-center gap-1 shrink-0"
+              disabled={materiSaving}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 active:scale-95 transition flex items-center gap-1 shrink-0 disabled:opacity-50"
             >
-              <Send className="w-3.5 h-3.5" />
+              {materiSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               <span>Simpan</span>
             </button>
           </div>
@@ -331,6 +419,29 @@ export default function TeacherDashboard() {
             <span>Materi berhasil disematkan dan siap diakses siswa!</span>
           </div>
         )}
+
+        {/* Daftar Materi yang Sudah Diupload */}
+        {materials.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <Eye className="w-3 h-3" /> Materi Terupload ({materials.length})
+            </h4>
+            {materials.slice(0, 5).map((mat: any) => (
+              <div key={mat.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-slate-800 block">{mat.title}</span>
+                  <span className="text-[10px] text-slate-500">{mat.classInfo?.name} — {mat.subject?.name}</span>
+                </div>
+                {mat.url && (
+                  <a href={mat.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-semibold shrink-0">Buka</a>
+                )}
+              </div>
+            ))}
+            {materials.length > 5 && (
+              <span className="text-[10px] text-center text-slate-400 italic">+ {materials.length - 5} materi lainnya</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal Form Jurnal Pembelajaran */}
@@ -340,7 +451,9 @@ export default function TeacherDashboard() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Form Jurnal Mengajar Harian</h3>
-                <p className="text-[11px] text-slate-500">Kelas XII RPL 1 • Sesi 1</p>
+                <p className="text-[11px] text-slate-500">
+                  {teacherClasses.length > 0 ? `${teacherClasses[0].classInfo.name} • ${teacherClasses[0].subject.name}` : "Pilih kelas di halaman jurnal"}
+                </p>
               </div>
               <button 
                 onClick={() => setShowJournalModal(false)}
@@ -355,7 +468,7 @@ export default function TeacherDashboard() {
                 <label className="text-[11px] font-semibold text-slate-700">Materi Pokok / KD</label>
                 <input
                   type="text"
-                  defaultValue="Menerapkan REST API & State Management pada Frontend"
+                  placeholder="Contoh: Menerapkan REST API & State Management"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                   required
                 />
@@ -365,15 +478,10 @@ export default function TeacherDashboard() {
                 <label className="text-[11px] font-semibold text-slate-700">Ringkasan Pembelajaran & Penugasan</label>
                 <textarea
                   rows={3}
-                  defaultValue="Siswa melakukan praktikum integrasi endpoint fetch data tugas dan presensi. Sebanyak 32 siswa tuntas tepat waktu."
+                  placeholder="Tuliskan ringkasan kegiatan pembelajaran..."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none"
                   required
                 />
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl text-xs">
-                <span className="text-slate-600">Siswa Tidak Hadir:</span>
-                <span className="font-semibold text-amber-600">2 Siswa (Rafi & Citra - Izin)</span>
               </div>
 
               {journalSaved ? (
@@ -416,16 +524,34 @@ export default function TeacherDashboard() {
 
             <form onSubmit={handleSaveViolation} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-semibold text-slate-700">Pilih Siswa (XII RPL 1):</label>
+                <label className="text-[11px] font-semibold text-slate-700">Pilih Kelas:</label>
                 <select
-                  value={selectedStudent}
-                  onChange={(e) => setSelectedStudent(e.target.value)}
+                  value={violationClassId}
+                  onChange={(e) => setViolationClassId(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
                 >
-                  <option value="Fajar Pratama">Fajar Pratama (NISN: 0067821943)</option>
-                  <option value="Rafi Ahmad">Rafi Ahmad (NISN: 0067821945)</option>
-                  <option value="Dimas Anggara">Dimas Anggara (NISN: 0067821946)</option>
+                  <option value="">-- Pilih Kelas --</option>
+                  {teacherClasses.map((tc: any, i: number) => (
+                    <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
+                  ))}
                 </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-slate-700">Pilih Siswa:</label>
+                <select
+                  value={selectedStudentId}
+                  onChange={(e) => setSelectedStudentId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                >
+                  <option value="">-- Pilih Siswa --</option>
+                  {classStudents.map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.username})</option>
+                  ))}
+                </select>
+                {classStudents.length === 0 && violationClassId && (
+                  <span className="text-[10px] text-amber-600 italic">Belum ada siswa di kelas ini</span>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -456,14 +582,15 @@ export default function TeacherDashboard() {
               {violationSaved ? (
                 <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Catatan pelanggaran tersimpan dan notifikasi terkirim!</span>
+                  <span>Catatan pelanggaran tersimpan!</span>
                 </div>
               ) : (
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition"
+                  disabled={violationSaving}
+                  className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50"
                 >
-                  Simpan ke Buku Disiplin Siswa
+                  {violationSaving ? "Menyimpan..." : "Simpan ke Buku Disiplin Siswa"}
                 </button>
               )}
             </form>
@@ -473,4 +600,3 @@ export default function TeacherDashboard() {
     </div>
   )
 }
-

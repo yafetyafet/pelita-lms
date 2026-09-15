@@ -225,3 +225,150 @@ export async function deleteSubject(id: string) {
   }
 }
 
+// ==========================================
+// CLASS-STUDENT ASSIGNMENT
+// ==========================================
+export async function addStudentToClass(userId: string, classId: string) {
+  try {
+    const existing = await prisma.classStudent.findUnique({
+      where: { userId_classId: { userId, classId } }
+    })
+    if (existing) return { error: 'Siswa sudah terdaftar di kelas ini.' }
+
+    await prisma.classStudent.create({
+      data: { userId, classId }
+    })
+    revalidatePath('/admin/classes')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function removeStudentFromClass(userId: string, classId: string) {
+  try {
+    await prisma.classStudent.delete({
+      where: { userId_classId: { userId, classId } }
+    })
+    revalidatePath('/admin/classes')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function getStudentsWithoutClass() {
+  const studentsWithClass = await prisma.classStudent.findMany({
+    select: { userId: true }
+  })
+  const assignedIds = studentsWithClass.map(s => s.userId)
+
+  return await prisma.user.findMany({
+    where: {
+      role: 'STUDENT',
+      id: { notIn: assignedIds.length > 0 ? assignedIds : ['__none__'] }
+    },
+    select: { id: true, name: true, username: true }
+  })
+}
+
+export async function getAllStudents() {
+  return await prisma.user.findMany({
+    where: { role: 'STUDENT' },
+    select: { id: true, name: true, username: true },
+    orderBy: { name: 'asc' }
+  })
+}
+
+export async function getClassStudents(classId: string) {
+  const data = await prisma.classStudent.findMany({
+    where: { classId },
+    include: {
+      user: { select: { id: true, name: true, username: true } }
+    }
+  })
+  return data.map(d => d.user)
+}
+
+// ==========================================
+// CLASS-TEACHER ASSIGNMENT
+// ==========================================
+export async function assignTeacherToClass(userId: string, classId: string, subjectId: string) {
+  try {
+    const existing = await prisma.classTeacher.findUnique({
+      where: { userId_classId_subjectId: { userId, classId, subjectId } }
+    })
+    if (existing) return { error: 'Guru sudah ditugaskan di kelas dan mapel ini.' }
+
+    await prisma.classTeacher.create({
+      data: { userId, classId, subjectId }
+    })
+    revalidatePath('/admin/classes')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function removeTeacherFromClass(userId: string, classId: string, subjectId: string) {
+  try {
+    await prisma.classTeacher.delete({
+      where: { userId_classId_subjectId: { userId, classId, subjectId } }
+    })
+    revalidatePath('/admin/classes')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+// ==========================================
+// SCHEDULE MANAGEMENT (ADMIN)
+// ==========================================
+export async function getSchedules() {
+  return await prisma.schedule.findMany({
+    orderBy: [{ day: 'asc' }, { sessionStart: 'asc' }]
+  })
+}
+
+export async function createScheduleAdmin(data: {
+  day: string;
+  sessionStart: string;
+  sessionEnd: string;
+  classId: string;
+  subjectId?: string;
+  teacherId?: string;
+  room?: string;
+  type: string;
+  label?: string;
+}) {
+  try {
+    await prisma.schedule.create({
+      data: {
+        day: data.day,
+        sessionStart: data.sessionStart,
+        sessionEnd: data.sessionEnd,
+        classId: data.classId,
+        subjectId: data.subjectId || null,
+        teacherId: data.teacherId || null,
+        room: data.room || null,
+        type: data.type,
+        label: data.label || null
+      }
+    })
+    revalidatePath('/admin/jadwal')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function deleteScheduleAdmin(id: string) {
+  try {
+    await prisma.schedule.delete({ where: { id } })
+    revalidatePath('/admin/jadwal')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}

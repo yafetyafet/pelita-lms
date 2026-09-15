@@ -118,8 +118,8 @@ export default function StudentDashboard() {
     },
     { 
       id: "ujian", 
-      title: "Ujian CBT", 
-      subtitle: "PTS & PAS Khusus", 
+      title: "Ujian", 
+      subtitle: "PTS & PAS", 
       icon: Timer, 
       color: "from-rose-500 to-red-600", 
       badge: null,
@@ -240,7 +240,7 @@ export default function StudentDashboard() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
                 </span>
               </div>
-              <p className="text-sm font-bold text-white">Senin, 14 September 2026</p>
+              <p className="text-sm font-bold text-white">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
             </div>
           </div>
 
@@ -318,20 +318,20 @@ export default function StudentDashboard() {
       <div className="grid grid-cols-3 gap-2.5">
         <Link href="/student/attendance" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
           <span className="text-[11px] font-semibold text-slate-500">Kehadiran</span>
-          <span className="text-lg font-bold text-slate-900 mt-0.5">-</span>
-          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">Data Kosong</span>
+          <span className="text-lg font-bold text-slate-900 mt-0.5">{attended ? "✓" : "-"}</span>
+          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">{attended ? "Hadir" : "Belum"}</span>
         </Link>
 
         <Link href="/student/discipline" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
           <span className="text-[11px] font-semibold text-slate-500">Poin Karakter</span>
-          <span className="text-lg font-bold text-blue-600 mt-0.5">100</span>
-          <span className="text-[10px] font-medium text-slate-500 mt-0.5">Nol Pelanggaran</span>
+          <span className="text-lg font-bold text-blue-600 mt-0.5">-</span>
+          <span className="text-[10px] font-medium text-slate-500 mt-0.5">Lihat Detail</span>
         </Link>
 
         <Link href="/student/assignments" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
           <span className="text-[11px] font-semibold text-slate-500">Tugas & Kuis</span>
-          <span className="text-lg font-bold text-amber-600 mt-0.5">2</span>
-          <span className="text-[10px] font-medium text-amber-600 mt-0.5">Perlu Dikerjakan</span>
+          <span className="text-lg font-bold text-amber-600 mt-0.5">-</span>
+          <span className="text-[10px] font-medium text-amber-600 mt-0.5">Lihat Detail</span>
         </Link>
       </div>
 
@@ -381,53 +381,28 @@ export default function StudentDashboard() {
       {/* Jadwal Pelajaran Hari Ini */}
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-bold text-slate-900">Jadwal Kelas Hari Ini</h3>
+          <h3 className="text-sm font-bold text-slate-900">Jadwal Kelas</h3>
           <Link href="/student/schedule" className="text-[11px] font-semibold text-blue-600 hover:underline">
             Lihat Sepekan →
           </Link>
         </div>
 
-        {/* Schedule Item 1 - Active Class */}
-        <div className="bg-white rounded-2xl p-3.5 border-2 border-blue-500 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 bg-blue-600 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-bl-xl uppercase tracking-wider">
-            Sedang Berlangsung
+        <Link 
+          href="/student/schedule"
+          className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:border-blue-300 transition flex items-center gap-3"
+        >
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+            <Calendar className="w-5 h-5" />
           </div>
-
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0 border border-blue-100">
-              PWB
-            </div>
-
-            <div className="flex-1 pr-14">
-              <h4 className="text-xs font-bold text-slate-900">
-                PemrogrData Kosong Web & Perangkat Bergerak
-              </h4>
-              <p className="text-[11px] text-slate-500 mt-0.5">Bpk. Kurniawan S, S.Kom</p>
-              
-              <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-600 font-medium">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" />
-                  07:15 - 09:30 WIB
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[10px] font-semibold">
-                  Lab Komputer 2
-                </span>
-              </div>
-            </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-bold text-slate-900">Lihat Jadwal Pembelajaran</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">Jadwal pelajaran berdasarkan hari</p>
           </div>
-
-          {/* Quick Action to open material */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-slate-500 text-[11px]">Materi 04: Next.js & Geotagging API</span>
-            <Link href="/student/materials" className="text-blue-600 font-bold text-[11px] flex items-center gap-0.5 hover:underline">
-              Buka Modul Video <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </Link>
       </div>
 
-      {/* Banner Khusus Ujian PTS CBT */}
+      {/* Banner Ujian */}
       <Link 
         href="/student/exams"
         className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200/80 rounded-2xl p-3.5 flex items-center justify-between hover:shadow-md transition active:scale-[0.99]"
@@ -439,11 +414,11 @@ export default function StudentDashboard() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold bg-rose-600 text-white px-1.5 py-0.2 rounded">
-                UJIAN CBT
+                UJIAN
               </span>
-              <span className="text-xs font-bold text-slate-900">Penilaian Tengah Semester (PTS)</span>
+              <span className="text-xs font-bold text-slate-900">Ujian Online</span>
             </div>
-            <p className="text-[11px] text-slate-600 mt-0.5">Ruang Ujian Terpisah • Token: PTS2026</p>
+            <p className="text-[11px] text-slate-600 mt-0.5">Akses ruang ujian digital Anda</p>
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-rose-400 shrink-0" />
