@@ -159,6 +159,16 @@ model Violation {
   createdAt   DateTime @default(now())
 }
 
+model Session {
+  id        String   @id @default(uuid())
+  day       String
+  name      String
+  startTime String
+  endTime   String
+  type      String   @default("Reguler")
+  createdAt DateTime @default(now())
+}
+
 model Exam {
   id          String           @id @default(uuid())
   title       String

@@ -372,3 +372,50 @@ export async function deleteScheduleAdmin(id: string) {
     return { error: err.message }
   }
 }
+
+// ==========================================
+// SESSION MANAGEMENT
+// ==========================================
+
+export async function getSessions() {
+  return await prisma.session.findMany({
+    orderBy: [
+      { day: 'asc' },
+      { startTime: 'asc' }
+    ]
+  })
+}
+
+export async function createSession(data: {
+  day: string
+  name: string
+  startTime: string
+  endTime: string
+  type: string
+}) {
+  try {
+    await prisma.session.create({
+      data: {
+        day: data.day,
+        name: data.name,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        type: data.type
+      }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function deleteSession(id: string) {
+  try {
+    await prisma.session.delete({ where: { id } })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}

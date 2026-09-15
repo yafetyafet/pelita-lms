@@ -1,39 +1,27 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Clock, Plus, Trash2, X } from "lucide-react"
+import { ArrowLeft, Clock, Plus, Trash2, X, Loader2 } from "lucide-react"
+import { getSessions, createSession, deleteSession } from "@/app/actions/admin"
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"]
 
 type Sesi = {
   id: string
-  hari: string
-  jamKe: string
-  mulai: string
-  selesai: string
+  day: string
+  name: string
+  startTime: string
+  endTime: string
   type: string
 }
 
-const DEFAULT_SESI: Sesi[] = [
-  { id: "1", hari: "Senin", jamKe: "Upacara", mulai: "07:00", selesai: "07:45", type: "Upacara" },
-  { id: "2", hari: "Senin", jamKe: "Jam Ke-1", mulai: "07:45", selesai: "08:30", type: "Reguler" },
-  { id: "3", hari: "Senin", jamKe: "Jam Ke-2", mulai: "08:30", selesai: "09:15", type: "Reguler" },
-  { id: "4", hari: "Senin", jamKe: "Istirahat", mulai: "09:15", selesai: "09:45", type: "Istirahat" },
-  { id: "5", hari: "Senin", jamKe: "Jam Ke-3", mulai: "09:45", selesai: "10:30", type: "Reguler" },
-  { id: "6", hari: "Senin", jamKe: "Jam Ke-4", mulai: "10:30", selesai: "11:15", type: "Reguler" },
-  { id: "7", hari: "Senin", jamKe: "Sholat & Istirahat", mulai: "11:45", selesai: "12:45", type: "Istirahat" },
-  { id: "8", hari: "Senin", jamKe: "Jam Ke-5", mulai: "12:45", selesai: "13:30", type: "Reguler" },
-  { id: "9", hari: "Jumat", jamKe: "Pembiasaan", mulai: "07:00", selesai: "08:00", type: "Pembiasaan" },
-  { id: "10", hari: "Jumat", jamKe: "Jam Ke-1", mulai: "08:00", selesai: "08:40", type: "Reguler" },
-  { id: "11", hari: "Jumat", jamKe: "Jam Ke-2", mulai: "08:40", selesai: "09:20", type: "Reguler" },
-  { id: "12", hari: "Jumat", jamKe: "Sholat Jumat", mulai: "11:15", selesai: "12:30", type: "Istirahat" },
-]
-
 export default function AdminSesiPage() {
-  const [sesiList, setSesiList] = useState<Sesi[]>(DEFAULT_SESI)
+  const [sesiList, setSesiList] = useState<Sesi[]>([])
   const [selectedDay, setSelectedDay] = useState("Senin")
   const [showModal, setShowModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form state
   const [formHari, setFormHari] = useState("Senin")
@@ -42,39 +30,71 @@ export default function AdminSesiPage() {
   const [formSelesai, setFormSelesai] = useState("07:45")
   const [formType, setFormType] = useState("Reguler")
 
-  const filteredSesi = sesiList
-    .filter(s => s.hari === selectedDay)
-    .sort((a, b) => a.mulai.localeCompare(b.mulai))
+  const loadData = async () => {
+    setIsLoading(true)
+    const data = await getSessions()
+    setSesiList(data as Sesi[])
+    setIsLoading(false)
+  }
 
-  const handleAdd = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const filteredSesi = sesiList
+    .filter(s => s.day === selectedDay)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formJamKe.trim()) return
-    setSesiList([...sesiList, {
-      id: Date.now().toString(),
-      hari: formHari,
-      jamKe: formJamKe,
-      mulai: formMulai,
-      selesai: formSelesai,
+    setIsSubmitting(true)
+
+    const res = await createSession({
+      day: formHari,
+      name: formJamKe,
+      startTime: formMulai,
+      endTime: formSelesai,
       type: formType
-    }])
-    setFormJamKe("")
-    setShowModal(false)
+    })
+
+    if (res.error) {
+      alert(res.error)
+    } else {
+      setFormJamKe("")
+      setShowModal(false)
+      loadData()
+    }
+    setIsSubmitting(false)
   }
 
-  const handleDelete = (id: string) => {
-    setSesiList(sesiList.filter(s => s.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!confirm("Hapus sesi ini?")) return
+    setIsSubmitting(true)
+    const res = await deleteSession(id)
+    if (res.error) alert(res.error)
+    else loadData()
+    setIsSubmitting(false)
   }
 
-  const handleCopyToDay = (targetDay: string) => {
-    const sourceSesi = sesiList.filter(s => s.hari === selectedDay)
+  const handleCopyToDay = async (targetDay: string) => {
+    const sourceSesi = sesiList.filter(s => s.day === selectedDay)
     if (sourceSesi.length === 0) return alert("Tidak ada sesi di hari ini untuk disalin.")
-    const existing = sesiList.filter(s => s.hari !== targetDay)
-    const copied = sourceSesi.map(s => ({
-      ...s,
-      id: Date.now().toString() + Math.random().toString(36).slice(2),
-      hari: targetDay
-    }))
-    setSesiList([...existing, ...copied])
+    
+    setIsSubmitting(true)
+    // Add all one by one
+    for (const s of sourceSesi) {
+      await createSession({
+        day: targetDay,
+        name: s.name,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        type: s.type
+      })
+    }
+    await loadData()
+    setIsSubmitting(false)
+    alert(`Berhasil menyalin ${sourceSesi.length} sesi ke hari ${targetDay}.`)
   }
 
   const typeStyles: Record<string, { bg: string; text: string; border: string }> = {
@@ -86,7 +106,7 @@ export default function AdminSesiPage() {
 
   const allDayCounts = DAYS.map(d => ({
     day: d,
-    count: sesiList.filter(s => s.hari === d).length
+    count: sesiList.filter(s => s.day === d).length
   }))
 
   return (
@@ -99,7 +119,7 @@ export default function AdminSesiPage() {
           </Link>
           <div>
             <h2 className="text-base font-bold text-slate-900 leading-tight">Master Sesi & Jam Pelajaran</h2>
-            <p className="text-[11px] text-slate-500 font-medium">Atur sesi per hari (setiap hari bisa berbeda)</p>
+            <p className="text-[11px] text-slate-500 font-medium">Atur sesi per hari secara dinamis (Tersimpan ke Database)</p>
           </div>
         </div>
 
@@ -108,10 +128,11 @@ export default function AdminSesiPage() {
             setFormHari(selectedDay)
             setShowModal(true)
           }}
-          className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm flex items-center gap-1.5"
+          disabled={isSubmitting}
+          className="bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 shadow-sm flex items-center gap-1.5 disabled:opacity-50"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Tambah Sesi</span>
+          <span>Tambah</span>
         </button>
       </div>
 
@@ -147,7 +168,8 @@ export default function AdminSesiPage() {
             <button
               key={d}
               onClick={() => handleCopyToDay(d)}
-              className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-lg hover:bg-blue-700 transition"
+              disabled={isSubmitting}
+              className="text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             >
               {d.slice(0, 3)}
             </button>
@@ -164,7 +186,12 @@ export default function AdminSesiPage() {
           </h3>
         </div>
 
-        {filteredSesi.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 flex flex-col items-center justify-center text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
+            <span className="text-xs">Memuat sesi dari database...</span>
+          </div>
+        ) : filteredSesi.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 italic flex flex-col items-center gap-2">
             <Clock className="w-8 h-8 text-slate-300" />
             <span>Belum ada sesi untuk hari {selectedDay}.</span>
@@ -181,8 +208,8 @@ export default function AdminSesiPage() {
                       <Clock className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900">{s.jamKe}</h4>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">{s.mulai} — {s.selesai}</p>
+                      <h4 className="text-xs font-bold text-slate-900">{s.name}</h4>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">{s.startTime} — {s.endTime}</p>
                     </div>
                   </div>
 
@@ -190,7 +217,11 @@ export default function AdminSesiPage() {
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${style.bg} ${style.text} ${style.border}`}>
                       {s.type}
                     </span>
-                    <button onClick={() => handleDelete(s.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition rounded-lg hover:bg-red-50">
+                    <button 
+                      onClick={() => handleDelete(s.id)} 
+                      disabled={isSubmitting}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 transition rounded-lg hover:bg-red-50 disabled:opacity-50"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -299,7 +330,9 @@ export default function AdminSesiPage() {
 
               <div className="flex gap-2 mt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50">Batal</button>
-                <button type="submit" className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700">Simpan Sesi</button>
+                <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 disabled:opacity-50">
+                  {isSubmitting ? "Menyimpan..." : "Simpan Sesi"}
+                </button>
               </div>
             </form>
           </div>
