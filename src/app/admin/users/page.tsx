@@ -106,39 +106,37 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Download Excel Template
-  const handleDownloadTemplate = () => {
+  // Download Excel Templates
+  const handleDownloadTemplateSiswa = () => {
     const templateData = [
-      {
-        "Nama Lengkap": "Bpk. Kurniawan S, S.Kom",
-        "Username": "kurniawan_guru",
-        "Password": "password123",
-        "Role": "TEACHER"
-      },
-      {
-        "Nama Lengkap": "Fajar Pratama",
-        "Username": "0067821943",
-        "Password": "password123",
-        "Role": "STUDENT"
-      },
-      {
-        "Nama Lengkap": "Siti Rahmawati",
-        "Username": "0067821990",
-        "Password": "password123",
-        "Role": "STUDENT"
-      },
-      {
-        "Nama Lengkap": "PT Telkom Indonesia",
-        "Username": "mitra_telkom",
-        "Password": "password123",
-        "Role": "DUDI"
-      }
+      { "Nama Lengkap": "Fajar Pratama", "Username (NISN)": "0067821943", "Password": "password123", "Kelas": "X RPL 1", "Role": "STUDENT" },
+      { "Nama Lengkap": "Siti Rahmawati", "Username (NISN)": "0067821990", "Password": "password123", "Kelas": "X RPL 1", "Role": "STUDENT" }
     ]
-
     const worksheet = XLSX.utils.json_to_sheet(templateData)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Pengguna")
-    XLSX.writeFile(workbook, "Template_Import_Pengguna_PELITA.xlsx")
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Siswa")
+    XLSX.writeFile(workbook, "Template_Import_Siswa.xlsx")
+  }
+
+  const handleDownloadTemplateGuru = () => {
+    const templateData = [
+      { "Nama Lengkap": "Bpk. Kurniawan S, S.Kom", "Username (NIP/NUPTK)": "kurniawan_guru", "Password": "password123", "Role": "TEACHER" }
+    ]
+    const worksheet = XLSX.utils.json_to_sheet(templateData)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Guru")
+    XLSX.writeFile(workbook, "Template_Import_Guru.xlsx")
+  }
+
+  const handleDownloadTemplateLainnya = () => {
+    const templateData = [
+      { "Nama Lengkap": "Admin Utama", "Username": "admin_utama", "Password": "password123", "Role": "ADMIN" },
+      { "Nama Lengkap": "PT Telkom", "Username": "mitra_telkom", "Password": "password123", "Role": "DUDI" }
+    ]
+    const worksheet = XLSX.utils.json_to_sheet(templateData)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Lainnya")
+    XLSX.writeFile(workbook, "Template_Import_Lainnya.xlsx")
   }
 
   // Handle File Upload & Parse
@@ -445,18 +443,25 @@ export default function AdminUsersPage() {
 
             <div className="overflow-y-auto py-4 flex flex-col gap-4">
               {/* Step 1: Download Template */}
-              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex items-center justify-between gap-3">
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex flex-col gap-3">
                 <div>
                   <h4 className="text-xs font-bold text-blue-900">Belum punya format file?</h4>
-                  <p className="text-[10px] text-blue-700 mt-0.5">Unduh template Excel resmi yang sudah disesuaikan dengan sistem PELITA.</p>
+                  <p className="text-[10px] text-blue-700 mt-0.5">Unduh template Excel resmi yang sudah disesuaikan dengan sistem PELITA berdasarkan role.</p>
                 </div>
-                <button 
-                  onClick={handleDownloadTemplate}
-                  className="shrink-0 bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-100 shadow-sm flex items-center gap-1.5 transition"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Unduh Template</span>
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleDownloadTemplateSiswa} className="flex-1 bg-white border border-blue-200 text-blue-700 px-2 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-100 shadow-sm flex items-center justify-center gap-1.5 transition">
+                    <Download className="w-3 h-3" />
+                    <span>Siswa</span>
+                  </button>
+                  <button onClick={handleDownloadTemplateGuru} className="flex-1 bg-white border border-blue-200 text-blue-700 px-2 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-100 shadow-sm flex items-center justify-center gap-1.5 transition">
+                    <Download className="w-3 h-3" />
+                    <span>Guru</span>
+                  </button>
+                  <button onClick={handleDownloadTemplateLainnya} className="flex-1 bg-white border border-blue-200 text-blue-700 px-2 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-100 shadow-sm flex items-center justify-center gap-1.5 transition">
+                    <Download className="w-3 h-3" />
+                    <span>Admin/DUDI</span>
+                  </button>
+                </div>
               </div>
 
               {/* Step 2: Upload File */}

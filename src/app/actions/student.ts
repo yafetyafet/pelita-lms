@@ -35,12 +35,58 @@ export async function submitAttendance(lat: number, lng: number) {
     return { error: "Anda sudah melakukan presensi hari ini." }
   }
 
+  // Fetch settings
+  const [schoolLat, schoolLng, radiusStr, timeLimitStr] = await Promise.all([
+    prisma.appSetting.findUnique({ where: { key: "SCHOOL_LATITUDE" } }),
+    prisma.appSetting.findUnique({ where: { key: "SCHOOL_LONGITUDE" } }),
+    prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_RADIUS" } }),
+    prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_TIME_LIMIT" } })
+  ])
+
+  // Verify Geofence
+  if (schoolLat?.value && schoolLng?.value && radiusStr?.value) {
+    const sLat = parseFloat(schoolLat.value)
+    const sLng = parseFloat(schoolLng.value)
+    const maxRadius = parseInt(radiusStr.value, 10)
+    
+    if (!isNaN(sLat) && !isNaN(sLng) && !isNaN(maxRadius)) {
+      const R = 6371e3
+      const phi1 = lat * Math.PI/180
+      const phi2 = sLat * Math.PI/180
+      const dPhi = (sLat-lat) * Math.PI/180
+      const dLam = (sLng-lng) * Math.PI/180
+
+      const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(dLam/2) * Math.sin(dLam/2)
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+      const distance = R * c
+
+      if (distance > maxRadius) {
+        return { error: `Gagal presensi. Anda berada di luar zona sekolah (Jarak Anda: ${Math.round(distance)} meter, Maksimal: ${maxRadius} meter).` }
+      }
+    }
+  }
+
+  // Verify Time
+  let finalStatus = "PRESENT"
+  if (timeLimitStr?.value) {
+    const now = new Date()
+    const currentMins = now.getHours() * 60 + now.getMinutes()
+    const [limitHour, limitMin] = timeLimitStr.value.split(':').map(Number)
+    const limitMins = limitHour * 60 + limitMin
+    
+    if (currentMins > limitMins) {
+      finalStatus = "LATE"
+    }
+  }
+
   // Create attendance record
   await prisma.attendance.create({
     data: {
       userId: userId,
       classId: studentClass.classId,
-      status: "PRESENT",
+      status: finalStatus as any,
       lat,
       lng,
     }

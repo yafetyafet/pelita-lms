@@ -18,10 +18,10 @@ import {
   Bell,
   Clock,
   BookMarked,
-  UserCheck,
   FileSpreadsheet,
   UploadCloud,
-  LogOut
+  LogOut,
+  MapPin
 } from "lucide-react"
 
 export default function AdminDashboard() {
@@ -59,6 +59,7 @@ export default function AdminDashboard() {
     { id: "sesi", title: "Master Sesi & Jam Pelajaran", desc: "Atur Durasi & Shift Jam Ke-X", icon: Clock },
     { id: "mapel", title: "Master Mapel & Pengampu", desc: "Data Mata Pelajaran & Relasi Guru", icon: BookMarked },
     { id: "jadwal", title: "Plotting Jadwal Mandiri Guru", desc: "Guru Mapel Menginput Jadwal Sendiri", icon: Calendar },
+    { id: "attendance-settings", title: "Aturan Presensi (GPS)", desc: "Set Titik Koordinat & Radius Absen", icon: MapPin },
     { id: "ujian", title: "Jadwal & Token Ujian PTS CBT", desc: "Pengaturan Token & Ruang CBT", icon: BookOpen },
     { id: "backup", title: "Backup Database Supabase", desc: "Sinkronisasi & Snapshot Data", icon: Database },
   ]

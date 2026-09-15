@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { submitAttendance, submitCheckOut, getTodayAttendance } from "@/app/actions/student"
+import { submitAttendance, submitCheckOut, getTodayAttendance, getStudentMaterials, getStudentAssignments, getStudentViolations } from "@/app/actions/student"
 import { getCurrentUser, logout } from "@/app/actions/auth"
+import { getBroadcasts } from "@/app/actions/admin"
 import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
@@ -37,9 +38,21 @@ export default function StudentDashboard() {
   const [hasUnreadNotif, setHasUnreadNotif] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
 
+  const [materials, setMaterials] = useState<any[]>([])
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [violations, setViolations] = useState<any[]>([])
+  const [broadcasts, setBroadcasts] = useState<any[]>([])
+
   useEffect(() => {
     async function loadData() {
-      const [data, user] = await Promise.all([getTodayAttendance(), getCurrentUser()])
+      const [data, user, mats, assigns, viols, broads] = await Promise.all([
+        getTodayAttendance(), 
+        getCurrentUser(),
+        getStudentMaterials(),
+        getStudentAssignments(),
+        getStudentViolations(),
+        getBroadcasts()
+      ])
       if (user) {
         setCurrentUser(user)
       }
@@ -51,6 +64,10 @@ export default function StudentDashboard() {
           setCheckOutTimeStr(new Date(data.checkOutTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
         }
       }
+      setMaterials(mats || [])
+      setAssignments(assigns || [])
+      setViolations(viols || [])
+      setBroadcasts((broads || []).filter(b => ["Semua Pengguna", "Siswa", "ALL"].includes(b.target)))
       setIsLoading(false)
     }
     loadData()
@@ -323,15 +340,15 @@ export default function StudentDashboard() {
         </Link>
 
         <Link href="/student/discipline" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
-          <span className="text-[11px] font-semibold text-slate-500">Poin Karakter</span>
-          <span className="text-lg font-bold text-blue-600 mt-0.5">-</span>
-          <span className="text-[10px] font-medium text-slate-500 mt-0.5">Lihat Detail</span>
+          <span className="text-[11px] font-semibold text-slate-500">Poin Pelanggaran</span>
+          <span className="text-lg font-bold text-blue-600 mt-0.5">{violations.length * 5}</span>
+          <span className="text-[10px] font-medium text-slate-500 mt-0.5">{violations.length} Kasus</span>
         </Link>
 
         <Link href="/student/assignments" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
           <span className="text-[11px] font-semibold text-slate-500">Tugas & Kuis</span>
-          <span className="text-lg font-bold text-amber-600 mt-0.5">-</span>
-          <span className="text-[10px] font-medium text-amber-600 mt-0.5">Lihat Detail</span>
+          <span className="text-lg font-bold text-amber-600 mt-0.5">{assignments.length}</span>
+          <span className="text-[10px] font-medium text-amber-600 mt-0.5">Tugas Tersedia</span>
         </Link>
       </div>
 
@@ -343,7 +360,7 @@ export default function StudentDashboard() {
             Layanan Akademik
           </h3>
           <span className="text-[11px] font-semibold text-blue-600 hover:underline">
-            8 Modul Siap
+            {materials.length} Modul Siap
           </span>
         </div>
 
@@ -433,16 +450,21 @@ export default function StudentDashboard() {
               <button onClick={() => setShowNotif(false)} className="text-slate-400 font-bold text-xs">Tutup</button>
             </div>
             <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
-              <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                <span className="text-[10px] font-bold text-blue-600 block mb-1">Baru saja</span>
-                <span className="text-xs font-bold text-slate-800 block">Tidak Ada Tugas</span>
-                <span className="text-[11px] text-slate-600">Belum ada tugas atau materi baru yang ditugaskan.</span>
-              </div>
-              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                <span className="text-[10px] font-bold text-slate-500 block mb-1">2 jam yang lalu</span>
-                <span className="text-xs font-bold text-slate-800 block">Pengumuman Sekolah</span>
-                <span className="text-[11px] text-slate-600">Besok menggunakan seragam pramuka lengkap.</span>
-              </div>
+              {broadcasts.length === 0 ? (
+                <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center">
+                  <span className="text-xs font-bold text-slate-500 block">Tidak Ada Pengumuman</span>
+                </div>
+              ) : (
+                broadcasts.map(b => (
+                  <div key={b.id} className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <span className="text-[10px] font-bold text-blue-600 block mb-1">
+                      {new Date(b.createdAt).toLocaleDateString('id-ID')}
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 block">{b.title}</span>
+                    <span className="text-[11px] text-slate-600">{b.message}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
