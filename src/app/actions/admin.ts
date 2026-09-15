@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
+import { requireRole } from '@/lib/logic/rbac'
 
 export async function getDashboardStats() {
   const [totalStudents, totalTeachers, totalAdmins, totalClasses, totalSubjects] = await Promise.all([
@@ -25,6 +27,20 @@ export async function getDashboardStats() {
 // ==========================================
 // USER MANAGEMENT
 // ==========================================
+async function getAdminUserId() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  const role = cookieStore.get('role')?.value as any
+  if (!userId || !role) return null
+
+  try {
+    const user = requireRole({ id: userId, role }, "ADMIN")
+    return user.id
+  } catch (e) {
+    return null
+  }
+}
+
 export async function getUsers() {
   return await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },

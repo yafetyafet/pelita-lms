@@ -29,6 +29,7 @@ model User {
   ForumDiscussion  ForumDiscussion[]
   ForumReply       ForumReply[]
   Exam             Exam[]
+  ExamSubmission   ExamSubmission[]
 }
 
 enum Role {
@@ -270,8 +271,13 @@ model ExamSubmission {
   userId      String
   answers     String?
   score       Float?
-  submittedAt DateTime @default(now())
+  scoreMax    Float?
+  essayScore  Float?
+  startedAt   DateTime @default(now())
+  submittedAt DateTime?
+  status      String   @default("ONGOING")
   exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Schedule {

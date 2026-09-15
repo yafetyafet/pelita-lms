@@ -3,6 +3,8 @@
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { hitungJarakGeofence, tentukanStatus, StatusPresensi } from '@/lib/logic/attendance'
+import { acakPG, tanpaKunci, kelayakanUjian, koreksiOtomatis } from '@/lib/logic/exam'
 
 export async function submitAttendance(lat: number, lng: number) {
   const cookieStore = await cookies()
@@ -10,14 +12,12 @@ export async function submitAttendance(lat: number, lng: number) {
 
   if (!userId) return { error: "Belum login" }
 
-  // Check if student has a class
   const studentClass = await prisma.classStudent.findFirst({
     where: { userId }
   })
 
   if (!studentClass) return { error: "Siswa belum memiliki rombel/kelas." }
 
-  // Check if already attended today
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -35,7 +35,6 @@ export async function submitAttendance(lat: number, lng: number) {
     return { error: "Anda sudah melakukan presensi hari ini." }
   }
 
-  // Fetch settings
   const [schoolLat, schoolLng, radiusStr, timeLimitStr] = await Promise.all([
     prisma.appSetting.findUnique({ where: { key: "SCHOOL_LATITUDE" } }),
     prisma.appSetting.findUnique({ where: { key: "SCHOOL_LONGITUDE" } }),
@@ -43,50 +42,38 @@ export async function submitAttendance(lat: number, lng: number) {
     prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_TIME_LIMIT" } })
   ])
 
-  // Verify Geofence
+  let validasi = null
   if (schoolLat?.value && schoolLng?.value && radiusStr?.value) {
     const sLat = parseFloat(schoolLat.value)
     const sLng = parseFloat(schoolLng.value)
     const maxRadius = parseInt(radiusStr.value, 10)
     
     if (!isNaN(sLat) && !isNaN(sLng) && !isNaN(maxRadius)) {
-      const R = 6371e3
-      const phi1 = lat * Math.PI/180
-      const phi2 = sLat * Math.PI/180
-      const dPhi = (sLat-lat) * Math.PI/180
-      const dLam = (sLng-lng) * Math.PI/180
-
-      const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
-              Math.cos(phi1) * Math.cos(phi2) *
-              Math.sin(dLam/2) * Math.sin(dLam/2)
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-      const distance = R * c
-
-      if (distance > maxRadius) {
-        return { error: `Gagal presensi. Anda berada di luar zona sekolah (Jarak Anda: ${Math.round(distance)} meter, Maksimal: ${maxRadius} meter).` }
-      }
+      validasi = hitungJarakGeofence(lat, lng, sLat, sLng, maxRadius)
     }
   }
 
-  // Verify Time
-  let finalStatus = "PRESENT"
-  if (timeLimitStr?.value) {
-    const now = new Date()
-    const currentMins = now.getHours() * 60 + now.getMinutes()
-    const [limitHour, limitMin] = timeLimitStr.value.split(':').map(Number)
-    const limitMins = limitHour * 60 + limitMin
-    
-    if (currentMins > limitMins) {
-      finalStatus = "LATE"
-    }
+  // Waktu
+  const waktuPresensi = new Date()
+  let limitMulai = "06:00"
+  let limitSelesai = timeLimitStr?.value || "07:15"
+
+  const keputusan = tentukanStatus({
+    jenis: "datang",
+    waktu: waktuPresensi,
+    jendela: { mulai: limitMulai, selesai: limitSelesai },
+    validasi: validasi as any
+  })
+
+  if (!keputusan.diterima) {
+    return { error: keputusan.pesan }
   }
 
-  // Create attendance record
   await prisma.attendance.create({
     data: {
       userId: userId,
       classId: studentClass.classId,
-      status: finalStatus as any,
+      status: keputusan.status,
       lat,
       lng,
     }
@@ -94,7 +81,7 @@ export async function submitAttendance(lat: number, lng: number) {
 
   revalidatePath('/', 'layout')
   
-  return { success: true }
+  return { success: true, pesan: keputusan.pesan }
 }
 
 export async function getTodayAttendance() {
@@ -179,7 +166,6 @@ export async function submitCheckOut(lat: number, lng: number) {
     return { error: "Anda sudah melakukan presensi pulang hari ini." }
   }
 
-  // Fetch settings for checkout
   const [schoolLat, schoolLng, radiusStr, checkoutTimeStr] = await Promise.all([
     prisma.appSetting.findUnique({ where: { key: "SCHOOL_LATITUDE" } }),
     prisma.appSetting.findUnique({ where: { key: "SCHOOL_LONGITUDE" } }),
@@ -187,53 +173,43 @@ export async function submitCheckOut(lat: number, lng: number) {
     prisma.appSetting.findUnique({ where: { key: "ATTENDANCE_CHECKOUT_TIME" } })
   ])
 
-  // Verify Geofence
+  let validasi = null
   if (schoolLat?.value && schoolLng?.value && radiusStr?.value) {
     const sLat = parseFloat(schoolLat.value)
     const sLng = parseFloat(schoolLng.value)
     const maxRadius = parseInt(radiusStr.value, 10)
     
     if (!isNaN(sLat) && !isNaN(sLng) && !isNaN(maxRadius)) {
-      const R = 6371e3
-      const phi1 = lat * Math.PI/180
-      const phi2 = sLat * Math.PI/180
-      const dPhi = (sLat-lat) * Math.PI/180
-      const dLam = (sLng-lng) * Math.PI/180
-
-      const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
-              Math.cos(phi1) * Math.cos(phi2) *
-              Math.sin(dLam/2) * Math.sin(dLam/2)
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-      const distance = R * c
-
-      if (distance > maxRadius) {
-        return { error: `Gagal presensi pulang. Anda berada di luar zona sekolah (Jarak Anda: ${Math.round(distance)} meter, Maksimal: ${maxRadius} meter).` }
-      }
+      validasi = hitungJarakGeofence(lat, lng, sLat, sLng, maxRadius)
     }
   }
 
-  // Verify Checkout Time
-  if (checkoutTimeStr?.value) {
-    const now = new Date()
-    const currentMins = now.getHours() * 60 + now.getMinutes()
-    const [limitHour, limitMin] = checkoutTimeStr.value.split(':').map(Number)
-    const limitMins = limitHour * 60 + limitMin
-    
-    if (currentMins < limitMins) {
-      return { error: `Belum waktunya pulang. Presensi pulang baru dapat dilakukan mulai pukul ${checkoutTimeStr.value} WIB.` }
-    }
+  const waktuPresensi = new Date()
+  let limitMulai = checkoutTimeStr?.value || "14:30"
+  let limitSelesai = "16:00"
+
+  const keputusan = tentukanStatus({
+    jenis: "pulang",
+    waktu: waktuPresensi,
+    jendela: { mulai: limitMulai, selesai: limitSelesai },
+    validasi: validasi as any
+  })
+
+  if (!keputusan.diterima) {
+    return { error: keputusan.pesan }
   }
 
   await prisma.attendance.update({
     where: { id: existing.id },
     data: {
-      checkOutTime: new Date()
+      checkOutTime: new Date(),
+      status: (existing.status === "tanpa_lokasi" || keputusan.status === "tanpa_lokasi" ? "tanpa_lokasi" : existing.status) // keep history
     }
   })
 
   revalidatePath('/', 'layout')
   
-  return { success: true }
+  return { success: true, pesan: keputusan.pesan }
 }
 
 export async function getStudentMaterials() {
@@ -320,7 +296,7 @@ export async function getStudentExams() {
   const studentClass = await prisma.classStudent.findFirst({ where: { userId } })
   if (!studentClass) return []
 
-  return await prisma.exam.findMany({
+  const exams = await prisma.exam.findMany({
     where: { classId: studentClass.classId },
     include: {
       subject: { select: { name: true } },
@@ -331,32 +307,134 @@ export async function getStudentExams() {
           question: true,
           options: true,
           type: true,
-          correctAnswer: true
+          correctAnswer: true,
+          points: true
         }
+      },
+      submissions: {
+        where: { userId }
       }
+    }
+  })
+
+  // Format and randomize deterministically for this student
+  return exams.map(exam => {
+    let rawQuestions = exam.questions.map(q => {
+      let parsedOptions = null;
+      try {
+        if (q.options) parsedOptions = JSON.parse(q.options);
+      } catch (e) {}
+      
+      return {
+        ...q,
+        type: q.type as "PG" | "ESAI",
+        options: parsedOptions
+      }
+    })
+    
+    // Randomize using userId as seed
+    const acak = acakPG(rawQuestions, userId)
+    
+    // Remove correct answers
+    const aman = tanpaKunci(acak)
+
+    return {
+      ...exam,
+      questions: aman,
+      mySubmission: exam.submissions[0] || null
     }
   })
 }
 
-export async function submitExam(examId: string, answers: string, score: number) {
+export async function submitExam(examId: string, answersJson: string) {
   const cookieStore = await cookies()
   const userId = cookieStore.get('userId')?.value
   if (!userId) return { error: "Not logged in" }
 
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    include: { questions: true }
+  })
+
+  if (!exam) return { error: "Ujian tidak ditemukan" }
+
+  // Check if already submitted
+  const existing = await prisma.examSubmission.findFirst({
+    where: { examId, userId }
+  })
+
+  let jawabanMap = new Map<string, string>()
   try {
+    const parsed = JSON.parse(answersJson)
+    Object.keys(parsed).forEach(k => jawabanMap.set(k, parsed[k]))
+  } catch(e) {}
+
+  // Auto-grade
+  const { skorOtomatis, skorMaksOtomatis, bobotEsai } = koreksiOtomatis(
+    exam.questions.map(q => ({
+      id: q.id,
+      type: q.type as "PG" | "ESAI",
+      question: q.question,
+      options: null,
+      correctAnswer: q.correctAnswer,
+      points: q.points
+    })),
+    jawabanMap
+  )
+
+  if (existing) {
+    if (existing.status === "FINISHED") {
+      return { error: "Sudah dikumpulkan" }
+    }
+    await prisma.examSubmission.update({
+      where: { id: existing.id },
+      data: {
+        answers: answersJson,
+        score: skorOtomatis,
+        scoreMax: skorMaksOtomatis,
+        submittedAt: new Date(),
+        status: "FINISHED"
+      }
+    })
+  } else {
     await prisma.examSubmission.create({
       data: {
         examId,
         userId,
-        answers,
-        score
+        answers: answersJson,
+        score: skorOtomatis,
+        scoreMax: skorMaksOtomatis,
+        submittedAt: new Date(),
+        status: "FINISHED"
       }
     })
-    revalidatePath('/', 'layout')
-    return { success: true }
-  } catch (err: any) {
-    return { error: err.message }
   }
+
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
+export async function startExam(examId: string) {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return { error: "Not logged in" }
+
+  const existing = await prisma.examSubmission.findFirst({
+    where: { examId, userId }
+  })
+
+  if (!existing) {
+    await prisma.examSubmission.create({
+      data: {
+        examId,
+        userId,
+        status: "ONGOING"
+      }
+    })
+  }
+
+  revalidatePath('/', 'layout')
+  return { success: true }
 }
 
 // ==========================================

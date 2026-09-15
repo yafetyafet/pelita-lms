@@ -4,9 +4,20 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
+import { requireRole } from '@/lib/logic/rbac'
+
 async function getTeacherUserId() {
   const cookieStore = await cookies()
-  return cookieStore.get('userId')?.value || null
+  const userId = cookieStore.get('userId')?.value
+  const role = cookieStore.get('role')?.value as any
+  if (!userId || !role) return null
+
+  try {
+    const user = requireRole({ id: userId, role }, "TEACHER", "ADMIN")
+    return user.id
+  } catch (e) {
+    return null
+  }
 }
 
 // ==========================================

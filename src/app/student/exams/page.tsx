@@ -98,23 +98,8 @@ export default function ExamsCBTPage() {
     if (!activeExam) return
     setIsSubmitting(true)
     
-    // Calculate Score
-    let correctCount = 0
-    activeExam.questions.forEach((q: any) => {
-      const selectedIndex = answers[q.id]
-      if (selectedIndex !== undefined) {
-        let optionsArr = []
-        try { optionsArr = JSON.parse(q.options) } catch (e) { optionsArr = q.options.split(',') }
-        const selectedText = optionsArr[selectedIndex]
-        if (selectedText === q.correctAnswer) correctCount++
-      }
-    })
-    
-    const finalScore = activeExam.questions.length > 0 
-      ? (correctCount / activeExam.questions.length) * 100 
-      : 0
-
-    await submitExam(activeExam.id, JSON.stringify(answers), finalScore)
+    // We send answers to backend and let the backend calculate the score based on the questions it randomized
+    await submitExam(activeExam.id, JSON.stringify(answers))
     setIsFinished(true)
     setIsSubmitting(false)
   }
