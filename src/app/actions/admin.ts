@@ -419,3 +419,75 @@ export async function deleteSession(id: string) {
     return { error: err.message }
   }
 }
+
+// ==========================================
+// BROADCAST MANAGEMENT
+// ==========================================
+export async function getBroadcasts() {
+  return await prisma.broadcast.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  })
+}
+
+export async function createBroadcast(data: { title: string, message: string, target: string }) {
+  try {
+    await prisma.broadcast.create({ data })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+// ==========================================
+// APP SETTINGS (e.g., CBT Token)
+// ==========================================
+export async function getAppSetting(key: string) {
+  const setting = await prisma.appSetting.findUnique({ where: { key } })
+  return setting ? setting.value : null
+}
+
+export async function setAppSetting(key: string, value: string) {
+  try {
+    await prisma.appSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+// ==========================================
+// BACKUP MANAGEMENT
+// ==========================================
+export async function downloadBackupData() {
+  try {
+    // In a real application, you might use pg_dump. 
+    // Here we create a simple JSON dump of critical tables.
+    const [users, classes, subjects, schedules, materials] = await Promise.all([
+      prisma.user.findMany(),
+      prisma.class.findMany(),
+      prisma.subject.findMany(),
+      prisma.schedule.findMany(),
+      prisma.material.findMany()
+    ])
+
+    const backupData = {
+      timestamp: new Date().toISOString(),
+      users,
+      classes,
+      subjects,
+      schedules,
+      materials
+    }
+    
+    return { success: true, data: backupData }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}

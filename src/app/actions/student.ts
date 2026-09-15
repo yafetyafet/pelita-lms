@@ -212,3 +212,101 @@ export async function getAttendanceHistory() {
     take: 30
   })
 }
+
+// ==========================================
+// CBT EXAMS
+// ==========================================
+export async function validateCbtToken(token: string) {
+  const setting = await prisma.appSetting.findUnique({ where: { key: "CBT_TOKEN" } })
+  return setting?.value === token
+}
+
+export async function getStudentExams() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  const studentClass = await prisma.classStudent.findFirst({ where: { userId } })
+  if (!studentClass) return []
+
+  return await prisma.exam.findMany({
+    where: { classId: studentClass.classId },
+    include: {
+      subject: { select: { name: true } },
+      classInfo: { select: { name: true } },
+      questions: {
+        select: {
+          id: true,
+          question: true,
+          options: true,
+          type: true,
+          correctAnswer: true
+        }
+      }
+    }
+  })
+}
+
+export async function submitExam(examId: string, answers: string, score: number) {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return { error: "Not logged in" }
+
+  try {
+    await prisma.examSubmission.create({
+      data: {
+        examId,
+        userId,
+        answers,
+        score
+      }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+// ==========================================
+// SPIRITUAL JOURNAL
+// ==========================================
+export async function getSpiritualJournals() {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return []
+
+  return await prisma.spiritualJournal.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
+export async function createSpiritualJournal(data: { activity: string, notes: string }) {
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('userId')?.value
+  if (!userId) return { error: "Not logged in" }
+
+  try {
+    await prisma.spiritualJournal.create({
+      data: {
+        userId,
+        activity: data.activity,
+        notes: data.notes
+      }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+// ==========================================
+// LIBRARY
+// ==========================================
+export async function getLibraryBooks() {
+  return await prisma.libraryBook.findMany({
+    orderBy: { createdAt: 'desc' }
+  })
+}

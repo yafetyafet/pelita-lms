@@ -1,58 +1,35 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { 
-  ArrowLeft, 
-  Search, 
-  BookMarked, 
-  BookOpen, 
-  DownloadCloud, 
-  Sparkles, 
-  ExternalLink,
-  Star
+  ArrowLeft, Search, BookMarked, BookOpen, DownloadCloud, Sparkles, ExternalLink, Star, Loader2
 } from "lucide-react"
+import { getLibraryBooks } from "@/app/actions/student"
 
 export default function LibraryPage() {
   const [search, setSearch] = useState("")
+  const [books, setBooks] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const books = [
-    {
-      title: "Panduan Pengembangan Aplikasi Web Modern Fullstack",
-      author: "Pusat Kurikulum Vokasi",
-      category: "Rekayasa Perangkat Lunak",
-      pages: "184 Hlm",
-      downloads: "420x",
-      coverColor: "from-blue-600 to-indigo-700",
-      desc: "Referensi standar kompetensi keahlian RPL: arsitektur REST, basis data PostgreSQL, dan responsive UI."
-    },
-    {
-      title: "Menjadi Insan Berkarakter: Integrasi Iman & Teknologi",
-      author: "Drs. H. Miftahudin, M.Ag",
-      category: "Iman & Literasi",
-      pages: "120 Hlm",
-      downloads: "310x",
-      coverColor: "from-emerald-600 to-teal-700",
-      desc: "Membentuk pribadi pembelajar yang berakhlak mulia, amanah dalam teknologi, dan menjunjung tinggi kejujuran."
-    },
-    {
-      title: "Algoritma Pemrograman Berorientasi Objek Lanjut",
-      author: "Tim Guru Produktif SMK",
-      category: "Produktif RPL",
-      pages: "210 Hlm",
-      downloads: "560x",
-      coverColor: "from-amber-600 to-orange-700",
-      desc: "Latihan praktikum logika algoritma, desain pola (design patterns), dan pemecahan masalah komputasi."
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true)
+      const data = await getLibraryBooks()
+      setBooks(data)
+      setIsLoading(false)
     }
-  ]
+    loadData()
+  }, [])
 
   const filtered = books.filter((b) => 
     b.title.toLowerCase().includes(search.toLowerCase()) ||
-    b.category.toLowerCase().includes(search.toLowerCase())
+    b.category.toLowerCase().includes(search.toLowerCase()) ||
+    b.author.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4 p-4 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2.5">
@@ -64,65 +41,85 @@ export default function LibraryPage() {
           </Link>
           <div>
             <h2 className="text-base font-bold text-slate-900 leading-tight">Perpustakaan Digital</h2>
-            <p className="text-[11px] text-slate-500 font-medium">Koleksi E-Book & Referensi Vokasi</p>
+            <p className="text-[11px] text-slate-500 font-medium">Buku teks & referensi literasi</p>
           </div>
         </div>
 
-        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full flex items-center gap-1">
-          <BookMarked className="w-3 h-3 text-amber-600" />
-          Open Access
+        <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full flex items-center gap-1">
+          <BookMarked className="w-3 h-3" /> {books.length} Buku
         </span>
       </div>
 
-      {/* Search Input */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+      {/* Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search className="h-4 w-4 text-slate-400" />
+        </div>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari judul buku, modul, atau penulis..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 shadow-sm"
+          placeholder="Cari judul buku, penulis, atau kategori..."
+          className="w-full bg-white border border-slate-200/80 rounded-2xl py-3.5 pl-11 pr-4 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
         />
       </div>
 
       {/* Book List */}
       <div className="flex flex-col gap-3">
-        {filtered.map((b, idx) => (
-          <div key={idx} className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-            <div className="flex gap-3">
-              <div className={`w-16 h-24 rounded-2xl bg-gradient-to-tr ${b.coverColor} p-2 text-white flex flex-col justify-between shrink-0 shadow-md`}>
-                <BookOpen className="w-5 h-5 text-white/80" />
-                <span className="text-[9px] font-black uppercase tracking-wider leading-tight">PELITA E-BOOK</span>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
+            <span className="text-sm font-bold text-slate-600">Memuat Katalog Buku...</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center text-center gap-3">
+            <BookOpen className="w-12 h-12 text-slate-300" />
+            <h3 className="text-sm font-bold text-slate-700">Tidak ada buku ditemukan</h3>
+            <p className="text-xs text-slate-500 max-w-xs">Buku yang kamu cari tidak tersedia di perpustakaan digital ini.</p>
+          </div>
+        ) : (
+          filtered.map((b) => (
+            <div key={b.id} className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex gap-4 hover:shadow-md transition group">
+              {/* Cover Mockup */}
+              <div className={`w-20 sm:w-24 shrink-0 rounded-2xl bg-gradient-to-br ${b.coverColor || "from-blue-600 to-indigo-700"} flex flex-col justify-between p-2.5 shadow-inner relative overflow-hidden`}>
+                <div className="absolute -right-4 -top-4 w-12 h-12 rounded-full bg-white/10 blur-xl"></div>
+                <Sparkles className="w-4 h-4 text-white/50" />
+                <div>
+                  <h4 className="text-[10px] font-black text-white leading-tight line-clamp-3">{b.title}</h4>
+                  <div className="w-full h-0.5 bg-white/20 mt-2 rounded-full"></div>
+                </div>
               </div>
 
-              <div className="flex-1 flex flex-col justify-between">
+              {/* Detail */}
+              <div className="flex flex-col justify-between flex-1 py-1">
                 <div>
-                  <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
-                    {b.category}
-                  </span>
-                  <h3 className="text-xs font-bold text-slate-900 mt-1 leading-snug">{b.title}</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{b.author}</p>
+                  <div className="flex justify-between items-start gap-2 mb-1">
+                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                      {b.category}
+                    </span>
+                    <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold bg-amber-50 px-1.5 py-0.5 rounded-md">
+                      <Star className="w-3 h-3 fill-amber-500" /> 4.9
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight mb-1">{b.title}</h3>
+                  <p className="text-[10px] text-slate-500 font-medium">Oleh: {b.author}</p>
                 </div>
 
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium pt-1">
-                  <span>{b.pages}</span>
-                  <span>•</span>
-                  <span>Diakses {b.downloads}</span>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                    <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {b.pages || "?"} Hlm</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span className="flex items-center gap-1"><DownloadCloud className="w-3 h-3" /> {b.downloads}x</span>
+                  </div>
+                  
+                  <button className="w-8 h-8 rounded-full bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition border border-slate-100 group-hover:border-blue-100">
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
-
-            <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              {b.desc}
-            </p>
-
-            <button className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Baca Online di Browser</span>
-            </button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )

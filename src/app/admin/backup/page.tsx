@@ -2,23 +2,22 @@
 
 import React, { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Database, Download, RefreshCw, CheckCircle2, ShieldCheck, Server } from "lucide-react"
+import { ArrowLeft, Database, Download, RefreshCw, CheckCircle2, ShieldCheck, Server, Loader2 } from "lucide-react"
+import { downloadBackupData } from "@/app/actions/admin"
 
 export default function AdminBackupPage() {
   const [isBackingUp, setIsBackingUp] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  const handleDownloadBackup = () => {
+  const handleDownloadBackup = async () => {
     setIsBackingUp(true)
-    setTimeout(() => {
-      setIsBackingUp(false)
+    const res = await downloadBackupData()
+    
+    if (res.error) {
+      alert("Error: " + res.error)
+    } else {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
-        JSON.stringify({
-          system: "PELITA LMS SMKN 1 Kemangkon",
-          backupDate: new Date().toISOString(),
-          status: "Snapshot Database Supabase OK",
-          engine: "PostgreSQL 15"
-        }, null, 2)
+        JSON.stringify(res.data, null, 2)
       )
       const downloadAnchor = document.createElement("a")
       downloadAnchor.setAttribute("href", dataStr)
@@ -27,9 +26,11 @@ export default function AdminBackupPage() {
       downloadAnchor.click()
       downloadAnchor.remove()
 
-      setToast("Snapshot backup database berhasil diunduh!")
+      setToast("Snapshot backup database (Real Data) berhasil diunduh!")
       setTimeout(() => setToast(null), 3500)
-    }, 1200)
+    }
+    
+    setIsBackingUp(false)
   }
 
   return (
@@ -86,10 +87,13 @@ export default function AdminBackupPage() {
           <button 
             onClick={handleDownloadBackup}
             disabled={isBackingUp}
-            className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
+            className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
           >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span>{isBackingUp ? "Mengekstrak Data..." : "Unduh Snapshot Data (JSON)"}</span>
+            {isBackingUp ? (
+              <><Loader2 className="w-4 h-4 text-emerald-400 animate-spin" /> Mengemas Data Server...</>
+            ) : (
+              <><Download className="w-4 h-4 text-emerald-400" /> Unduh Snapshot Data Real (JSON)</>
+            )}
           </button>
         </div>
       </div>

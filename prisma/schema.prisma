@@ -9,22 +9,26 @@ datasource db {
 }
 
 model User {
-  id             String            @id @default(uuid())
-  username       String            @unique
-  password       String
-  name           String
-  role           Role              @default(STUDENT)
-  avatarUrl      String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  assignments    Assignment[]
-  userAssignments UserAssignment[]
-  attendances    Attendance[]
-  studentClasses ClassStudent[]
-  teacherClasses ClassTeacher[]
-  journals       Journal[]
-  materials      Material[]
-  waliClasses    Class[]           @relation("WaliKelas")
+  id               String             @id @default(uuid())
+  username         String             @unique
+  password         String
+  name             String
+  role             Role               @default(STUDENT)
+  avatarUrl        String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  assignments      Assignment[]
+  userAssignments  UserAssignment[]
+  attendances      Attendance[]
+  studentClasses   ClassStudent[]
+  teacherClasses   ClassTeacher[]
+  journals         Journal[]
+  materials        Material[]
+  waliClasses      Class[]            @relation("WaliKelas")
+  SpiritualJournal SpiritualJournal[]
+  ForumDiscussion  ForumDiscussion[]
+  ForumReply       ForumReply[]
+  Exam             Exam[]
 }
 
 enum Role {
@@ -35,30 +39,34 @@ enum Role {
 }
 
 model Class {
-  id          String         @id @default(uuid())
-  name        String
-  description String?
-  level       Int?
-  waliId      String?
-  wali        User?          @relation("WaliKelas", fields: [waliId], references: [id], onDelete: SetNull)
-  createdAt   DateTime       @default(now())
-  assignments Assignment[]
-  attendances Attendance[]
-  students    ClassStudent[]
-  teachers    ClassTeacher[]
-  journals    Journal[]
-  materials   Material[]
+  id              String            @id @default(uuid())
+  name            String
+  description     String?
+  level           Int?
+  waliId          String?
+  wali            User?             @relation("WaliKelas", fields: [waliId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  assignments     Assignment[]
+  attendances     Attendance[]
+  students        ClassStudent[]
+  teachers        ClassTeacher[]
+  journals        Journal[]
+  materials       Material[]
+  ForumDiscussion ForumDiscussion[]
+  Exam            Exam[]
 }
 
 model Subject {
-  id          String         @id @default(uuid())
-  code        String?
-  name        String
-  description String?
-  assignments Assignment[]
-  teachers    ClassTeacher[]
-  journals    Journal[]
-  materials   Material[]
+  id              String            @id @default(uuid())
+  code            String?
+  name            String
+  description     String?
+  assignments     Assignment[]
+  teachers        ClassTeacher[]
+  journals        Journal[]
+  materials       Material[]
+  ForumDiscussion ForumDiscussion[]
+  Exam            Exam[]
 }
 
 model ClassStudent {
@@ -124,17 +132,17 @@ model UserAssignment {
 }
 
 model Attendance {
-  id        String    @id @default(uuid())
-  userId    String
-  classId   String?
-  date      DateTime  @default(now())
-  status    String
-  lat       Float?
-  lng       Float?
-  createdAt DateTime  @default(now())
+  id           String    @id @default(uuid())
+  userId       String
+  classId      String?
+  date         DateTime  @default(now())
+  status       String
+  lat          Float?
+  lng          Float?
+  createdAt    DateTime  @default(now())
   checkOutTime DateTime?
-  classInfo Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classInfo    Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Journal {
@@ -159,6 +167,65 @@ model Violation {
   createdAt   DateTime @default(now())
 }
 
+model AppSetting {
+  key   String @id
+  value String
+}
+
+model Broadcast {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  target    String
+  createdAt DateTime @default(now())
+}
+
+model SpiritualJournal {
+  id        String   @id @default(uuid())
+  userId    String
+  activity  String
+  notes     String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LibraryBook {
+  id          String   @id @default(uuid())
+  title       String
+  author      String
+  category    String
+  pages       String?
+  coverColor  String?
+  description String?
+  fileUrl     String?
+  downloads   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model ForumDiscussion {
+  id        String       @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  classId   String?
+  subjectId String?
+  createdAt DateTime     @default(now())
+  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  classInfo Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  subject   Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  replies   ForumReply[]
+}
+
+model ForumReply {
+  id           String          @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime        @default(now())
+  discussion   ForumDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
 model Session {
   id        String   @id @default(uuid())
   day       String
@@ -180,6 +247,9 @@ model Exam {
   createdAt   DateTime         @default(now())
   questions   ExamQuestion[]
   submissions ExamSubmission[]
+  classInfo   Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model ExamQuestion {
@@ -195,13 +265,13 @@ model ExamQuestion {
 }
 
 model ExamSubmission {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   examId      String
   userId      String
   answers     String?
   score       Float?
-  submittedAt DateTime  @default(now())
-  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submittedAt DateTime @default(now())
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
 }
 
 model Schedule {

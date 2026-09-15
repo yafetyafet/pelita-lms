@@ -1,23 +1,44 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Key, RefreshCw, CheckCircle2, ShieldAlert } from "lucide-react"
+import { ArrowLeft, BookOpen, Key, RefreshCw, CheckCircle2, ShieldAlert, Loader2 } from "lucide-react"
+import { getAppSetting, setAppSetting } from "@/app/actions/admin"
 
 export default function AdminUjianPage() {
-  const [token, setToken] = useState("PTS2026")
-  const [isGenerated, setIsGenerated] = useState(false)
+  const [token, setToken] = useState("...")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  const generateNewToken = () => {
+  const loadToken = async () => {
+    setIsLoading(true)
+    const t = await getAppSetting("CBT_TOKEN")
+    setToken(t || "BELUM_ADA")
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    loadToken()
+  }, [])
+
+  const generateNewToken = async () => {
+    setIsGenerating(true)
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     let res = "CBT-"
     for (let i = 0; i < 5; i++) {
       res += chars.charAt(Math.floor(Math.random() * chars.length))
     }
-    setToken(res)
-    setToast("Token CBT baru berhasil di-generate!")
-    setTimeout(() => setToast(null), 3000)
+    
+    const result = await setAppSetting("CBT_TOKEN", res)
+    if (result.error) {
+      alert(result.error)
+    } else {
+      setToken(res)
+      setToast("Token CBT baru berhasil di-generate & disimpan di database!")
+      setTimeout(() => setToast(null), 3000)
+    }
+    setIsGenerating(false)
   }
 
   return (
@@ -40,15 +61,25 @@ export default function AdminUjianPage() {
       </div>
 
       {/* Active Token Card */}
-      <div className="bg-gradient-to-br from-purple-800 via-indigo-900 to-slate-900 rounded-3xl p-5 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
+      <div className="bg-gradient-to-br from-purple-800 via-indigo-900 to-slate-900 rounded-3xl p-5 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+          <Key className="w-24 h-24" />
+        </div>
+        
+        <div className="relative z-10">
           <span className="text-[10px] font-bold uppercase tracking-wider text-purple-200 bg-white/10 px-2 py-0.5 rounded-md">
             Token Akses Sesi Ujian Aktif
           </span>
           <div className="flex items-center gap-3 mt-2">
-            <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow">
-              {token}
-            </span>
+            {isLoading ? (
+              <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow flex items-center gap-3">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </span>
+            ) : (
+              <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow">
+                {token}
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-purple-200/90 mt-1">
             Bagikan kode token ini ke pengawas ruang untuk dibuka di HP siswa sebelum ujian dimulai.
@@ -57,9 +88,10 @@ export default function AdminUjianPage() {
 
         <button 
           onClick={generateNewToken}
-          className="bg-white text-purple-900 hover:bg-purple-50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-md flex items-center gap-2 transition shrink-0"
+          disabled={isGenerating || isLoading}
+          className="relative z-10 bg-white text-purple-900 hover:bg-purple-50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-md flex items-center gap-2 transition shrink-0 disabled:opacity-70"
         >
-          <RefreshCw className="w-4 h-4 text-purple-600" />
+          {isGenerating ? <Loader2 className="w-4 h-4 text-purple-600 animate-spin" /> : <RefreshCw className="w-4 h-4 text-purple-600" />}
           <span>Generate Token Baru</span>
         </button>
       </div>

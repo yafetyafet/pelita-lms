@@ -360,3 +360,63 @@ export async function deleteSchedule(scheduleId: string) {
     return { error: err.message }
   }
 }
+
+// ==========================================
+// FORUM DISCUSSIONS
+// ==========================================
+export async function getForumDiscussions() {
+  return await prisma.forumDiscussion.findMany({
+    include: {
+      author: { select: { name: true, role: true } },
+      classInfo: { select: { name: true } },
+      subject: { select: { name: true } },
+      replies: {
+        include: {
+          author: { select: { name: true, role: true } }
+        },
+        orderBy: { createdAt: 'asc' }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
+export async function createForumDiscussion(data: { title: string, content: string, classId?: string, subjectId?: string }) {
+  const userId = await getTeacherUserId()
+  if (!userId) return { error: 'Belum login' }
+
+  try {
+    await prisma.forumDiscussion.create({
+      data: {
+        title: data.title,
+        content: data.content,
+        authorId: userId,
+        classId: data.classId || null,
+        subjectId: data.subjectId || null
+      }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
+export async function addForumReply(discussionId: string, content: string) {
+  const userId = await getTeacherUserId()
+  if (!userId) return { error: 'Belum login' }
+
+  try {
+    await prisma.forumReply.create({
+      data: {
+        discussionId,
+        authorId: userId,
+        content
+      }
+    })
+    revalidatePath('/', 'layout')
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
