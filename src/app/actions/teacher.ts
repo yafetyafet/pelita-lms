@@ -92,7 +92,7 @@ export async function createJournal(data: { title: string; content: string; clas
         subjectId: data.subjectId
       }
     })
-    revalidatePath('/teacher/journal')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -131,7 +131,7 @@ export async function createMaterial(data: { title: string; description?: string
         subjectId: data.subjectId
       }
     })
-    revalidatePath('/teacher')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -179,7 +179,7 @@ export async function createAssignment(data: { title: string; description?: stri
         subjectId: data.subjectId
       }
     })
-    revalidatePath('/teacher/grades')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -208,7 +208,7 @@ export async function saveGrade(data: { userId: string; assignmentId: string; sc
         status: 'GRADED'
       }
     })
-    revalidatePath('/teacher/grades')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -231,7 +231,7 @@ export async function createViolation(data: { studentId: string; description: st
         points: data.points
       }
     })
-    revalidatePath('/teacher')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -287,7 +287,7 @@ export async function createExam(data: {
         }
       }
     })
-    revalidatePath('/teacher/exams')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -297,7 +297,7 @@ export async function createExam(data: {
 export async function deleteExam(examId: string) {
   try {
     await prisma.exam.delete({ where: { id: examId } })
-    revalidatePath('/teacher/exams')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -344,7 +344,7 @@ export async function createSchedule(data: {
         label: data.label || null
       }
     })
-    revalidatePath('/teacher/schedule')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -354,7 +354,7 @@ export async function createSchedule(data: {
 export async function deleteSchedule(scheduleId: string) {
   try {
     await prisma.schedule.delete({ where: { id: scheduleId } })
-    revalidatePath('/teacher/schedule')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }

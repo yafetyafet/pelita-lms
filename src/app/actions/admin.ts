@@ -46,7 +46,7 @@ export async function createUser(data: { username: string, password?: string, na
       }
     })
     
-    revalidatePath('/admin/users')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -56,7 +56,7 @@ export async function createUser(data: { username: string, password?: string, na
 export async function deleteUser(id: string) {
   try {
     await prisma.user.delete({ where: { id } })
-    revalidatePath('/admin/users')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -121,8 +121,8 @@ export async function bulkCreateUsers(users: { username: string, password?: stri
       skipDuplicates: true
     })
 
-    revalidatePath('/admin/users')
-    revalidatePath('/admin')
+    revalidatePath('/', 'layout')
+    revalidatePath('/', 'layout')
 
     return { 
       success: true, 
@@ -169,7 +169,7 @@ export async function createClass(data: { name: string, description?: string, wa
       }
     })
     
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -180,7 +180,7 @@ export async function createClass(data: { name: string, description?: string, wa
     await prisma.classStudent.deleteMany({ where: { classId: id } })
     await prisma.class.delete({ where: { id } })
     
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -208,7 +208,7 @@ export async function createSubject(data: { name: string, description?: string }
       }
     })
     
-    revalidatePath('/admin/subjects')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -218,7 +218,7 @@ export async function createSubject(data: { name: string, description?: string }
 export async function deleteSubject(id: string) {
   try {
     await prisma.subject.delete({ where: { id } })
-    revalidatePath('/admin/subjects')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -238,7 +238,7 @@ export async function addStudentToClass(userId: string, classId: string) {
     await prisma.classStudent.create({
       data: { userId, classId }
     })
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -250,7 +250,7 @@ export async function removeStudentFromClass(userId: string, classId: string) {
     await prisma.classStudent.delete({
       where: { userId_classId: { userId, classId } }
     })
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -303,7 +303,7 @@ export async function assignTeacherToClass(userId: string, classId: string, subj
     await prisma.classTeacher.create({
       data: { userId, classId, subjectId }
     })
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -315,7 +315,7 @@ export async function removeTeacherFromClass(userId: string, classId: string, su
     await prisma.classTeacher.delete({
       where: { userId_classId_subjectId: { userId, classId, subjectId } }
     })
-    revalidatePath('/admin/classes')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -356,7 +356,7 @@ export async function createScheduleAdmin(data: {
         label: data.label || null
       }
     })
-    revalidatePath('/admin/jadwal')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }
@@ -366,7 +366,7 @@ export async function createScheduleAdmin(data: {
 export async function deleteScheduleAdmin(id: string) {
   try {
     await prisma.schedule.delete({ where: { id } })
-    revalidatePath('/admin/jadwal')
+    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err.message }

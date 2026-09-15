@@ -46,7 +46,7 @@ export async function submitAttendance(lat: number, lng: number) {
     }
   })
 
-  revalidatePath('/student')
+  revalidatePath('/', 'layout')
   
   return { success: true }
 }
@@ -140,7 +140,7 @@ export async function submitCheckOut(lat: number, lng: number) {
     }
   })
 
-  revalidatePath('/student')
+  revalidatePath('/', 'layout')
   
   return { success: true }
 }
