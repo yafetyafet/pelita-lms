@@ -4,7 +4,9 @@ import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
-import { keNilaiAkhir, koreksiOtomatis } from '@/lib/logic/exam'
+import { keNilaiAkhir, koreksiOtomatis,
+  type TipeSoal,
+} from '@/lib/logic/exam'
 import { dateKeyWIB, rentangHariWIB, slotKeyPresensi } from '@/lib/logic/waktu'
 
 /** Status presensi yang boleh diinput manual oleh guru. */
@@ -1153,7 +1155,7 @@ export async function recomputeExamScores(examId: string): Promise<AksiHasil<{ c
 
     const soal = exam.questions.map((q) => ({
       id: q.id,
-      type: q.type as 'PG' | 'ESAI',
+      type: q.type as TipeSoal,
       question: q.question,
       options: null,
       correctAnswer: q.correctAnswer,

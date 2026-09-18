@@ -126,16 +126,44 @@ export default function SchedulePage() {
                       <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${
                         isSpecial ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-700"
                       }`}>
-                        {isUpacara ? "UPC" : isPembiasaan ? "PMB" : (item.subjectId?.slice(0, 3).toUpperCase() || "?")}
+                        {isUpacara
+                          ? "UPC"
+                          : isPembiasaan
+                            ? "PMB"
+                            : /* Sebelumnya di sini ditampilkan tiga huruf pertama
+                                 dari UUID mapel — misalnya "A3F". Pakai nama
+                                 mapelnya. */
+                              (item.subject?.name?.slice(0, 3).toUpperCase() || "MP")}
                       </div>
 
                       <div className="flex-1">
                         <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                          {item.label || (isUpacara ? "Upacara Bendera" : isPembiasaan ? "Pembiasaan" : `Pelajaran`)}
+                          {/* Nama mapel didahulukan; sebelumnya setiap jadwal
+                              reguler hanya bertuliskan kata "Pelajaran". */}
+                          {item.subject?.name ||
+                            item.label ||
+                            (isUpacara
+                              ? "Upacara Bendera"
+                              : isPembiasaan
+                                ? "Pembiasaan"
+                                : "Pelajaran")}
                         </h4>
+
+                        {item.teacher?.name && (
+                          <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+                            <UserRound className="w-3 h-3 text-slate-400" /> {item.teacher.name}
+                          </p>
+                        )}
+
                         {item.room && (
                           <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-slate-400" /> {item.room}
+                          </p>
+                        )}
+
+                        {item.jamPelajaran?.name && (
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {item.jamPelajaran.name}
                           </p>
                         )}
                       </div>

@@ -23,7 +23,7 @@ type Soal = {
   id: string
   question: string
   imageUrl: string | null
-  type: "PG" | "ESAI"
+  type: "PG" | "PG_KOMPLEKS" | "ESAI"
   points: number
   options: string[] | null
 }
@@ -287,7 +287,7 @@ export default function ExamsCBTPage() {
           </div>
           <div className="grid grid-cols-8 gap-1.5">
             {questions.map((s, i) => {
-              const sudah = answers[s.id] !== undefined && answers[s.id] !== ""
+              const sudah = Boolean(String(answers[s.id] || "").trim())
               const ragu = doubtful[s.id]
               return (
                 <button
@@ -315,7 +315,12 @@ export default function ExamsCBTPage() {
           <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
-                Soal {currentIdx + 1} • {q.type === "ESAI" ? "Esai" : "Pilihan Ganda"}{" "}
+                Soal {currentIdx + 1} •{" "}
+                {q.type === "ESAI"
+                  ? "Esai"
+                  : q.type === "PG_KOMPLEKS"
+                    ? "Pilihan Ganda Kompleks"
+                    : "Pilihan Ganda"}{" "}
                 • {q.points} poin
               </span>
               <button
@@ -358,17 +363,44 @@ export default function ExamsCBTPage() {
               />
             ) : (
               <div className="flex flex-col gap-2">
+                {q.type === "PG_KOMPLEKS" && (
+                  <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    Jawaban benar lebih dari satu. Pilih semua yang benar —
+                    dinilai utuh, jadi tidak boleh ada yang terlewat atau keliru.
+                  </p>
+                )}
+
                 {(q.options || []).map((opt, i) => {
                   const huruf = String.fromCharCode(65 + i)
-                  // Kunci jawaban disimpan guru sebagai INDEKS ("0".."3"),
+                  // Kunci jawaban disimpan guru sebagai INDEKS ("0".."4"),
                   // bukan huruf — jawaban harus dikirim dalam format yang sama
                   // agar koreksiOtomatis() cocok dengan ujian yang sudah ada.
+                  // Untuk PG kompleks, beberapa indeks dipisah koma ("0,2").
                   const nilai = String(i)
-                  const dipilih = answers[q.id] === nilai
+                  const terpilih = String(answers[q.id] || "")
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean)
+                  const dipilih = terpilih.includes(nilai)
+
+                  const pilih = () => {
+                    if (q.type !== "PG_KOMPLEKS") {
+                      setAnswers((p) => ({ ...p, [q.id]: nilai }))
+                      return
+                    }
+                    const set = new Set(terpilih)
+                    if (set.has(nilai)) set.delete(nilai)
+                    else set.add(nilai)
+                    setAnswers((p) => ({
+                      ...p,
+                      [q.id]: Array.from(set).sort((a, b) => Number(a) - Number(b)).join(","),
+                    }))
+                  }
+
                   return (
                     <button
                       key={i}
-                      onClick={() => setAnswers((p) => ({ ...p, [q.id]: nilai }))}
+                      onClick={pilih}
                       className={`text-left px-3 py-2.5 rounded-2xl border text-xs flex items-start gap-2.5 transition ${
                         dipilih
                           ? "bg-blue-50 border-blue-500 ring-1 ring-blue-300"
@@ -376,10 +408,12 @@ export default function ExamsCBTPage() {
                       }`}
                     >
                       <span
-                        className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center font-bold text-[11px] ${
+                        className={`w-6 h-6 shrink-0 flex items-center justify-center font-bold text-[11px] ${
+                          q.type === "PG_KOMPLEKS" ? "rounded-md border-2" : "rounded-lg"
+                        } ${
                           dipilih
-                            ? "bg-blue-600 text-white"
-                            : "bg-slate-100 text-slate-600"
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-slate-100 text-slate-600 border-slate-300"
                         }`}
                       >
                         {huruf}

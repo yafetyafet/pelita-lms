@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { submitAttendance, submitCheckOut, getTodayAttendance, getStudentMaterials, getStudentAssignments, getStudentViolations } from "@/app/actions/student"
-import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getMyBroadcasts, markAllBroadcastsRead } from "@/app/actions/broadcast"
+import { submitAttendance, submitCheckOut, getStudentHome } from "@/app/actions/student"
+import { logout } from "@/app/actions/auth"
+import { markAllBroadcastsRead } from "@/app/actions/broadcast"
 import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
@@ -46,16 +46,32 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     async function loadData() {
-      // 1. Fetch fast-loading essential data first
-      const [data, user] = await Promise.all([
-        getTodayAttendance(), 
-        getCurrentUser()
-      ])
-      
-      if (user) {
-        setCurrentUser(user)
+      // Satu server action untuk seluruh beranda. Sebelumnya enam action
+      // terpisah, masing-masing satu permintaan HTTP ke Vercel dan
+      // masing-masing mencari rombel siswa sendiri — 1.521 ms kueri basis
+      // data hanya untuk membuka halaman ini.
+      const home = await getStudentHome()
+      if (!home) {
+        setIsLoading(false)
+        return
       }
-      
+
+      // Bentuk objek disesuaikan agar sisa halaman tidak perlu diubah.
+      setCurrentUser(
+        home.user
+          ? {
+              ...home.user,
+              studentClasses: home.kelas ? [{ classInfo: home.kelas }] : [],
+            }
+          : null
+      )
+      setMaterials(home.materials || [])
+      setAssignments(home.assignments || [])
+      setViolations(home.violations || [])
+      setBroadcasts(home.broadcasts || [])
+      setHasUnreadNotif((home.broadcasts || []).some((b: any) => !b.sudahDibaca))
+
+      const data = home.presensiHariIni
       if (data) {
         setAttended(true)
         setAttendanceTime(new Date(data.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB")
@@ -65,24 +81,7 @@ export default function StudentDashboard() {
         }
       }
       
-      // Stop the loading state so UI renders instantly for identity
       setIsLoading(false)
-
-      // 2. Fetch the heavier/additional data in background
-      const [mats, assigns, viols, broads] = await Promise.all([
-        getStudentMaterials(),
-        getStudentAssignments(),
-        getStudentViolations(),
-        // Penyaringan target sekarang di server, termasuk pengumuman yang
-        // ditujukan khusus ke rombel siswa ini.
-        getMyBroadcasts()
-      ])
-
-      setMaterials(mats || [])
-      setAssignments(assigns || [])
-      setViolations(viols || [])
-      setBroadcasts(broads || [])
-      setHasUnreadNotif((broads || []).some(b => !b.sudahDibaca))
     }
     loadData()
   }, [])

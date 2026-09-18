@@ -1,4 +1,9 @@
-export type TipeSoal = "PG" | "ESAI";
+/**
+ * "PG"          = pilihan ganda, tepat satu jawaban benar.
+ * "PG_KOMPLEKS" = pilihan ganda kompleks, jawaban benar bisa lebih dari satu.
+ * "ESAI"        = uraian, dikoreksi manual oleh guru.
+ */
+export type TipeSoal = "PG" | "PG_KOMPLEKS" | "ESAI";
 
 export type Soal = {
   id: string;
@@ -85,6 +90,27 @@ export type HasilKoreksi = {
   kosong: number;
 };
 
+/**
+ * Samakan bentuk jawaban agar bisa dibandingkan.
+ *
+ * Jawaban PG kompleks dikirim sebagai daftar indeks dipisah koma ("0,2").
+ * Urutan pilihan siswa tidak boleh memengaruhi hasil, jadi daftarnya diurutkan
+ * dan spasi/duplikat dibuang. Untuk PG biasa hasilnya sama dengan nilai
+ * aslinya, sekaligus membuatnya tahan terhadap spasi berlebih.
+ */
+function normalJawaban(nilai: string | null | undefined): string {
+  return Array.from(
+    new Set(
+      String(nilai ?? "")
+        .split(",")
+        .map((x) => x.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+    .sort()
+    .join(",");
+}
+
 export function koreksiOtomatis(
   soal: Soal[],
   jawaban: Map<string, string>
@@ -110,8 +136,10 @@ export function koreksiOtomatis(
       continue;
     }
 
-    const kunci = (s.correctAnswer ?? "").trim();
-    if (j.toLowerCase() === kunci.toLowerCase()) {
+    // PG kompleks dinilai utuh: seluruh jawaban benar harus dipilih dan tidak
+    // boleh ada yang salah. Tidak ada nilai sebagian, supaya hasilnya mudah
+    // dijelaskan ke siswa.
+    if (normalJawaban(j) === normalJawaban(s.correctAnswer)) {
       skorOtomatis += s.points;
       benar++;
     } else {
@@ -159,7 +187,9 @@ export function acakPG<T extends { type: string }>(
   daftar: T[],
   benih: string
 ): T[] {
-  const pg = daftar.filter((s) => s.type === "PG");
+  // Semua tipe pilihan ganda (termasuk PG kompleks) diacak; esai tetap di
+  // belakang agar siswa mengerjakan uraian paling akhir.
+  const pg = daftar.filter((s) => s.type !== "ESAI");
   const esai = daftar.filter((s) => s.type === "ESAI");
   return [...acakDeterministik(pg, benih), ...esai];
 }
