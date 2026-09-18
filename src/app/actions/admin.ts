@@ -1,7 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -21,6 +19,42 @@ function gagal(err: unknown) {
 // DASHBOARD
 // ==========================================
 
+/**
+ * Satu kueri untuk seluruh angka dashboard.
+ *
+ * Sebelumnya ini 10 kueri Prisma terpisah di dalam Promise.all. Karena Prisma
+ * mengirimkannya lewat satu koneksi ke pooler Supabase, 10 kueri berarti 10
+ * perjalanan jaringan — terukur 386ms, padahal satu kueri gabungan hanya
+ * ~140ms. Nilai `count(*)` di-cast ke ::int supaya tidak sampai ke JavaScript
+ * sebagai BigInt (yang tidak bisa di-JSON-serialize oleh Server Action).
+ */
+const SQL_DASHBOARD = `
+SELECT
+  (SELECT count(*) FROM "User" WHERE role::text='STUDENT')::int AS students,
+  (SELECT count(*) FROM "User" WHERE role::text='TEACHER')::int AS teachers,
+  (SELECT count(*) FROM "User" WHERE role::text='ADMIN')::int   AS admins,
+  (SELECT count(*) FROM "User" WHERE role::text='DUDI')::int    AS dudi,
+  (SELECT count(*) FROM "Class")::int    AS classes,
+  (SELECT count(*) FROM "Subject")::int  AS subjects,
+  (SELECT count(*) FROM "Schedule")::int AS schedules,
+  (SELECT count(*) FROM "Exam")::int     AS exams,
+  (SELECT count(*) FROM "Attendance" WHERE "dateKey"=$1 AND kind='DAILY')::int AS "attendanceToday",
+  (SELECT count(DISTINCT "userId") FROM "ClassStudent")::int AS assigned
+`
+
+type BarisDashboard = {
+  students: number
+  teachers: number
+  admins: number
+  dudi: number
+  classes: number
+  subjects: number
+  schedules: number
+  exams: number
+  attendanceToday: number
+  assigned: number
+}
+
 export async function getDashboardStats() {
   const session = await optionalSession('ADMIN')
   if (!session) {
@@ -39,47 +73,62 @@ export async function getDashboardStats() {
     }
   }
 
-  const [
-    students,
-    teachers,
-    admins,
-    dudi,
-    classes,
-    subjects,
-    schedules,
-    exams,
-    attendanceToday,
-    assignedStudents,
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: 'STUDENT' } }),
-    prisma.user.count({ where: { role: 'TEACHER' } }),
-    prisma.user.count({ where: { role: 'ADMIN' } }),
-    prisma.user.count({ where: { role: 'DUDI' } }),
-    prisma.class.count(),
-    prisma.subject.count(),
-    prisma.schedule.count(),
-    prisma.exam.count(),
-    prisma.attendance.count({ where: { dateKey: dateKeyWIB(), kind: 'DAILY' } }),
-    prisma.classStudent
-      .findMany({ select: { userId: true }, distinct: ['userId'] })
-      .then((r) => r.length),
-  ])
+  const [r] = await prisma.$queryRawUnsafe<BarisDashboard[]>(
+    SQL_DASHBOARD,
+    dateKeyWIB()
+  )
 
   return {
-    students,
-    teachers,
-    admins,
-    dudi,
-    classes,
-    subjects,
-    schedules,
-    exams,
-    attendanceToday,
+    students: r.students,
+    teachers: r.teachers,
+    admins: r.admins,
+    dudi: r.dudi,
+    classes: r.classes,
+    subjects: r.subjects,
+    schedules: r.schedules,
+    exams: r.exams,
+    attendanceToday: r.attendanceToday,
     // Angka ini yang paling sering jadi akar masalah "fitur siswa kosong":
     // siswa tanpa rombel tidak melihat jadwal, tugas, materi, maupun ujian.
-    studentsWithoutClass: Math.max(0, students - assignedStudents),
+    studentsWithoutClass: Math.max(0, r.students - r.assigned),
     database: 'Online (Supabase PostgreSQL)',
   }
+}
+
+/** Sama seperti SQL_DASHBOARD: 10 kueri terpisah digabung jadi satu. */
+const SQL_HEALTH = `
+SELECT
+  (SELECT count(*) FROM "User" u WHERE u.role::text='STUDENT'
+     AND NOT EXISTS (SELECT 1 FROM "ClassStudent" cs WHERE cs."userId"=u.id))::int AS "siswaTanpaKelas",
+  (SELECT count(*) FROM "User" u WHERE u.role::text='TEACHER'
+     AND NOT EXISTS (SELECT 1 FROM "ClassTeacher" ct WHERE ct."userId"=u.id))::int AS "guruTanpaKelas",
+  (SELECT count(*) FROM "Class" WHERE "waliId" IS NULL)::int AS "kelasTanpaWali",
+  (SELECT count(*) FROM "Class" c
+     WHERE NOT EXISTS (SELECT 1 FROM "ClassTeacher" ct WHERE ct."classId"=c.id))::int AS "kelasTanpaPengampu",
+  (SELECT count(*) FROM "Subject" s
+     WHERE NOT EXISTS (SELECT 1 FROM "ClassTeacher" ct WHERE ct."subjectId"=s.id))::int AS "mapelTanpaPengampu",
+  (SELECT count(*) FROM "Class" c
+     WHERE NOT EXISTS (SELECT 1 FROM "Schedule" sc WHERE sc."classId"=c.id))::int AS "kelasTanpaJadwal",
+  (SELECT count(*) FROM "Exam" WHERE "isPublished"=false)::int AS "ujianBelumTerbit",
+  (SELECT count(*) FROM "Exam" e
+     WHERE NOT EXISTS (SELECT 1 FROM "ExamQuestion" q WHERE q."examId"=e.id))::int AS "ujianTanpaSoal",
+  (SELECT count(*) FROM "AppSetting"
+     WHERE key IN ('SCHOOL_LATITUDE','SCHOOL_LONGITUDE','ATTENDANCE_RADIUS')
+       AND value <> '')::int AS "geofenceTerisi",
+  (SELECT count(*) FROM "AppSetting" WHERE key='CBT_TOKEN' AND value <> '')::int AS "tokenCbtAda"
+`
+
+type BarisHealth = {
+  siswaTanpaKelas: number
+  guruTanpaKelas: number
+  kelasTanpaWali: number
+  kelasTanpaPengampu: number
+  mapelTanpaPengampu: number
+  kelasTanpaJadwal: number
+  ujianBelumTerbit: number
+  ujianTanpaSoal: number
+  geofenceTerisi: number
+  tokenCbtAda: number
 }
 
 /**
@@ -89,98 +138,71 @@ export async function getDashboardStats() {
 export async function getSystemHealth() {
   await requireSession('ADMIN')
 
-  const [
-    siswaTanpaKelas,
-    kelasTanpaWali,
-    kelasTanpaPengampu,
-    mapelTanpaPengampu,
-    kelasTanpaJadwal,
-    ujianBelumTerbit,
-    ujianTanpaSoal,
-    geofence,
-    tokenCbt,
-    guruTanpaKelas,
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: 'STUDENT', studentClasses: { none: {} } } }),
-    prisma.class.count({ where: { waliId: null } }),
-    prisma.class.count({ where: { teachers: { none: {} } } }),
-    prisma.subject.count({ where: { teachers: { none: {} } } }),
-    prisma.class.count({ where: { schedules: { none: {} } } }),
-    prisma.exam.count({ where: { isPublished: false } }),
-    prisma.exam.count({ where: { questions: { none: {} } } }),
-    prisma.appSetting.findMany({
-      where: {
-        key: { in: ['SCHOOL_LATITUDE', 'SCHOOL_LONGITUDE', 'ATTENDANCE_RADIUS'] },
-      },
-    }),
-    prisma.appSetting.findUnique({ where: { key: 'CBT_TOKEN' } }),
-    prisma.user.count({ where: { role: 'TEACHER', teacherClasses: { none: {} } } }),
-  ])
-
-  const geofenceLengkap = geofence.length === 3 && geofence.every((g) => g.value)
+  const [h] = await prisma.$queryRawUnsafe<BarisHealth[]>(SQL_HEALTH)
+  const geofenceLengkap = h.geofenceTerisi === 3
 
   return [
     {
       key: 'siswa-tanpa-kelas',
       label: 'Siswa belum masuk rombel',
-      count: siswaTanpaKelas,
-      severity: siswaTanpaKelas > 0 ? 'error' : 'ok',
+      count: h.siswaTanpaKelas,
+      severity: h.siswaTanpaKelas > 0 ? 'error' : 'ok',
       hint: 'Tanpa rombel, siswa tidak melihat jadwal, tugas, materi, maupun ujian.',
       href: '/admin/classes',
     },
     {
       key: 'guru-tanpa-kelas',
-      label: 'Guru belum diberi kelas & mapel',
-      count: guruTanpaKelas,
-      severity: guruTanpaKelas > 0 ? 'warn' : 'ok',
-      hint: 'Guru tanpa penugasan tidak bisa membuat jurnal, tugas, atau ujian.',
-      href: '/admin/classes',
+      label: 'Guru belum mengambil kelas & mapel',
+      count: h.guruTanpaKelas,
+      severity: h.guruTanpaKelas > 0 ? 'warn' : 'ok',
+      hint: 'Guru tanpa penugasan tidak bisa membuat jurnal, tugas, atau ujian. Guru mengambilnya sendiri dari menu Kelas pada akun guru.',
+      href: '/admin/subjects',
     },
     {
       key: 'kelas-tanpa-pengampu',
       label: 'Rombel belum punya guru pengampu',
-      count: kelasTanpaPengampu,
-      severity: kelasTanpaPengampu > 0 ? 'error' : 'ok',
+      count: h.kelasTanpaPengampu,
+      severity: h.kelasTanpaPengampu > 0 ? 'error' : 'ok',
       hint: 'Kelas tanpa pengampu tidak akan pernah menerima materi atau tugas.',
-      href: '/admin/classes',
+      href: '/admin/subjects',
     },
     {
       key: 'mapel-tanpa-pengampu',
       label: 'Mapel belum punya pengampu',
-      count: mapelTanpaPengampu,
-      severity: mapelTanpaPengampu > 0 ? 'warn' : 'ok',
+      count: h.mapelTanpaPengampu,
+      severity: h.mapelTanpaPengampu > 0 ? 'warn' : 'ok',
       hint: 'Mapel ini tidak bisa dipakai membuat jadwal atau ujian.',
       href: '/admin/subjects',
     },
     {
       key: 'kelas-tanpa-wali',
       label: 'Rombel belum punya wali kelas',
-      count: kelasTanpaWali,
-      severity: kelasTanpaWali > 0 ? 'warn' : 'ok',
+      count: h.kelasTanpaWali,
+      severity: h.kelasTanpaWali > 0 ? 'warn' : 'ok',
       hint: 'Wali kelas dibutuhkan untuk tindak lanjut pelanggaran dan presensi.',
       href: '/admin/classes',
     },
     {
       key: 'kelas-tanpa-jadwal',
       label: 'Rombel belum punya jadwal',
-      count: kelasTanpaJadwal,
-      severity: kelasTanpaJadwal > 0 ? 'warn' : 'ok',
+      count: h.kelasTanpaJadwal,
+      severity: h.kelasTanpaJadwal > 0 ? 'warn' : 'ok',
       hint: 'Halaman jadwal siswa akan kosong sampai jadwal diplot.',
       href: '/admin/jadwal',
     },
     {
       key: 'ujian-tanpa-soal',
       label: 'Ujian tanpa soal',
-      count: ujianTanpaSoal,
-      severity: ujianTanpaSoal > 0 ? 'error' : 'ok',
+      count: h.ujianTanpaSoal,
+      severity: h.ujianTanpaSoal > 0 ? 'error' : 'ok',
       hint: 'Ujian tanpa soal tidak bisa dikerjakan siswa.',
       href: '/admin/ujian',
     },
     {
       key: 'ujian-belum-terbit',
       label: 'Ujian belum diterbitkan',
-      count: ujianBelumTerbit,
-      severity: ujianBelumTerbit > 0 ? 'info' : 'ok',
+      count: h.ujianBelumTerbit,
+      severity: h.ujianBelumTerbit > 0 ? 'info' : 'ok',
       hint: 'Ujian hanya tampil ke siswa setelah guru menerbitkannya.',
       href: '/admin/ujian',
     },
@@ -197,9 +219,9 @@ export async function getSystemHealth() {
     {
       key: 'token-cbt',
       label: 'Token CBT global',
-      count: tokenCbt?.value ? 0 : 1,
-      severity: tokenCbt?.value ? 'ok' : 'warn',
-      hint: tokenCbt?.value
+      count: h.tokenCbtAda > 0 ? 0 : 1,
+      severity: h.tokenCbtAda > 0 ? 'ok' : 'warn',
+      hint: h.tokenCbtAda > 0
         ? 'Sudah diatur.'
         : 'Belum ada token — ujian tanpa token sendiri tidak bisa dibuka siswa.',
       href: '/admin/ujian',
@@ -275,7 +297,6 @@ export async function createUser(data: {
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -322,7 +343,6 @@ export async function setStudentClass(
       }
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, className }
   } catch (err) {
     return gagal(err)
@@ -361,7 +381,6 @@ export async function updateUser(data: {
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -382,7 +401,6 @@ export async function resetUserPassword(id: string, newPassword?: string): Promi
         mustChangePassword: true,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true, password: plain }
   } catch (err) {
     return gagal(err)
@@ -411,7 +429,6 @@ export async function deleteUser(id: string): Promise<AksiHasil> {
     }
 
     await prisma.user.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -604,7 +621,6 @@ export async function bulkCreateUsers(
       }
     }
 
-    revalidatePath('/', 'layout')
     return {
       success: true,
       count: toInsert.length,
@@ -645,10 +661,22 @@ export async function getClasses() {
   const session = await optionalSession('ADMIN', 'TEACHER')
   if (!session) return []
 
+  // `students: true` dulu menarik SELURUH baris ClassStudent (387 baris) dan
+  // `user: true` menarik objek pengguna lengkap termasuk hash kata sandi —
+  // 55,7 KB hanya untuk 12 rombel. Sekarang hanya kolom yang benar-benar
+  // dipakai antarmuka.
   return await prisma.class.findMany({
     include: {
-      teachers: { include: { user: true, subject: true } },
-      students: true,
+      teachers: {
+        select: {
+          userId: true,
+          classId: true,
+          subjectId: true,
+          user: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true } },
+        },
+      },
+      students: { select: { userId: true } },
       wali: { select: { id: true, name: true } },
       _count: { select: { students: true, schedules: true } },
     },
@@ -690,7 +718,6 @@ export async function createClass(data: {
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -719,7 +746,6 @@ export async function updateClass(data: {
           : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -735,7 +761,6 @@ export async function deleteClass(id: string): Promise<AksiHasil> {
     await prisma.classStudent.deleteMany({ where: { classId: id } })
     await prisma.class.delete({ where: { id } })
 
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -784,7 +809,6 @@ export async function createSubject(data: {
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -795,7 +819,6 @@ export async function deleteSubject(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.subject.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -815,7 +838,6 @@ export async function addStudentToClass(userId: string, classId: string): Promis
     if (existing) return { error: 'Siswa sudah terdaftar di kelas ini.' }
 
     await prisma.classStudent.create({ data: { userId, classId } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -838,7 +860,6 @@ export async function addStudentsToClass(userIds: string[], classId: string): Pr
       skipDuplicates: true,
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, count: res.count }
   } catch (err) {
     return gagal(err)
@@ -851,7 +872,6 @@ export async function removeStudentFromClass(userId: string, classId: string): P
     await prisma.classStudent.delete({
       where: { userId_classId: { userId, classId } },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -910,7 +930,6 @@ export async function assignTeacherToClass(
     if (existing) return { error: 'Guru sudah ditugaskan di kelas dan mapel ini.' }
 
     await prisma.classTeacher.create({ data: { userId, classId, subjectId } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -927,7 +946,6 @@ export async function removeTeacherFromClass(
     await prisma.classTeacher.delete({
       where: { userId_classId_subjectId: { userId, classId, subjectId } },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1036,7 +1054,6 @@ export async function createScheduleAdmin(data: {
         label: data.label?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1047,7 +1064,6 @@ export async function deleteScheduleAdmin(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.schedule.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1091,7 +1107,6 @@ export async function createSession(data: {
         order: data.order ?? 0,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1102,7 +1117,6 @@ export async function deleteSession(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.session.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1133,7 +1147,6 @@ export async function copySessionsToDay(from: string, to: string): Promise<AksiH
       })),
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, count: sumber.length }
   } catch (err) {
     return gagal(err)
@@ -1177,7 +1190,6 @@ export async function createBroadcast(data: {
         authorId: session.uid,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1188,7 +1200,6 @@ export async function deleteBroadcast(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.broadcast.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1223,7 +1234,6 @@ export async function setAppSetting(key: string, value: string): Promise<AksiHas
       update: { value },
       create: { key, value },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1245,7 +1255,6 @@ export async function setAppSettings(entries: Record<string, string>): Promise<A
         })
       )
     )
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1304,7 +1313,6 @@ export async function createLibraryBook(data: {
         createdById: session.uid,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1345,7 +1353,6 @@ export async function updateLibraryBook(data: {
         ...(data.isbn !== undefined ? { isbn: data.isbn.trim() || null } : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1356,7 +1363,6 @@ export async function deleteLibraryBook(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.libraryBook.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)

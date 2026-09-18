@@ -8,8 +8,6 @@
  * meski model `ForumDiscussion`/`ForumReply` sudah ada.
  */
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -107,7 +105,6 @@ export async function createForumDiscussion(data: {
         subjectId: data.subjectId || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -136,7 +133,6 @@ export async function addForumReply(discussionId: string, content: string): Prom
     await prisma.forumReply.create({
       data: { discussionId, authorId: session.uid, content: content.trim() },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -155,7 +151,6 @@ export async function deleteForumDiscussion(id: string): Promise<AksiHasil> {
       return { error: 'Hanya penulis atau admin yang boleh menghapus.' }
     }
     await prisma.forumDiscussion.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -174,7 +169,6 @@ export async function deleteForumReply(id: string): Promise<AksiHasil> {
       return { error: 'Hanya penulis atau admin yang boleh menghapus.' }
     }
     await prisma.forumReply.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -196,7 +190,6 @@ export async function moderateForumDiscussion(input: {
         ...(input.isLocked !== undefined ? { isLocked: input.isLocked } : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)

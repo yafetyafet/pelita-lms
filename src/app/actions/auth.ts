@@ -1,8 +1,6 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import type { Role } from '@prisma/client'
@@ -144,7 +142,6 @@ export async function changeMyPassword(input: {
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err?.message || 'Gagal mengubah password.' }
@@ -165,7 +162,6 @@ export async function updateMyProfile(input: {
         phone: input.phone?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err: any) {
     return { error: err?.message || 'Gagal menyimpan profil.' }
