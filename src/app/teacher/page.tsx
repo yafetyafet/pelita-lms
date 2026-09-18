@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass } from "@/app/actions/teacher"
+import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
 import { 
   Bell, 
   BookOpen, 
@@ -61,6 +61,13 @@ export default function TeacherDashboard() {
   const [materiAdded, setMateriAdded] = useState(false)
   const [materiSaving, setMateriSaving] = useState(false)
 
+  // State Jurnal Cepat
+  const [jurnalTitle, setJurnalTitle] = useState("")
+  const [jurnalContent, setJurnalContent] = useState("")
+  const [jurnalClassId, setJurnalClassId] = useState("")
+  const [jurnalSaving, setJurnalSaving] = useState(false)
+  const [jurnalError, setJurnalError] = useState("")
+
   // State Pelanggaran
   const [selectedStudentId, setSelectedStudentId] = useState("")
   const [violationType, setViolationType] = useState("Keterlambatan Hadir (> 07:15 WIB)")
@@ -82,12 +89,42 @@ export default function TeacherDashboard() {
       if (!materiClassId) setMateriClassId(first.classId)
       if (!materiSubjectId) setMateriSubjectId(first.subjectId)
       if (!violationClassId) setViolationClassId(first.classId)
+      if (!jurnalClassId) setJurnalClassId(`${first.classId}|${first.subjectId}`)
     }
   }, [teacherClasses])
 
-  const handleSaveJournal = (e: React.FormEvent) => {
+  /**
+   * Sebelumnya handler ini hanya menampilkan pesan "Jurnal Berhasil Disimpan"
+   * lewat setTimeout — tanpa menulis apa pun ke basis data, dan input formnya
+   * bahkan tidak terikat state. Sekarang benar-benar memanggil createJournal.
+   */
+  const handleSaveJournal = async (e: React.FormEvent) => {
     e.preventDefault()
+    setJurnalError("")
+
+    const [classId, subjectId] = (jurnalClassId || "").split("|")
+    if (!classId || !subjectId) {
+      setJurnalError("Pilih kelas dan mata pelajaran dulu.")
+      return
+    }
+
+    setJurnalSaving(true)
+    const res = await createJournal({
+      title: jurnalTitle,
+      content: jurnalContent,
+      classId,
+      subjectId,
+    })
+    setJurnalSaving(false)
+
+    if (res.error) {
+      setJurnalError(res.error)
+      return
+    }
+
     setJournalSaved(true)
+    setJurnalTitle("")
+    setJurnalContent("")
     setTimeout(() => {
       setShowJournalModal(false)
       setJournalSaved(false)
@@ -144,7 +181,7 @@ export default function TeacherDashboard() {
   const teacherMenus = [
     { id: "jurnal", title: "Jurnal Mengajar", desc: "Isi Administrasi", icon: PenTool, color: "from-emerald-600 to-teal-600", count: "Wajib", href: "/teacher/journal" },
     { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, action: "scroll-materi" },
-    { id: "absensi", title: "Presensi Kelas", desc: "Lihat Data Siswa", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/classes" },
+    { id: "absensi", title: "Presensi Kelas", desc: "Input Hadir/Sakit/Izin", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/attendance" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
     { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
     { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
@@ -452,7 +489,7 @@ export default function TeacherDashboard() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Form Jurnal Mengajar Harian</h3>
                 <p className="text-[11px] text-slate-500">
-                  {teacherClasses.length > 0 ? `${teacherClasses[0].classInfo.name} • ${teacherClasses[0].subject.name}` : "Pilih kelas di halaman jurnal"}
+                  {teacherClasses.length > 0 ? "Pilih kelas dan mapel di bawah" : "Belum ada kelas yang ditugaskan"}
                 </p>
               </div>
               <button 
@@ -465,9 +502,27 @@ export default function TeacherDashboard() {
 
             <form onSubmit={handleSaveJournal} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-slate-700">Kelas & Mata Pelajaran</label>
+                <select
+                  value={jurnalClassId}
+                  onChange={(e) => setJurnalClassId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  required
+                >
+                  {teacherClasses.map((tc: any) => (
+                    <option key={`${tc.classId}|${tc.subjectId}`} value={`${tc.classId}|${tc.subjectId}`}>
+                      {tc.classInfo.name} — {tc.subject.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-semibold text-slate-700">Materi Pokok / KD</label>
                 <input
                   type="text"
+                  value={jurnalTitle}
+                  onChange={(e) => setJurnalTitle(e.target.value)}
                   placeholder="Contoh: Menerapkan REST API & State Management"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                   required
@@ -478,11 +533,19 @@ export default function TeacherDashboard() {
                 <label className="text-[11px] font-semibold text-slate-700">Ringkasan Pembelajaran & Penugasan</label>
                 <textarea
                   rows={3}
+                  value={jurnalContent}
+                  onChange={(e) => setJurnalContent(e.target.value)}
                   placeholder="Tuliskan ringkasan kegiatan pembelajaran..."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none"
                   required
                 />
               </div>
+
+              {jurnalError && (
+                <p className="text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  {jurnalError}
+                </p>
+              )}
 
               {journalSaved ? (
                 <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
@@ -492,9 +555,11 @@ export default function TeacherDashboard() {
               ) : (
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md hover:bg-emerald-700 transition"
+                  disabled={jurnalSaving || teacherClasses.length === 0}
+                  className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md hover:bg-emerald-700 transition flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  Simpan Jurnal Pembelajaran
+                  {jurnalSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{jurnalSaving ? "Menyimpan..." : "Simpan Jurnal Pembelajaran"}</span>
                 </button>
               )}
             </form>

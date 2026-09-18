@@ -113,13 +113,13 @@ export function statusHarian(args: {
   return { kehadiran, statusPulang: "pulang_tidak_tercatat" };
 }
 
-export function hitungJarakGeofence(
+/** Jarak haversine antara dua koordinat, dibulatkan ke meter. */
+export function jarakMeter(
   lat: number,
   lng: number,
   sLat: number,
-  sLng: number,
-  radius: number
-): HasilValidasi {
+  sLng: number
+): number {
   const R = 6371e3;
   const phi1 = (lat * Math.PI) / 180;
   const phi2 = (sLat * Math.PI) / 180;
@@ -130,9 +130,18 @@ export function hitungJarakGeofence(
     Math.sin(dPhi / 2) * Math.sin(dPhi / 2) +
     Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam / 2) * Math.sin(dLam / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = Math.round(R * c);
+  return Math.round(R * c);
+}
 
-  // You can also add accuracy checks if passed from frontend
+export function hitungJarakGeofence(
+  lat: number,
+  lng: number,
+  sLat: number,
+  sLng: number,
+  radius: number
+): HasilValidasi {
+  const distance = jarakMeter(lat, lng, sLat, sLng);
+
   if (distance > radius) {
     return {
       ok: false,

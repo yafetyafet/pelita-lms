@@ -11,7 +11,8 @@ import {
   Plus, 
   Loader2,
   Sparkles,
-  X
+  X,
+  FileSearch
 } from "lucide-react"
 
 export default function TeacherGradesPage() {
@@ -21,8 +22,14 @@ export default function TeacherGradesPage() {
   const [assignments, setAssignments] = useState<any[]>([])
   const [students, setStudents] = useState<any[]>([])
   const [grades, setGrades] = useState<{ [key: string]: { score: number; description: string } }>({})
+  // Hanya baris yang benar-benar disunting guru yang dikirim saat menyimpan.
+  // Sebelumnya `handleSaveAll` mengirim SELURUH peta nilai, sehingga sekali
+  // klik "Simpan" akan menandai semua siswa GRADED dengan nilai 0 — termasuk
+  // yang belum pernah dinilai.
+  const [dirty, setDirty] = useState<Set<string>>(new Set())
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
 
   // Modal for adding new assessment
   const [showAddModal, setShowAddModal] = useState(false)
@@ -62,15 +69,21 @@ export default function TeacherGradesPage() {
       })
     })
     setGrades(gradeMap)
+    setDirty(new Set())
   }
+
+  const maxScoreOf = (assignmentId: string) =>
+    assignments.find((a: any) => a.id === assignmentId)?.maxScore ?? 100
 
   const handleScoreChange = (studentId: string, assignmentId: string, val: string) => {
     const num = parseInt(val) || 0
     const key = `${studentId}_${assignmentId}`
+    const batas = maxScoreOf(assignmentId)
     setGrades(prev => ({
       ...prev,
-      [key]: { ...prev[key], score: Math.min(100, Math.max(0, num)), description: prev[key]?.description || "" }
+      [key]: { ...prev[key], score: Math.min(batas, Math.max(0, num)), description: prev[key]?.description || "" }
     }))
+    setDirty(prev => new Set(prev).add(key))
   }
 
   const handleDescChange = (studentId: string, assignmentId: string, val: string) => {
@@ -79,16 +92,40 @@ export default function TeacherGradesPage() {
       ...prev,
       [key]: { ...prev[key], score: prev[key]?.score || 0, description: val }
     }))
+    setDirty(prev => new Set(prev).add(key))
   }
 
   const handleSaveAll = async () => {
+    if (dirty.size === 0) {
+      setSaveError("Belum ada nilai yang diubah.")
+      setTimeout(() => setSaveError(""), 3000)
+      return
+    }
+
     setSaving(true)
-    const promises = Object.entries(grades).map(([key, val]) => {
-      const [userId, assignmentId] = key.split("_")
-      return saveGrade({ userId, assignmentId, score: val.score, description: val.description })
-    })
-    await Promise.all(promises)
+    setSaveError("")
+
+    const hasil = await Promise.all(
+      Array.from(dirty).map(key => {
+        const [userId, assignmentId] = key.split("_")
+        const val = grades[key]
+        return saveGrade({
+          userId,
+          assignmentId,
+          score: val?.score ?? 0,
+          description: val?.description,
+        })
+      })
+    )
     setSaving(false)
+
+    const galat = hasil.find(r => r.error)
+    if (galat) {
+      setSaveError(galat.error || "Sebagian nilai gagal disimpan.")
+      return
+    }
+
+    setDirty(new Set())
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -154,9 +191,15 @@ export default function TeacherGradesPage() {
           className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          <span>{saving ? "..." : "Simpan"}</span>
+          <span>{saving ? "..." : dirty.size > 0 ? `Simpan (${dirty.size})` : "Simpan"}</span>
         </button>
       </div>
+
+      {saveError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-semibold">
+          {saveError}
+        </div>
+      )}
 
       {saved && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-semibold flex items-center gap-2">
@@ -208,6 +251,30 @@ export default function TeacherGradesPage() {
           </h3>
           <span className="text-[10px] font-semibold text-slate-400">Edit nilai langsung di kolom</span>
         </div>
+
+        {/* Pintasan ke lembar pengumpulan tiap tugas: di sana guru bisa
+            membaca jawaban siswa, bukan hanya mengisi angka. */}
+        {assignments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-1">
+            {assignments.map((a: any) => {
+              const masuk = (a.submissions || []).filter((s: any) => s.submittedAt).length
+              return (
+                <Link
+                  key={a.id}
+                  href={`/teacher/assignments/${a.id}`}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 text-[10px] font-bold text-slate-600 flex items-center gap-1.5 transition"
+                  title="Buka lembar pengumpulan & jawaban siswa"
+                >
+                  <FileSearch className="w-3 h-3" />
+                  <span className="max-w-[9rem] truncate">{a.title}</span>
+                  <span className="text-[9px] bg-white border border-slate-200 px-1 rounded">
+                    {masuk}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
 
         {students.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400 italic">

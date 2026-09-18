@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { submitAttendance, submitCheckOut, getTodayAttendance, getStudentMaterials, getStudentAssignments, getStudentViolations } from "@/app/actions/student"
 import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getBroadcasts } from "@/app/actions/admin"
+import { getMyBroadcasts, markAllBroadcastsRead } from "@/app/actions/broadcast"
 import { PwaInstaller } from "@/components/PwaInstaller"
 import { 
   User, 
@@ -23,7 +23,8 @@ import {
   Clock,
   Sparkle,
   Radio,
-  LogOut
+  LogOut,
+  Building2
 } from "lucide-react"
 
 export default function StudentDashboard() {
@@ -35,7 +36,7 @@ export default function StudentDashboard() {
   
   const [activeTab, setActiveTab] = useState<"hari-ini" | "minggu-ini">("hari-ini")
   const [showNotif, setShowNotif] = useState(false)
-  const [hasUnreadNotif, setHasUnreadNotif] = useState(true)
+  const [hasUnreadNotif, setHasUnreadNotif] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const [materials, setMaterials] = useState<any[]>([])
@@ -72,25 +73,45 @@ export default function StudentDashboard() {
         getStudentMaterials(),
         getStudentAssignments(),
         getStudentViolations(),
-        getBroadcasts()
+        // Penyaringan target sekarang di server, termasuk pengumuman yang
+        // ditujukan khusus ke rombel siswa ini.
+        getMyBroadcasts()
       ])
-      
+
       setMaterials(mats || [])
       setAssignments(assigns || [])
       setViolations(viols || [])
-      setBroadcasts((broads || []).filter(b => ["Semua Pengguna", "Siswa", "ALL"].includes(b.target)))
+      setBroadcasts(broads || [])
+      setHasUnreadNotif((broads || []).some(b => !b.sudahDibaca))
     }
     loadData()
   }, [])
 
+  /** Ambil koordinat sesungguhnya dari perangkat. */
+  const ambilKoordinat = () =>
+    new Promise<{ lat: number; lng: number }>((resolve) => {
+      if (!navigator.geolocation) {
+        resolve({ lat: NaN, lng: NaN })
+        return
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        // Izin ditolak / gagal: kirim NaN supaya server mencatatnya sebagai
+        // presensi "tanpa lokasi" untuk ditinjau guru piket.
+        () => resolve({ lat: NaN, lng: NaN }),
+        { enableHighAccuracy: true, timeout: 10000 }
+      )
+    })
+
   const handleAttendance = async () => {
     if (isLoading || (attended && checkedOut)) return
     setIsLoading(true)
-    
-    // Simulate GPS fetch
-    const lat = -7.34
-    const lng = 109.34
-    
+
+    // Sebelumnya koordinat di-hardcode (-7.34, 109.34) dengan komentar
+    // "Simulate GPS fetch", sehingga geofence sekolah tidak pernah benar-benar
+    // menguji posisi siswa.
+    const { lat, lng } = await ambilKoordinat()
+
     if (!attended) {
       const res = await submitAttendance(lat, lng)
       if (res.success) {
@@ -159,7 +180,16 @@ export default function StudentDashboard() {
       icon: MessageSquareText, 
       color: "from-violet-500 to-purple-600", 
       badge: null,
-      href: "/student/materials"
+      href: "/student/forum"
+    },
+    {
+      id: "pkl",
+      title: "PKL / Prakerin",
+      subtitle: "Jurnal & Presensi",
+      icon: Building2,
+      color: "from-purple-600 to-indigo-700",
+      badge: null,
+      href: "/student/pkl"
     },
     { 
       id: "iman", 
@@ -182,7 +212,7 @@ export default function StudentDashboard() {
     { 
       id: "disiplin", 
       title: "Buku Disiplin", 
-      subtitle: "0 Poin Pelanggaran", 
+      subtitle: `${violations.reduce((n, v) => n + (v.points || 0), 0)} Poin Pelanggaran`, 
       icon: AlertTriangle, 
       color: "from-slate-700 to-slate-800", 
       badge: null,
@@ -457,7 +487,18 @@ export default function StudentDashboard() {
           <div className="w-full max-w-md bg-white rounded-t-[32px] sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-3 animate-in slide-in-from-bottom-5">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900">Notifikasi Terbaru</h3>
-              <button onClick={() => setShowNotif(false)} className="text-slate-400 font-bold text-xs">Tutup</button>
+              <button
+                onClick={async () => {
+                  setShowNotif(false)
+                  if (hasUnreadNotif) {
+                    await markAllBroadcastsRead()
+                    setHasUnreadNotif(false)
+                  }
+                }}
+                className="text-slate-400 font-bold text-xs"
+              >
+                Tutup
+              </button>
             </div>
             <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
               {broadcasts.length === 0 ? (

@@ -6,17 +6,19 @@ import {
   Home, 
   UsersRound, 
   BookCheck, 
-  PenTool, 
+  ClipboardCheck,
   UserCog 
 } from "lucide-react"
 
 export function TeacherBottomNav() {
   const pathname = usePathname()
 
+  // Presensi adalah pekerjaan harian guru, jadi diberi slot tetap di sini.
+  // Jurnal mengajar tetap dapat dibuka dari beranda guru.
   const navItems = [
     { name: "Beranda", href: "/teacher", icon: Home, badge: null },
     { name: "Kelas", href: "/teacher/classes", icon: UsersRound, badge: null },
-    { name: "Jurnal", href: "/teacher/journal", icon: PenTool, badge: null },
+    { name: "Presensi", href: "/teacher/attendance", icon: ClipboardCheck, badge: null },
     { name: "Penilaian", href: "/teacher/grades", icon: BookCheck, badge: null },
     { name: "Profil", href: "/teacher/profile", icon: UserCog, badge: null },
   ]

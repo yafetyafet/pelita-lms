@@ -47,8 +47,8 @@ export default function AdminBackupPage() {
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div>
-          <h2 className="text-base font-bold text-slate-900 leading-tight">Backup & Pemeliharaan Database</h2>
-          <p className="text-[11px] text-slate-500 font-medium">Sinkronisasi, snapshot, dan pemulihan database cloud Supabase</p>
+          <h2 className="text-base font-bold text-slate-900 leading-tight">Backup & Ekspor Data</h2>
+          <p className="text-[11px] text-slate-500 font-medium">Unduh snapshot seluruh data aplikasi sebagai JSON</p>
         </div>
       </div>
 
@@ -58,29 +58,31 @@ export default function AdminBackupPage() {
             <Server className="w-6 h-6 text-emerald-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">Supabase PostgreSQL Connection</h3>
-              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                Terhubung (Healthy)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-mono mt-0.5">aws-0-ap-southeast-1.pooler.supabase.com:6543</p>
+            <h3 className="text-sm font-bold text-slate-900">Ekspor Data Aplikasi</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Snapshot seluruh tabel aplikasi dalam satu berkas JSON
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
-          <div className="p-3 bg-slate-50 rounded-2xl">
-            <span className="text-[10px] text-slate-500 block">Koneksi Pooler</span>
-            <strong className="text-slate-900">PgBouncer IPv4</strong>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-2xl">
-            <span className="text-[10px] text-slate-500 block">Status Backup Cloud</span>
-            <strong className="text-emerald-600">Otomatis Tiap Hari</strong>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-2xl col-span-2 sm:col-span-1">
-            <span className="text-[10px] text-slate-500 block">Latency Rata-rata</span>
-            <strong className="text-slate-900">~24 ms</strong>
-          </div>
+        {/*
+          Kartu ini sebelumnya memajang angka yang ditulis mati di kode —
+          status "Terhubung (Healthy)", host pooler, "Otomatis Tiap Hari",
+          dan "Latency ~24 ms" — padahal tidak ada satu pun yang diukur.
+          Diganti dengan keterangan yang memang benar tentang fitur ini.
+        */}
+        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 leading-relaxed">
+          <strong className="block text-slate-800 mb-1">Isi snapshot</strong>
+          Pengguna (tanpa kata sandi), rombel, mapel, penempatan siswa &amp; guru,
+          jam pelajaran, jadwal, materi, tugas &amp; pengumpulannya, jurnal,
+          presensi, pelanggaran, ujian beserta soal dan hasilnya, perpustakaan,
+          pengumuman, pengaturan aplikasi, serta data PKL.
+        </div>
+
+        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
+          Berkas ini untuk arsip dan pemindahan data, bukan pengganti backup
+          basis data. Untuk pemulihan penuh (point-in-time recovery), gunakan
+          fitur backup pada dasbor Supabase proyek Anda.
         </div>
 
         <div className="pt-2 flex flex-col sm:flex-row gap-2">

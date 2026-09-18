@@ -16,7 +16,8 @@ import {
   X,
   Upload,
   Sparkles,
-  ClipboardPaste
+  ClipboardPaste,
+  Settings2
 } from "lucide-react"
 
 export default function TeacherExamsPage() {
@@ -101,7 +102,10 @@ export default function TeacherExamsPage() {
         current.options.push(trimmed.replace(/^[A-D][\.\)]\s*/i, ""))
       } else if (trimmed.toLowerCase().startsWith("jawaban:") && current) {
         const ans = trimmed.replace(/^jawaban:\s*/i, "").trim().toUpperCase()
-        current.correctAnswer = String("ABCD".indexOf(ans))
+        // indexOf mengembalikan -1 untuk jawaban di luar A-D; jangan simpan
+        // itu sebagai kunci karena soalnya jadi mustahil dijawab benar.
+        const idx = "ABCD".indexOf(ans)
+        current.correctAnswer = String(idx >= 0 ? idx : 0)
       } else if (current && current.options.length === 0) {
         current.question += " " + trimmed
       }
@@ -220,10 +224,23 @@ export default function TeacherExamsPage() {
         ) : (
           <div className="flex flex-col gap-2.5">
             {exams.map((exam: any) => (
-              <div key={exam.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">{exam.title}</h4>
-                  <div className="flex items-center gap-2 mt-1">
+              <div key={exam.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="text-xs font-bold text-slate-900">{exam.title}</h4>
+                    {/* Status terbit menentukan apakah siswa bisa melihat ujian. */}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      exam.isPublished
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {exam.isPublished ? "TERBIT" : "DRAF"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {exam.classInfo?.name} • {exam.subject?.name}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded">{exam.type}</span>
                     <span className="text-[10px] text-slate-500 flex items-center gap-1">
                       <FileText className="w-3 h-3" /> {exam.questions?.length || 0} Soal
@@ -236,9 +253,17 @@ export default function TeacherExamsPage() {
                     </span>
                   </div>
                 </div>
-                <button onClick={() => handleDeleteExam(exam.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Link
+                    href={`/teacher/exams/${exam.id}`}
+                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold flex items-center gap-1 transition"
+                  >
+                    <Settings2 className="w-3 h-3" /> Kelola
+                  </Link>
+                  <button onClick={() => handleDeleteExam(exam.id)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

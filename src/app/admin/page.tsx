@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { getDashboardStats } from "@/app/actions/admin"
+import { getDashboardStats, getSystemHealth } from "@/app/actions/admin"
 import { logout } from "@/app/actions/auth"
 import { 
   Users, 
@@ -21,7 +21,11 @@ import {
   FileSpreadsheet,
   UploadCloud,
   LogOut,
-  MapPin
+  MapPin,
+  Building2,
+  AlertTriangle,
+  CheckCircle2,
+  Info
 } from "lucide-react"
 
 export default function AdminDashboard() {
@@ -29,17 +33,24 @@ export default function AdminDashboard() {
     students: 0,
     teachers: 0,
     admins: 0,
+    dudi: 0,
     classes: 0,
     subjects: 0,
+    schedules: 0,
+    exams: 0,
+    attendanceToday: 0,
+    studentsWithoutClass: 0,
     database: "Menghubungkan..."
   })
-  
+
+  const [health, setHealth] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function loadStats() {
-      const data = await getDashboardStats()
+      const [data, h] = await Promise.all([getDashboardStats(), getSystemHealth()])
       setStats(data)
+      setHealth(h)
       setIsLoading(false)
     }
     loadStats()
@@ -61,6 +72,8 @@ export default function AdminDashboard() {
     { id: "jadwal", title: "Plotting Jadwal Mandiri Guru", desc: "Guru Mapel Menginput Jadwal Sendiri", icon: Calendar },
     { id: "attendance-settings", title: "Aturan Presensi (GPS)", desc: "Set Titik Koordinat & Radius Absen", icon: MapPin },
     { id: "ujian", title: "Jadwal & Token Ujian PTS CBT", desc: "Pengaturan Token & Ruang CBT", icon: BookOpen },
+    { id: "library", title: "Perpustakaan Digital", desc: "Isi Koleksi Buku yang Dibaca Siswa", icon: BookMarked },
+    { id: "pkl", title: "PKL / Prakerin & Mitra DUDI", desc: "Mitra Industri & Penempatan Siswa", icon: Building2 },
     { id: "backup", title: "Backup Database Supabase", desc: "Sinkronisasi & Snapshot Data", icon: Database },
   ]
 
@@ -107,9 +120,60 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-amber-800 text-xs mt-2">
-        <strong className="block mb-1">Informasi Database</strong>
-        Tampilan ini sudah terhubung ke database langsung. Jika angka di atas menunjukkan 0, artinya sistem benar-benar telah dikosongkan dan siap digunakan untuk pendataan sesungguhnya.
+      {/* Diagnosa integrasi: menjawab langsung "kenapa menu ini kosong?" */}
+      <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3 mt-1">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+          <ShieldCheck className="w-4 h-4 text-blue-600" />
+          Kesiapan Data & Integrasi
+        </h3>
+
+        {isLoading ? (
+          <p className="text-xs text-slate-400 italic py-2">Memeriksa...</p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {health.map((h) => {
+              const beres = h.severity === "ok"
+              const Icon = beres
+                ? CheckCircle2
+                : h.severity === "info"
+                  ? Info
+                  : AlertTriangle
+              const warna = beres
+                ? "text-emerald-600"
+                : h.severity === "error"
+                  ? "text-red-600"
+                  : h.severity === "warn"
+                    ? "text-amber-600"
+                    : "text-blue-600"
+
+              return (
+                <Link
+                  key={h.key}
+                  href={h.href}
+                  className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-100 transition"
+                >
+                  <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${warna}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-800">
+                        {h.label}
+                      </span>
+                      {!beres && h.count > 0 && (
+                        <span className={`text-[10px] font-black ${warna}`}>
+                          {h.count}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                      {h.hint}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Banner Import Data Massal */}

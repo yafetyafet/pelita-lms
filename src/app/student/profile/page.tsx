@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
+import { GantiSandiForm } from "@/components/GantiSandiForm"
 import { 
   ArrowLeft, 
   User, 
-  Lock, 
   LogOut, 
   CheckCircle2,
   Smartphone,
@@ -16,8 +16,6 @@ import {
 export default function StudentProfilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [savedPassword, setSavedPassword] = useState(false)
-  const [showPasswordForm, setShowPasswordForm] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -27,15 +25,6 @@ export default function StudentProfilePage() {
     }
     load()
   }, [])
-
-  const handleUpdatePassword = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSavedPassword(true)
-    setTimeout(() => {
-      setSavedPassword(false)
-      setShowPasswordForm(false)
-    }, 1500)
-  }
 
   if (isLoading) {
     return (
@@ -126,43 +115,7 @@ export default function StudentProfilePage() {
         </div>
       </div>
 
-      {/* Keamanan */}
-      <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-blue-50 text-blue-600">
-              <Lock className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-slate-900">Keamanan Akun</h3>
-              <p className="text-[10px] text-slate-500">Kelola kata sandi akun LMS</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowPasswordForm(!showPasswordForm)}
-            className="text-xs font-bold text-blue-600 hover:underline"
-          >
-            {showPasswordForm ? "Tutup Form" : "Ubah Sandi"}
-          </button>
-        </div>
-
-        {showPasswordForm && (
-          <form onSubmit={handleUpdatePassword} className="flex flex-col gap-2 pt-1 border-t border-slate-100">
-            <input type="password" placeholder="Kata sandi lama" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
-            <input type="password" placeholder="Kata sandi baru (min. 6 karakter)" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" required />
-            <button type="submit" className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-sm mt-1">
-              Simpan Kata Sandi Baru
-            </button>
-          </form>
-        )}
-
-        {savedPassword && (
-          <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Kata sandi berhasil diperbarui!</span>
-          </div>
-        )}
-      </div>
+      <GantiSandiForm accent="blue" />
 
       {/* Info Versi */}
       <div className="p-3 bg-slate-100 rounded-2xl flex items-center justify-between text-[11px] text-slate-500 font-medium">

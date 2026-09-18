@@ -103,12 +103,36 @@ export default function AdminUjianPage() {
           <span>Konfigurasi Ruang & Jadwal CBT</span>
         </h3>
 
+        {/*
+          Sebelumnya bagian ini mengklaim sistem "otomatis mengunci layar agar
+          tidak dapat berpindah aplikasi". Peramban web tidak mengizinkan hal
+          itu dan aplikasi ini tidak melakukannya. Yang benar-benar ada adalah
+          pencatatan perpindahan tab, jadi deskripsinya disesuaikan.
+        */}
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2.5">
           <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <strong className="block font-bold">Mode Anti-Curang (Safe Exam Browser / Tab Lock)</strong>
+            <strong className="block font-bold">Pengawasan Ujian</strong>
             <span>
-              Saat token aktif dimasukkan oleh siswa, sistem ujian otomatis mengunci layar agar tidak dapat berpindah aplikasi atau membuka peramban lain.
+              Setiap kali siswa meninggalkan halaman ujian, kejadian itu dihitung
+              dan tersimpan bersama jawabannya; guru melihat jumlahnya di halaman
+              kelola ujian. Waktu pengerjaan juga dihitung di server sehingga
+              menutup atau menyegarkan aplikasi tidak menambah waktu. Peramban
+              web tidak dapat mengunci perangkat siswa, jadi pengawas ruang tetap
+              diperlukan.
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 text-xs flex items-start gap-2.5">
+          <BookOpen className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+          <div>
+            <strong className="block font-bold text-slate-800">Token per ujian</strong>
+            <span>
+              Token di atas berlaku sebagai token cadangan untuk seluruh ujian.
+              Guru dapat menetapkan token, jadwal buka/tutup, dan status terbit
+              khusus tiap ujian dari menu Ujian pada akun guru — token khusus
+              selalu didahulukan.
             </span>
           </div>
         </div>

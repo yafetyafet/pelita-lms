@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
+import { GantiSandiForm } from "@/components/GantiSandiForm"
 import { 
   ArrowLeft, 
   User, 
@@ -120,6 +121,8 @@ export default function TeacherProfilePage() {
           <span className="font-bold text-emerald-600 font-mono text-[11px]">@{currentUser?.username || "-"}</span>
         </div>
       </div>
+
+      <GantiSandiForm accent="emerald" />
 
       {/* Logout */}
       <button
