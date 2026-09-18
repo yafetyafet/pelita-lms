@@ -221,7 +221,9 @@ export default function TeacherGradesPage() {
                   : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50"
               }`}
             >
-              {tc.classInfo.name}
+              {/* Satu guru bisa mengampu beberapa mapel di kelas yang sama,
+                  jadi nama kelas saja membuat pil-pil ini kembar. */}
+              {tc.classInfo.name} · {tc.subject.name}
             </button>
           ))}
         </div>
