@@ -1,7 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -132,7 +130,6 @@ export async function submitAttendance(lat: number, lng: number): Promise<AksiHa
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, pesan: keputusan.pesan }
   } catch (err) {
     return gagal(err)
@@ -180,7 +177,6 @@ export async function submitCheckOut(lat: number, lng: number): Promise<AksiHasi
       data: { checkOutTime: new Date() },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, pesan: keputusan.pesan }
   } catch (err) {
     return gagal(err)
@@ -419,7 +415,6 @@ export async function submitAssignment(input: {
       },
     })
 
-    revalidatePath('/', 'layout')
     return {
       success: true,
       pesan: terlambat
@@ -471,7 +466,6 @@ export async function createSpiritualJournal(data: {
         notes: data.notes?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -750,7 +744,6 @@ export async function submitExam(
       },
     })
 
-    revalidatePath('/', 'layout')
     return {
       success: true,
       // Hasil hanya dibocorkan bila guru mengizinkan.

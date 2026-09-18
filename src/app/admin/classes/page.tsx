@@ -164,7 +164,17 @@ export default function AdminClassesPage() {
       alert(res.error)
       return
     }
-    loadData()
+
+    // Perbarui hanya baris itu. loadData() sebelumnya menarik ulang seluruh
+    // rombel beserta relasinya (~570 ms) hanya untuk satu dropdown.
+    const guru = teachers.find((t: any) => t.id === waliKelasId) || null
+    setClasses(prev =>
+      prev.map((c: any) =>
+        c.id === classId
+          ? { ...c, waliId: guru ? guru.id : null, wali: guru ? { id: guru.id, name: guru.name } : null }
+          : c
+      )
+    )
   }
 
   const handleAddStudentsBulk = async () => {

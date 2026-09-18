@@ -154,11 +154,41 @@ export default function AdminUsersPage() {
       showToast("error", res.error)
       return
     }
+
+    // Perbarui hanya baris yang berubah. Sebelumnya di sini dipanggil
+    // loadUsers(), yang menarik ulang 407 akun (102 KB, ~830 ms) plus daftar
+    // rombel hanya untuk mengubah satu dropdown — itulah yang membuat
+    // "menyimpan" terasa lama.
+    const kelas = classes.find((c: any) => c.id === classId) || null
+    setUsers(prev =>
+      prev.map(u =>
+        u.id === userId
+          ? {
+              ...u,
+              studentClasses: kelas
+                ? [{ classInfo: { id: kelas.id, name: kelas.name } }]
+                : []
+            }
+          : u
+      )
+    )
+    // Jaga agar hitungan siswa per rombel di dropdown tetap masuk akal.
+    setClasses(prev =>
+      prev.map((c: any) => {
+        const sebelum = rombelOf(users.find(u => u.id === userId) || {})
+        let delta = 0
+        if (sebelum?.id === c.id) delta -= 1
+        if (classId === c.id) delta += 1
+        return delta === 0
+          ? c
+          : { ...c, _count: { ...c._count, students: Math.max(0, (c._count?.students ?? 0) + delta) } }
+      })
+    )
+
     showToast(
       "success",
       res.className ? `Rombel diubah ke ${res.className}.` : "Rombel dikosongkan."
     )
-    loadUsers()
   }
 
   // Delete User

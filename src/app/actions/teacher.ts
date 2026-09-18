@@ -1,7 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -79,6 +77,123 @@ export async function getTeacherClasses() {
     },
     orderBy: [{ classId: 'asc' }],
   })
+}
+
+/**
+ * Pilihan rombel dan mapel untuk guru menentukan sendiri apa yang diampunya.
+ *
+ * Per keputusan sekolah, guru mengambil sendiri kelas + mapel dan langsung
+ * berlaku tanpa persetujuan admin. Yang tetap dijaga: guru hanya bisa
+ * mengambil untuk DIRINYA SENDIRI — `claimTeaching` selalu memakai id dari
+ * sesi, bukan dari parameter, sehingga tidak ada guru yang bisa menugaskan
+ * atau melepas guru lain.
+ */
+export async function getTeachingOptions() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return { classes: [], subjects: [], mine: [] }
+
+  const [classes, subjects, mine] = await Promise.all([
+    prisma.class.findMany({
+      select: { id: true, name: true, level: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.subject.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.classTeacher.findMany({
+      where: { userId: session.uid },
+      select: {
+        classId: true,
+        subjectId: true,
+        classInfo: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true } },
+      },
+    }),
+  ])
+
+  return { classes, subjects, mine }
+}
+
+/** Guru mengambil satu kombinasi rombel + mapel untuk dirinya sendiri. */
+export async function claimTeaching(
+  classId: string,
+  subjectId: string
+): Promise<AksiHasil<{ className: string; subjectName: string }>> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    if (!classId || !subjectId) {
+      return { error: 'Pilih rombel dan mata pelajaran dulu.' }
+    }
+
+    const [kelas, mapel] = await Promise.all([
+      prisma.class.findUnique({ where: { id: classId }, select: { name: true } }),
+      prisma.subject.findUnique({ where: { id: subjectId }, select: { name: true } }),
+    ])
+    if (!kelas) return { error: 'Rombel tidak ditemukan.' }
+    if (!mapel) return { error: 'Mata pelajaran tidak ditemukan.' }
+
+    const existing = await prisma.classTeacher.findUnique({
+      where: {
+        userId_classId_subjectId: { userId: session.uid, classId, subjectId },
+      },
+      select: { userId: true },
+    })
+    if (existing) {
+      return { error: `Kamu sudah mengampu ${mapel.name} di ${kelas.name}.` }
+    }
+
+    await prisma.classTeacher.create({
+      data: { userId: session.uid, classId, subjectId },
+    })
+
+    return { success: true, className: kelas.name, subjectName: mapel.name }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
+/**
+ * Guru melepas kombinasi rombel + mapel miliknya sendiri.
+ *
+ * Jurnal, materi, tugas, dan ujian yang sudah dibuat TIDAK terhapus — hanya
+ * hak aksesnya yang hilang, sehingga guru tidak bisa lagi membukanya sampai
+ * mengambil kembali kelas tersebut.
+ */
+export async function releaseTeaching(
+  classId: string,
+  subjectId: string
+): Promise<AksiHasil<{ terkait: number }>> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    const existing = await prisma.classTeacher.findUnique({
+      where: {
+        userId_classId_subjectId: { userId: session.uid, classId, subjectId },
+      },
+      select: { userId: true },
+    })
+    if (!existing) return { error: 'Penugasan itu bukan milikmu.' }
+
+    // Hitung data yang akan kehilangan akses, untuk diberitahukan ke guru.
+    const [jurnal, materi, tugas, ujian] = await Promise.all([
+      prisma.journal.count({ where: { authorId: session.uid, classId, subjectId } }),
+      prisma.material.count({ where: { authorId: session.uid, classId, subjectId } }),
+      prisma.assignment.count({ where: { authorId: session.uid, classId, subjectId } }),
+      prisma.exam.count({ where: { authorId: session.uid, classId, subjectId } }),
+    ])
+
+    await prisma.classTeacher.delete({
+      where: {
+        userId_classId_subjectId: { userId: session.uid, classId, subjectId },
+      },
+    })
+
+    return { success: true, terkait: jurnal + materi + tugas + ujian }
+  } catch (err) {
+    return gagal(err)
+  }
 }
 
 export async function getStudentsByClass(classId: string) {
@@ -241,7 +356,6 @@ export async function saveManualAttendance(input: {
       )
     )
 
-    revalidatePath('/', 'layout')
     return { success: true, count: valid.length }
   } catch (err) {
     return gagal(err)
@@ -359,7 +473,6 @@ export async function createJournal(data: {
         hadir: typeof data.hadir === 'number' ? data.hadir : null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -378,7 +491,6 @@ export async function deleteJournal(id: string): Promise<AksiHasil> {
       return { error: 'Kamu hanya boleh menghapus jurnalmu sendiri.' }
     }
     await prisma.journal.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -427,7 +539,6 @@ export async function createMaterial(data: {
         subjectId: data.subjectId,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -446,7 +557,6 @@ export async function deleteMaterial(id: string): Promise<AksiHasil> {
       return { error: 'Kamu hanya boleh menghapus materimu sendiri.' }
     }
     await prisma.material.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -516,7 +626,6 @@ export async function createAssignment(data: {
         subjectId: data.subjectId,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -535,7 +644,6 @@ export async function deleteAssignment(id: string): Promise<AksiHasil> {
       return { error: 'Kamu hanya boleh menghapus tugasmu sendiri.' }
     }
     await prisma.assignment.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -625,7 +733,6 @@ export async function saveGrade(data: {
         gradedById: session.uid,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -668,7 +775,6 @@ export async function createViolation(data: {
         points,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -716,7 +822,6 @@ export async function updateViolationStatus(input: {
         followUp: input.followUp?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -823,7 +928,6 @@ export async function createExam(data: {
         },
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -894,7 +998,6 @@ export async function updateExamSettings(input: {
           : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -906,7 +1009,6 @@ export async function deleteExam(examId: string): Promise<AksiHasil> {
     const session = await requireSession('TEACHER', 'ADMIN')
     await examMilikSaya(session, examId)
     await prisma.exam.delete({ where: { id: examId } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1028,7 +1130,6 @@ export async function saveEssayScore(input: {
         gradedAt: new Date(),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true, finalScore }
   } catch (err) {
     return gagal(err)
@@ -1084,7 +1185,6 @@ export async function recomputeExamScores(examId: string): Promise<AksiHasil<{ c
       diperbarui++
     }
 
-    revalidatePath('/', 'layout')
     return { success: true, count: diperbarui }
   } catch (err) {
     return gagal(err)
@@ -1189,7 +1289,6 @@ export async function createSchedule(data: {
         label: data.label?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -1208,7 +1307,6 @@ export async function deleteSchedule(scheduleId: string): Promise<AksiHasil> {
       return { error: 'Kamu hanya boleh menghapus jadwalmu sendiri.' }
     }
     await prisma.schedule.delete({ where: { id: scheduleId } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)

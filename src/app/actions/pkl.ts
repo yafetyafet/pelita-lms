@@ -10,8 +10,6 @@
  * lokasi industri, pembimbing industri memverifikasi.
  */
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -67,7 +65,6 @@ export async function createPartner(data: {
         mentorId: data.mentorId || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -108,7 +105,6 @@ export async function updatePartner(data: {
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -119,7 +115,6 @@ export async function deletePartner(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.partner.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -204,7 +199,6 @@ export async function createPlacement(data: {
         endDate: end,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -244,7 +238,6 @@ export async function updatePlacement(data: {
           : {}),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -255,7 +248,6 @@ export async function deletePlacement(id: string): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
     await prisma.pklPlacement.delete({ where: { id } })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -307,7 +299,6 @@ export async function createPklJournal(data: {
         fileUrl: data.fileUrl?.trim() || null,
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)
@@ -363,7 +354,6 @@ export async function submitPklAttendance(lat: number, lng: number): Promise<Aks
       },
     })
 
-    revalidatePath('/', 'layout')
     return { success: true, pesan: keputusan.pesan }
   } catch (err) {
     return gagal(err)
@@ -483,7 +473,6 @@ export async function verifyPklJournal(input: {
         verifiedAt: new Date(),
       },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     return gagal(err)

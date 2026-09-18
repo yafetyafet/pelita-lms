@@ -10,8 +10,6 @@
  * ditambah penanda sudah-dibaca.
  */
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
@@ -90,7 +88,6 @@ export async function markBroadcastRead(broadcastId: string): Promise<AksiHasil>
       update: {},
       create: { broadcastId, userId: session.uid },
     })
-    revalidatePath('/', 'layout')
     return { success: true }
   } catch (err) {
     if (err instanceof ForbiddenError) return { error: err.message }
@@ -109,7 +106,6 @@ export async function markAllBroadcastsRead(): Promise<AksiHasil<{ count: number
       data: belum.map((b) => ({ broadcastId: b.id, userId: session.uid })),
       skipDuplicates: true,
     })
-    revalidatePath('/', 'layout')
     return { success: true, count: belum.length }
   } catch {
     return { error: 'Gagal menandai pengumuman.' }
