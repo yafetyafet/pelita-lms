@@ -298,42 +298,175 @@ export default function TeacherExamsPage() {
     reader.readAsBinaryString(file)
   }
 
+  /**
+   * Parser soal tempel/copas.
+   *
+   * Yang dikenali per baris:
+   *   1. / 1)          -> soal baru
+   *   A. / A)  s.d. H.  -> opsi jawaban (dulu hanya A-D)
+   *   Gambar: <url>     -> gambar soal (dulu tidak ada sama sekali)
+   *   ![](url)          -> gambar bergaya Markdown
+   *   <url gambar>      -> baris yang isinya hanya tautan gambar
+   *   Jawaban: A        -> kunci PG
+   *   Jawaban: A,B,D    -> kunci PG kompleks (otomatis jadi PG_KOMPLEKS)
+   *   Poin: 15          -> bobot soal
+   *   Esai / Uraian     -> menandai soal uraian
+   *
+   * Dua bug versi lama: opsi di luar A-D diabaikan, dan "Jawaban: A,B" membuat
+   * "ABCD".indexOf() mengembalikan -1 lalu DIAM-DIAM menyimpan kunci "A",
+   * sehingga soal tampak wajar tetapi kuncinya salah.
+   */
   const handlePasteImport = () => {
     if (!pasteText.trim()) return
-    const lines = pasteText.trim().split("\n").filter(l => l.trim())
+
+    const lines = pasteText.split("\n")
     const imported: any[] = []
-    
+    const catatan: string[] = []
+
+    const HURUF = "ABCDEFGH"
+    const isTautanGambar = (t: string) =>
+      /^https?:\/\/\S+$/i.test(t) &&
+      (/\.(png|jpe?g|gif|webp|svg|bmp)(\?\S*)?$/i.test(t) ||
+        /(drive\.google|googleusercontent|imgur|ibb\.co|cloudinary|blogspot|wp\.com)/i.test(t))
+
     let current: any = null
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.match(/^\d+[\.\)]/)) {
-        if (current) imported.push(current)
+    const tutup = () => {
+      if (!current) return
+      const terisi = current.options.filter((o: string) => String(o).trim())
+
+      if (current.type !== "ESAI") {
+        if (terisi.length < 2) {
+          // Soal tanpa opsi wajar diperlakukan sebagai uraian daripada dibuang.
+          current.type = "ESAI"
+          current.correctAnswer = ""
+          current.options = ["", "", "", "", ""]
+          catatan.push(`Soal "${String(current.question).slice(0, 24)}..." tanpa opsi → jadi Esai`)
+        } else if (!String(current.correctAnswer).trim()) {
+          catatan.push(`Soal "${String(current.question).slice(0, 24)}..." belum ada baris "Jawaban:"`)
+        }
+      }
+
+      // Selalu sediakan lima kolom opsi (A–E).
+      while (current.options.length < 5) current.options.push("")
+      current.question = String(current.question).trim()
+      imported.push(current)
+      current = null
+    }
+
+    for (const raw of lines) {
+      const t = raw.trim()
+      if (!t) continue
+
+      // --- soal baru ---
+      if (/^\d+[.)]/.test(t)) {
+        tutup()
         current = {
-          question: trimmed.replace(/^\d+[\.\)]\s*/, ""),
+          question: t.replace(/^\d+[.)]\s*/, ""),
           imageUrl: "",
           type: "PG",
           options: [],
-          correctAnswer: "0",
+          correctAnswer: "",
           points: 10
         }
-      } else if (trimmed.match(/^[A-D][\.\)]/i) && current) {
-        current.options.push(trimmed.replace(/^[A-D][\.\)]\s*/i, ""))
-      } else if (trimmed.toLowerCase().startsWith("jawaban:") && current) {
-        const ans = trimmed.replace(/^jawaban:\s*/i, "").trim().toUpperCase()
-        // indexOf mengembalikan -1 untuk jawaban di luar A-D; jangan simpan
-        // itu sebagai kunci karena soalnya jadi mustahil dijawab benar.
-        const idx = "ABCD".indexOf(ans)
-        current.correctAnswer = String(idx >= 0 ? idx : 0)
-      } else if (current && current.options.length === 0) {
-        current.question += " " + trimmed
+        continue
+      }
+
+      if (!current) continue
+
+      // --- gambar: "Gambar: url" / "Img: url" ---
+      const mGambar = t.match(/^(gambar|image|img|foto)\s*[:=]\s*(\S+)/i)
+      if (mGambar) {
+        current.imageUrl = mGambar[2]
+        continue
+      }
+
+      // --- gambar bergaya Markdown: ![apa saja](url) ---
+      const mMd = t.match(/^!\[[^\]]*\]\((\S+?)\)/)
+      if (mMd) {
+        current.imageUrl = mMd[1]
+        continue
+      }
+
+      // --- baris yang isinya hanya tautan gambar ---
+      if (!current.imageUrl && isTautanGambar(t)) {
+        current.imageUrl = t
+        continue
+      }
+
+      // --- bobot ---
+      const mPoin = t.match(/^(poin|point|bobot|skor)\s*[:=]\s*(\d+)/i)
+      if (mPoin) {
+        const n = parseInt(mPoin[2], 10)
+        if (n > 0) current.points = n
+        continue
+      }
+
+      // --- penanda esai ---
+      if (/^(esai|essay|uraian)\s*$/i.test(t)) {
+        current.type = "ESAI"
+        continue
+      }
+
+      // --- kunci jawaban ---
+      const mJawab = t.match(/^(jawaban|kunci|answer)\s*[:=]\s*(.+)$/i)
+      if (mJawab) {
+        const bagian = mJawab[2]
+          .toUpperCase()
+          .split(/[,;/ ]+/)
+          .map(x => x.trim().replace(/[.)]$/, ""))
+          .filter(Boolean)
+
+        const indeks = Array.from(
+          new Set(
+            bagian
+              .map(x => (/^[A-H]$/.test(x) ? HURUF.indexOf(x) : Number(x) - 1))
+              .filter(n => Number.isInteger(n) && n >= 0)
+          )
+        ).sort((a, b) => a - b)
+
+        if (indeks.length === 0) {
+          catatan.push(`Jawaban "${mJawab[2].trim()}" tidak dikenali`)
+        } else {
+          current.correctAnswer = indeks.join(",")
+          // Lebih dari satu jawaban benar berarti PG kompleks.
+          if (indeks.length > 1) current.type = "PG_KOMPLEKS"
+        }
+        continue
+      }
+
+      // --- opsi jawaban A–H ---
+      const mOpsi = t.match(/^([A-H])[.)]\s*(.*)$/i)
+      if (mOpsi) {
+        current.options.push(mOpsi[2].trim())
+        continue
+      }
+
+      // --- lanjutan teks soal (hanya sebelum opsi pertama) ---
+      if (current.options.length === 0) {
+        current.question += " " + t
       }
     }
-    if (current) imported.push(current)
+    tutup()
 
-    // Ensure each question has at least 4 options
-    imported.forEach(q => {
-      while (q.options.length < 4) q.options.push("")
-    })
+    if (imported.length === 0) {
+      setImportError("Tidak ada soal terdeteksi. Pastikan setiap soal diawali nomor, misalnya \"1.\"")
+      return
+    }
+
+    const berGambar = imported.filter(q => q.imageUrl).length
+    const kompleks = imported.filter(q => q.type === "PG_KOMPLEKS").length
+    const esai = imported.filter(q => q.type === "ESAI").length
+
+    const ringkas = [`${imported.length} soal masuk`]
+    if (berGambar) ringkas.push(`${berGambar} bergambar`)
+    if (kompleks) ringkas.push(`${kompleks} PG kompleks`)
+    if (esai) ringkas.push(`${esai} esai`)
+
+    setImportError(
+      catatan.length > 0
+        ? `${ringkas.join(", ")}. Perlu dicek: ${catatan.slice(0, 4).join("; ")}${catatan.length > 4 ? ", dst." : ""}`
+        : `${ringkas.join(", ")}.`
+    )
 
     setQuestions(prev => [...prev, ...imported])
     setPasteText("")
@@ -664,16 +797,38 @@ export default function TeacherExamsPage() {
 
               {importMode === "paste" && (
                 <div className="flex flex-col gap-2 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
-                  <p className="text-[10px] text-amber-800">
-                    <strong>Format:</strong> Baris soal diawali nomor (1. / 1)), opsi diawali huruf (A. / A)), jawaban dengan &quot;Jawaban: A&quot;
-                  </p>
+                  <div className="text-[10px] text-amber-900 leading-relaxed">
+                    <strong className="block mb-1">Format per baris:</strong>
+                    <table className="w-full">
+                      <tbody>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">1.</td><td>soal baru</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">A. s.d. H.</td><td>opsi jawaban</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Gambar:</td><td>tautan gambar soal — boleh juga ditempel sebagai <code>![](url)</code> atau tautannya sendirian di satu baris</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Jawaban:</td><td><code>A</code> untuk satu kunci, atau <code>A,B,D</code> untuk beberapa kunci — otomatis jadi PG Kompleks</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Poin:</td><td>bobot soal (bawaan 10)</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Esai</td><td>tulis sendirian untuk soal uraian</td></tr>
+                      </tbody>
+                    </table>
+                    <p className="mt-1.5">
+                      Gambar harus berupa <strong>tautan</strong>. Menempel gambar
+                      langsung dari papan klip belum didukung — unggah dulu ke Drive
+                      atau layanan gambar, lalu tempel tautannya. Pastikan tautannya
+                      bisa dibuka publik.
+                    </p>
+                  </div>
                   <textarea
                     rows={6}
                     value={pasteText}
                     onChange={e => setPasteText(e.target.value)}
-                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup\nB. Bahasa pemrograman\nC. Database\nD. Operating system\nJawaban: A\n\n2. CSS digunakan untuk?\nA. Struktur\nB. Styling\nC. Backend\nD. Testing\nJawaban: B"}
+                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\nJawaban: A\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star\nB. Bus\nC. HTTP\nD. Ring\nE. SMTP\nJawaban: A,B,D\n\n4. Jelaskan perbedaan HUB dan SWITCH.\nEsai\nPoin: 20"}
                     className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-[11px] text-slate-800 resize-none focus:outline-none font-mono"
                   />
+                  {importError && (
+                    <p className="text-[10px] font-semibold text-slate-800 bg-white border border-amber-300 rounded-xl px-2.5 py-2">
+                      {importError}
+                    </p>
+                  )}
+
                   <button type="button" onClick={handlePasteImport} className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition">
                     Import Soal ({pasteText.split("\n").filter(l => l.trim().match(/^\d+[\.\)]/)).length} soal terdeteksi)
                   </button>
