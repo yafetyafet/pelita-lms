@@ -5,7 +5,7 @@ import Link from "next/link"
 import { 
   ArrowLeft, MessageSquare, Users, Sparkles, Send, BookOpen, Loader2, Plus, MessageCircle 
 } from "lucide-react"
-import { getForumDiscussions, createForumDiscussion, addForumReply } from "@/app/actions/teacher"
+import { getForumDiscussions, createForumDiscussion, addForumReply } from "@/app/actions/forum"
 
 export default function TeacherForumPage() {
   const [discussions, setDiscussions] = useState<any[]>([])

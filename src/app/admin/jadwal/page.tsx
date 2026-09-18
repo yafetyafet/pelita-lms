@@ -3,13 +3,16 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Plus, Trash2, ShieldCheck, Loader2, X, Flag } from "lucide-react"
-import { getSchedules, createScheduleAdmin, deleteScheduleAdmin, getClasses, getTeachers } from "@/app/actions/admin"
+import { getSchedules, createScheduleAdmin, deleteScheduleAdmin, getClasses, getTeachers, getSubjects, getSessions, getAppSetting, setAppSetting } from "@/app/actions/admin"
 
 export default function AdminJadwalPage() {
   const [teacherSelfSchedule, setTeacherSelfSchedule] = useState(true)
+  const [togglingPolicy, setTogglingPolicy] = useState(false)
   const [schedules, setSchedules] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -19,6 +22,8 @@ export default function AdminJadwalPage() {
   const [formStart, setFormStart] = useState("07:00")
   const [formEnd, setFormEnd] = useState("08:00")
   const [formClassId, setFormClassId] = useState("")
+  const [formSubjectId, setFormSubjectId] = useState("")
+  const [formSessionId, setFormSessionId] = useState("")
   const [formTeacherId, setFormTeacherId] = useState("")
   const [formRoom, setFormRoom] = useState("")
   const [formType, setFormType] = useState("REGULAR")
@@ -26,15 +31,51 @@ export default function AdminJadwalPage() {
 
   useEffect(() => {
     async function load() {
-      const [sch, cls, tch] = await Promise.all([getSchedules(), getClasses(), getTeachers()])
+      const [sch, cls, tch, subj, sesi, kebijakan] = await Promise.all([
+        getSchedules(),
+        getClasses(),
+        getTeachers(),
+        getSubjects(),
+        getSessions(),
+        getAppSetting("TEACHER_SELF_SCHEDULE"),
+      ])
       setSchedules(sch)
       setClasses(cls)
       setTeachers(tch)
+      setSubjects(subj)
+      setSessions(sesi)
+      // Kebijakan ini sebelumnya hanya state lokal: nilainya hilang saat
+      // halaman dimuat ulang dan tidak pernah membatasi apa pun. Sekarang
+      // disimpan di AppSetting dan ditegakkan oleh createSchedule() guru.
+      setTeacherSelfSchedule(kebijakan !== "0")
       if (cls.length > 0) setFormClassId(cls[0].id)
       setIsLoading(false)
     }
     load()
   }, [])
+
+  const ubahKebijakan = async () => {
+    const berikutnya = !teacherSelfSchedule
+    setTogglingPolicy(true)
+    const res = await setAppSetting("TEACHER_SELF_SCHEDULE", berikutnya ? "1" : "0")
+    setTogglingPolicy(false)
+    if (res.error) {
+      alert(res.error)
+      return
+    }
+    setTeacherSelfSchedule(berikutnya)
+  }
+
+  /** Jam pelajaran mengisi otomatis waktu mulai/selesai. */
+  const pilihSesi = (id: string) => {
+    setFormSessionId(id)
+    const s = sessions.find((x: any) => x.id === id)
+    if (s) {
+      setFormDay(s.day)
+      setFormStart(s.startTime)
+      setFormEnd(s.endTime)
+    }
+  }
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,6 +86,8 @@ export default function AdminJadwalPage() {
       sessionStart: formStart,
       sessionEnd: formEnd,
       classId: formClassId,
+      subjectId: formType === "REGULAR" ? formSubjectId || undefined : undefined,
+      sessionId: formSessionId || undefined,
       teacherId: formTeacherId || undefined,
       room: formRoom || undefined,
       type: formType,
@@ -115,13 +158,18 @@ export default function AdminJadwalPage() {
           </p>
         </div>
 
-        <button 
-          onClick={() => setTeacherSelfSchedule(!teacherSelfSchedule)}
-          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition shrink-0 ${
+        <button
+          onClick={ubahKebijakan}
+          disabled={togglingPolicy}
+          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition shrink-0 disabled:opacity-60 ${
             teacherSelfSchedule ? "bg-emerald-500 text-white shadow-sm" : "bg-white/20 text-white"
           }`}
         >
-          {teacherSelfSchedule ? "Aktif (Mandiri)" : "Terkunci (Admin Only)"}
+          {togglingPolicy
+            ? "Menyimpan..."
+            : teacherSelfSchedule
+              ? "Aktif (Mandiri)"
+              : "Terkunci (Admin Only)"}
         </button>
       </div>
 
@@ -157,15 +205,24 @@ export default function AdminJadwalPage() {
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${typeColors[item.type] || "bg-slate-100 text-slate-600"}`}>
                         {item.type}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-500">{getClassName(item.classId)}</span>
+                      <span className="text-[10px] font-bold text-slate-500">{item.classInfo?.name || getClassName(item.classId)}</span>
                     </div>
                     <h4 className="text-xs font-bold text-slate-900">
-                      {item.label || (item.type === "UPACARA" ? "Upacara Bendera" : item.type === "PEMBIASAAN" ? "Pembiasaan" : "Pelajaran")}
+                      {/* Nama mapel kini terbawa lewat relasi Prisma. */}
+                      {item.subject?.name ||
+                        item.label ||
+                        (item.type === "UPACARA" ? "Upacara Bendera" : item.type === "PEMBIASAAN" ? "Pembiasaan" : "Pelajaran")}
                     </h4>
-                    {item.teacherId && (
-                      <p className="text-[10px] text-slate-500 mt-0.5">{getTeacherName(item.teacherId)}</p>
+                    {(item.teacher?.name || item.teacherId) && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">{item.teacher?.name || getTeacherName(item.teacherId)}</p>
+                    )}
+                    {item.type === "REGULAR" && !item.subject && (
+                      <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                        Mapel belum diisi — jadwal ini tampil tanpa nama pelajaran di aplikasi siswa.
+                      </p>
                     )}
                     <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded mt-1 inline-block border border-emerald-200/60">
+                      {item.jamPelajaran?.name ? `${item.jamPelajaran.name} • ` : ""}
                       {item.sessionStart} - {item.sessionEnd}
                     </span>
                     {item.room && <span className="text-[10px] text-slate-400 ml-2">{item.room}</span>}
@@ -228,6 +285,29 @@ export default function AdminJadwalPage() {
                 </div>
               )}
 
+              {sessions.length > 0 && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Jam Pelajaran (dari Master Sesi):
+                  </label>
+                  <select
+                    value={formSessionId}
+                    onChange={e => pilihSesi(e.target.value)}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
+                  >
+                    <option value="">-- Isi jam secara manual --</option>
+                    {sessions.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.day} • {s.name} ({s.startTime}-{s.endTime})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Memilih jam pelajaran akan mengisi hari dan jam di bawah secara otomatis.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">Hari:</label>
@@ -252,6 +332,21 @@ export default function AdminJadwalPage() {
                     {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
+                {formType === "REGULAR" && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Mata Pelajaran:</label>
+                    <select
+                      value={formSubjectId}
+                      onChange={e => setFormSubjectId(e.target.value)}
+                      className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
+                    >
+                      <option value="">-- Pilih --</option>
+                      {subjects.map((sb: any) => (
+                        <option key={sb.id} value={sb.id}>{sb.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">Guru (Opsional):</label>
                   <select value={formTeacherId} onChange={e => setFormTeacherId(e.target.value)} className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">

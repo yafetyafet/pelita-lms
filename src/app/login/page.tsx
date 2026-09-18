@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -38,12 +38,10 @@ export default function LoginPage() {
         return
       }
       
-      const role = res?.role
-      if (role === "STUDENT") router.push("/student")
-      else if (role === "TEACHER") router.push("/teacher")
-      else if (role === "ADMIN") router.push("/admin")
-      else if (role === "DUDI") router.push("/dudi")
-      else router.push("/")
+      // Kembalikan ke halaman yang tadi dijaga proxy, kalau ada.
+      const next = new URLSearchParams(window.location.search).get("next")
+      router.replace(next && next.startsWith("/") ? next : res?.redirectTo || "/")
+      router.refresh()
       
     } catch (err) {
       setError("Terjadi kesalahan jaringan.")

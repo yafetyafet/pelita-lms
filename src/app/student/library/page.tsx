@@ -3,14 +3,16 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { 
-  ArrowLeft, Search, BookMarked, BookOpen, DownloadCloud, Sparkles, ExternalLink, Star, Loader2
+  ArrowLeft, Search, BookMarked, BookOpen, DownloadCloud, Sparkles, ExternalLink, Loader2
 } from "lucide-react"
-import { getLibraryBooks } from "@/app/actions/student"
+import { getLibraryBooks, recordBookDownload } from "@/app/actions/student"
 
 export default function LibraryPage() {
   const [search, setSearch] = useState("")
   const [books, setBooks] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [membuka, setMembuka] = useState<string | null>(null)
+  const [pesan, setPesan] = useState("")
 
   useEffect(() => {
     const loadData = async () => {
@@ -21,6 +23,32 @@ export default function LibraryPage() {
     }
     loadData()
   }, [])
+
+  /**
+   * Buka berkas buku dan naikkan penghitung unduhan. Tombol ini sebelumnya
+   * tidak melakukan apa pun, dan kolom `downloads` selalu bernilai 0.
+   */
+  const buka = async (id: string) => {
+    setPesan("")
+    setMembuka(id)
+    const res = await recordBookDownload(id)
+    setMembuka(null)
+
+    if (res.error) {
+      setPesan(res.error)
+      return
+    }
+    if (!res.fileUrl) {
+      setPesan("Buku ini belum dilengkapi berkas digital oleh admin.")
+      setTimeout(() => setPesan(""), 4000)
+      return
+    }
+
+    setBooks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, downloads: res.downloads } : b))
+    )
+    window.open(res.fileUrl, "_blank", "noopener,noreferrer")
+  }
 
   const filtered = books.filter((b) => 
     b.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -64,6 +92,12 @@ export default function LibraryPage() {
         />
       </div>
 
+      {pesan && (
+        <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+          {pesan}
+        </p>
+      )}
+
       {/* Book List */}
       <div className="flex flex-col gap-3">
         {isLoading ? (
@@ -97,9 +131,11 @@ export default function LibraryPage() {
                     <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
                       {b.category}
                     </span>
-                    <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold bg-amber-50 px-1.5 py-0.5 rounded-md">
-                      <Star className="w-3 h-3 fill-amber-500" /> 4.9
-                    </div>
+                    {b.year && (
+                      <span className="text-[10px] text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded-md">
+                        {b.year}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-sm font-bold text-slate-900 leading-tight mb-1">{b.title}</h3>
                   <p className="text-[10px] text-slate-500 font-medium">Oleh: {b.author}</p>
@@ -112,8 +148,21 @@ export default function LibraryPage() {
                     <span className="flex items-center gap-1"><DownloadCloud className="w-3 h-3" /> {b.downloads}x</span>
                   </div>
                   
-                  <button className="w-8 h-8 rounded-full bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition border border-slate-100 group-hover:border-blue-100">
-                    <ExternalLink className="w-4 h-4" />
+                  <button
+                    onClick={() => buka(b.id)}
+                    disabled={membuka === b.id}
+                    title={b.fileUrl ? "Buka buku" : "Berkas belum tersedia"}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition border ${
+                      b.fileUrl
+                        ? "bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 border-slate-100 group-hover:border-blue-100"
+                        : "bg-slate-50 text-slate-300 border-slate-100"
+                    }`}
+                  >
+                    {membuka === b.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>

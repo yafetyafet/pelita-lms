@@ -8,28 +8,57 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// =====================================================
+// PENGGUNA & OTORISASI
+// =====================================================
+
 model User {
-  id               String             @id @default(uuid())
-  username         String             @unique
-  password         String
-  name             String
-  role             Role               @default(STUDENT)
-  avatarUrl        String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  assignments      Assignment[]
-  userAssignments  UserAssignment[]
-  attendances      Attendance[]
-  studentClasses   ClassStudent[]
-  teacherClasses   ClassTeacher[]
-  journals         Journal[]
-  materials        Material[]
-  waliClasses      Class[]            @relation("WaliKelas")
-  SpiritualJournal SpiritualJournal[]
-  ForumDiscussion  ForumDiscussion[]
-  ForumReply       ForumReply[]
-  Exam             Exam[]
-  ExamSubmission   ExamSubmission[]
+  id                 String             @id @default(uuid())
+  username           String             @unique
+  password           String
+  name               String
+  role               Role               @default(STUDENT)
+  avatarUrl          String?
+  // Identitas tambahan (opsional, dipakai impor Dapodik)
+  nomorInduk         String? // NIS untuk siswa, NIP untuk guru
+  email              String?
+  phone              String?
+  isActive           Boolean            @default(true)
+  mustChangePassword Boolean            @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  assignments        Assignment[]
+  userAssignments    UserAssignment[]
+  gradedAssignments  UserAssignment[]   @relation("PenilaiTugas")
+  attendances        Attendance[]
+  recordedAttendance Attendance[]       @relation("PencatatAbsensi")
+  studentClasses     ClassStudent[]
+  teacherClasses     ClassTeacher[]
+  journals           Journal[]
+  materials          Material[]
+  waliClasses        Class[]            @relation("WaliKelas")
+  SpiritualJournal   SpiritualJournal[]
+  ForumDiscussion    ForumDiscussion[]
+  ForumReply         ForumReply[]
+  Exam               Exam[]
+  ExamSubmission     ExamSubmission[]
+  gradedExams        ExamSubmission[]   @relation("PenilaiUjian")
+  violations         Violation[]        @relation("SiswaPelanggaran")
+  reportedViolations Violation[]        @relation("PelaporPelanggaran")
+  schedules          Schedule[]         @relation("GuruJadwal")
+  broadcasts         Broadcast[]
+  broadcastReads     BroadcastRead[]
+  libraryBooks       LibraryBook[]
+  // PKL
+  mentoredPartners   Partner[]          @relation("PembimbingIndustri")
+  pklPlacements      PklPlacement[]     @relation("SiswaPkl")
+  supervisedPkl      PklPlacement[]     @relation("PembimbingSekolah")
+  verifiedPklJournal PklJournal[]       @relation("VerifikatorJurnalPkl")
+
+  @@index([role])
+  @@index([name])
 }
 
 enum Role {
@@ -39,9 +68,13 @@ enum Role {
   DUDI
 }
 
+// =====================================================
+// MASTER DATA AKADEMIK
+// =====================================================
+
 model Class {
   id              String            @id @default(uuid())
-  name            String
+  name            String            @unique
   description     String?
   level           Int?
   waliId          String?
@@ -55,12 +88,15 @@ model Class {
   materials       Material[]
   ForumDiscussion ForumDiscussion[]
   Exam            Exam[]
+  schedules       Schedule[]
+
+  @@index([level])
 }
 
 model Subject {
   id              String            @id @default(uuid())
   code            String?
-  name            String
+  name            String            @unique
   description     String?
   assignments     Assignment[]
   teachers        ClassTeacher[]
@@ -68,15 +104,19 @@ model Subject {
   materials       Material[]
   ForumDiscussion ForumDiscussion[]
   Exam            Exam[]
+  schedules       Schedule[]
+  attendances     Attendance[]
 }
 
 model ClassStudent {
   userId    String
   classId   String
-  classInfo Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+  classInfo Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, classId])
+  @@index([classId])
 }
 
 model ClassTeacher {
@@ -88,13 +128,60 @@ model ClassTeacher {
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, classId, subjectId])
+  @@index([classId])
+  @@index([subjectId])
 }
+
+// Jam pelajaran (jam ke-1, ke-2, istirahat, dst)
+model Session {
+  id        String     @id @default(uuid())
+  day       String
+  name      String
+  startTime String
+  endTime   String
+  type      String     @default("Reguler")
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  schedules Schedule[]
+
+  @@index([day, startTime])
+}
+
+model Schedule {
+  id           String   @id @default(uuid())
+  day          String
+  sessionStart String
+  sessionEnd   String
+  classId      String
+  subjectId    String?
+  teacherId    String?
+  sessionId    String?
+  room         String?
+  type         String   @default("REGULAR")
+  label        String?
+  createdAt    DateTime @default(now())
+
+  classInfo    Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject      Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacher      User?    @relation("GuruJadwal", fields: [teacherId], references: [id], onDelete: SetNull)
+  jamPelajaran Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([classId, day])
+  @@index([teacherId, day])
+}
+
+// =====================================================
+// PEMBELAJARAN
+// =====================================================
 
 model Material {
   id          String   @id @default(uuid())
   title       String
   description String?
   url         String?
+  kind        String   @default("LINK") // LINK | FILE
+  fileName    String?
+  fileSize    Int?
   authorId    String
   classId     String
   subjectId   String
@@ -102,21 +189,29 @@ model Material {
   author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   classInfo   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([classId, createdAt])
+  @@index([authorId])
 }
 
 model Assignment {
-  id          String           @id @default(uuid())
-  title       String
-  description String?
-  dueDate     DateTime
-  authorId    String
-  classId     String
-  subjectId   String
-  createdAt   DateTime         @default(now())
-  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  classInfo   Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  submissions UserAssignment[]
+  id                  String           @id @default(uuid())
+  title               String
+  description         String?
+  dueDate             DateTime
+  maxScore            Int              @default(100)
+  allowLateSubmission Boolean          @default(true)
+  authorId            String
+  classId             String
+  subjectId           String
+  createdAt           DateTime         @default(now())
+  author              User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  classInfo           Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject             Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  submissions         UserAssignment[]
+
+  @@index([classId, subjectId])
+  @@index([authorId])
 }
 
 model UserAssignment {
@@ -124,61 +219,94 @@ model UserAssignment {
   assignmentId String
   score        Float?
   submittedAt  DateTime?
-  status       String     @default("PENDING")
-  description  String?
+  status       String     @default("PENDING") // PENDING | SUBMITTED | LATE | GRADED
+  description  String? // catatan/feedback dari guru
+  answerText   String? // jawaban siswa
+  fileUrl      String? // lampiran siswa
+  fileName     String?
+  isLate       Boolean    @default(false)
+  gradedAt     DateTime?
+  gradedById   String?
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradedBy     User?      @relation("PenilaiTugas", fields: [gradedById], references: [id], onDelete: SetNull)
 
   @@id([userId, assignmentId])
-}
-
-model Attendance {
-  id           String    @id @default(uuid())
-  userId       String
-  classId      String?
-  date         DateTime  @default(now())
-  status       String
-  lat          Float?
-  lng          Float?
-  createdAt    DateTime  @default(now())
-  checkOutTime DateTime?
-  classInfo    Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([assignmentId, status])
 }
 
 model Journal {
   id        String   @id @default(uuid())
   title     String
   content   String
-  authorId  String
   classId   String
   subjectId String
+  authorId  String
+  // Konteks pertemuan
+  tanggal   DateTime @default(now())
+  jamKe     String?
+  hadir     Int?
   createdAt DateTime @default(now())
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   classInfo Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([authorId, createdAt])
+  @@index([classId, subjectId])
 }
+
+// =====================================================
+// PRESENSI
+// =====================================================
+
+model Attendance {
+  id           String    @id @default(uuid())
+  userId       String
+  classId      String?
+  subjectId    String? // null = presensi harian, terisi = presensi per mapel
+  date         DateTime  @default(now())
+  dateKey      String // YYYY-MM-DD, memudahkan kueri & unik harian
+  // slotKey = "<dateKey>|DAILY" atau "<dateKey>|<subjectId>"
+  slotKey      String
+  status       String // hadir | terlambat | sakit | izin | alfa | tanpa_lokasi
+  kind         String    @default("DAILY") // DAILY | SUBJECT
+  note         String?
+  lat          Float?
+  lng          Float?
+  distance     Float? // meter dari titik sekolah saat presensi
+  checkOutTime DateTime?
+  recordedById String? // guru/admin yang menginput manual; null = presensi mandiri siswa
+  createdAt    DateTime  @default(now())
+
+  classInfo    Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  subject      Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy   User?     @relation("PencatatAbsensi", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, slotKey])
+  @@index([classId, dateKey])
+  @@index([userId, date])
+}
+
+// =====================================================
+// KESISWAAN
+// =====================================================
 
 model Violation {
   id          String   @id @default(uuid())
   studentId   String
   reporterId  String
   description String
+  category    String?
   points      Int
+  status      String   @default("OPEN") // OPEN | FOLLOW_UP | CLOSED
+  followUp    String?
   createdAt   DateTime @default(now())
-}
 
-model AppSetting {
-  key   String @id
-  value String
-}
+  student     User     @relation("SiswaPelanggaran", fields: [studentId], references: [id], onDelete: Cascade)
+  reporter    User     @relation("PelaporPelanggaran", fields: [reporterId], references: [id], onDelete: Cascade)
 
-model Broadcast {
-  id        String   @id @default(uuid())
-  title     String
-  message   String
-  target    String
-  createdAt DateTime @default(now())
+  @@index([studentId, createdAt])
 }
 
 model SpiritualJournal {
@@ -188,69 +316,40 @@ model SpiritualJournal {
   notes     String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
-model LibraryBook {
-  id          String   @id @default(uuid())
-  title       String
-  author      String
-  category    String
-  pages       String?
-  coverColor  String?
-  description String?
-  fileUrl     String?
-  downloads   Int      @default(0)
-  createdAt   DateTime @default(now())
-}
-
-model ForumDiscussion {
-  id        String       @id @default(uuid())
-  title     String
-  content   String
-  authorId  String
-  classId   String?
-  subjectId String?
-  createdAt DateTime     @default(now())
-  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  classInfo Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
-  subject   Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  replies   ForumReply[]
-}
-
-model ForumReply {
-  id           String          @id @default(uuid())
-  discussionId String
-  authorId     String
-  content      String
-  createdAt    DateTime        @default(now())
-  discussion   ForumDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
-}
-
-model Session {
-  id        String   @id @default(uuid())
-  day       String
-  name      String
-  startTime String
-  endTime   String
-  type      String   @default("Reguler")
-  createdAt DateTime @default(now())
-}
+// =====================================================
+// UJIAN / CBT
+// =====================================================
 
 model Exam {
-  id          String           @id @default(uuid())
-  title       String
-  type        String           @default("PG")
-  classId     String
-  subjectId   String
-  authorId    String
-  duration    Int              @default(60)
-  createdAt   DateTime         @default(now())
-  questions   ExamQuestion[]
-  submissions ExamSubmission[]
-  classInfo   Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  id           String           @id @default(uuid())
+  title        String
+  description  String?
+  type         String           @default("PG")
+  classId      String
+  subjectId    String
+  authorId     String
+  duration     Int              @default(60)
+  // Jendela pelaksanaan — dipakai kelayakanUjian() di server
+  startAt      DateTime?
+  endAt        DateTime?
+  token        String? // token per-ujian; fallback ke AppSetting CBT_TOKEN
+  shuffle      Boolean          @default(true)
+  isPublished  Boolean          @default(false)
+  showResult   Boolean          @default(true)
+  passingScore Int?
+  createdAt    DateTime         @default(now())
+  questions    ExamQuestion[]
+  submissions  ExamSubmission[]
+  classInfo    Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject      Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  author       User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([classId, isPublished])
+  @@index([authorId])
 }
 
 model ExamQuestion {
@@ -262,34 +361,200 @@ model ExamQuestion {
   options       String?
   correctAnswer String?
   points        Int     @default(10)
+  order         Int     @default(0)
   exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([examId, order])
 }
 
 model ExamSubmission {
-  id          String   @id @default(uuid())
-  examId      String
-  userId      String
-  answers     String?
-  score       Float?
-  scoreMax    Float?
-  essayScore  Float?
-  startedAt   DateTime @default(now())
-  submittedAt DateTime?
-  status      String   @default("ONGOING")
-  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(uuid())
+  examId         String
+  userId         String
+  answers        String?
+  score          Float? // skor otomatis (PG)
+  scoreMax       Float? // bobot maksimum PG
+  essayScore     Float? // skor esai hasil koreksi guru
+  essayMax       Float? // bobot maksimum esai
+  finalScore     Float? // nilai akhir 0-100
+  startedAt      DateTime  @default(now())
+  submittedAt    DateTime?
+  status         String    @default("ONGOING") // ONGOING | FINISHED | GRADED
+  violationCount Int       @default(0) // jumlah perpindahan tab terdeteksi
+  gradedById     String?
+  gradedAt       DateTime?
+  exam           Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradedBy       User?     @relation("PenilaiUjian", fields: [gradedById], references: [id], onDelete: SetNull)
+
+  @@unique([examId, userId])
+  @@index([examId, status])
 }
 
-model Schedule {
-  id           String   @id @default(uuid())
-  day          String
-  sessionStart String
-  sessionEnd   String
-  classId      String
-  subjectId    String?
-  teacherId    String?
-  room         String?
-  type         String   @default("REGULAR")
-  label        String?
-  createdAt    DateTime @default(now())
+// =====================================================
+// KOMUNIKASI
+// =====================================================
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Broadcast {
+  id        String          @id @default(uuid())
+  title     String
+  message   String
+  target    String // Semua Pengguna | Siswa | Guru | Mitra DUDI | <classId>
+  authorId  String?
+  createdAt DateTime        @default(now())
+  author    User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  reads     BroadcastRead[]
+
+  @@index([createdAt])
+}
+
+model BroadcastRead {
+  broadcastId String
+  userId      String
+  readAt      DateTime  @default(now())
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([broadcastId, userId])
+  @@index([userId])
+}
+
+model ForumDiscussion {
+  id        String       @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  classId   String?
+  subjectId String?
+  isPinned  Boolean      @default(false)
+  isLocked  Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  author    User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  classInfo Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  subject   Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  replies   ForumReply[]
+
+  @@index([classId, createdAt])
+  @@index([createdAt])
+}
+
+model ForumReply {
+  id           String          @id @default(uuid())
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime        @default(now())
+  discussion   ForumDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author       User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([discussionId, createdAt])
+}
+
+// =====================================================
+// PERPUSTAKAAN
+// =====================================================
+
+model LibraryBook {
+  id          String   @id @default(uuid())
+  title       String
+  author      String
+  category    String
+  pages       String?
+  coverColor  String?
+  description String?
+  fileUrl     String?
+  publisher   String?
+  year        Int?
+  isbn        String?
+  downloads   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([category])
+}
+
+// =====================================================
+// PKL / PRAKERIN (DUDI)
+// =====================================================
+
+model Partner {
+  id         String         @id @default(uuid())
+  name       String
+  address    String?
+  contact    String?
+  phone      String?
+  // Geofence lokasi industri untuk presensi siswa PKL
+  lat        Float?
+  lng        Float?
+  radius     Int            @default(150)
+  mentorId   String? // akun Role.DUDI pembimbing industri
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  mentor     User?          @relation("PembimbingIndustri", fields: [mentorId], references: [id], onDelete: SetNull)
+  placements PklPlacement[]
+
+  @@index([mentorId])
+}
+
+model PklPlacement {
+  id           String          @id @default(uuid())
+  studentId    String
+  partnerId    String
+  supervisorId String? // guru pembimbing sekolah
+  startDate    DateTime
+  endDate      DateTime
+  status       String          @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  finalNote    String?
+  finalScore   Float?
+  createdAt    DateTime        @default(now())
+  student      User            @relation("SiswaPkl", fields: [studentId], references: [id], onDelete: Cascade)
+  partner      Partner         @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  supervisor   User?           @relation("PembimbingSekolah", fields: [supervisorId], references: [id], onDelete: SetNull)
+  journals     PklJournal[]
+  attendances  PklAttendance[]
+
+  @@unique([studentId, partnerId, startDate])
+  @@index([partnerId, status])
+}
+
+model PklJournal {
+  id           String       @id @default(uuid())
+  placementId  String
+  date         DateTime
+  activity     String
+  notes        String?
+  fileUrl      String?
+  status       String       @default("PENDING") // PENDING | APPROVED | REJECTED
+  mentorNote   String?
+  verifiedById String?
+  verifiedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  placement    PklPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  verifiedBy   User?        @relation("VerifikatorJurnalPkl", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([placementId, date])
+}
+
+model PklAttendance {
+  id           String       @id @default(uuid())
+  placementId  String
+  date         DateTime     @default(now())
+  dateKey      String
+  status       String // hadir | terlambat | sakit | izin | alfa | tanpa_lokasi
+  lat          Float?
+  lng          Float?
+  distance     Float?
+  checkOutTime DateTime?
+  createdAt    DateTime     @default(now())
+  placement    PklPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+
+  @@unique([placementId, dateKey])
+  @@index([placementId, date])
 }

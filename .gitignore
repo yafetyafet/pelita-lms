@@ -45,3 +45,8 @@ dist/
 
 .vercel
 .env*
+
+# Templat env aman untuk dilacak — isinya hanya placeholder, bukan rahasia.
+# Tanpa pengecualian ini, aturan `.env*` di atas ikut memblokirnya sehingga
+# variabel wajib (mis. SESSION_SECRET) tidak terdokumentasi di repo.
+!.env.example
