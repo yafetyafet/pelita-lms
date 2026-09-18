@@ -15,6 +15,7 @@ import {
   keNilaiAkhir,
   koreksiOtomatis,
   tanpaKunci,
+  type TipeSoal,
 } from '@/lib/logic/exam'
 import {
   dateKeyWIB,
@@ -69,6 +70,153 @@ async function pengaturanPresensi(): Promise<PengaturanGeofence> {
     radius: num('ATTENDANCE_RADIUS'),
     batasMasuk: map.get('ATTENDANCE_TIME_LIMIT') || '07:15',
     jamPulang: map.get('ATTENDANCE_CHECKOUT_TIME') || '14:30',
+  }
+}
+
+/**
+ * Pengaturan geofence untuk ditampilkan ke siswa.
+ *
+ * Halaman presensi siswa sebelumnya memakai koordinat sekolah yang ditulis
+ * mati di dalam komponennya, terpisah dari yang diatur admin. Tombol
+ * presensinya pun diblokir di sisi klien berdasarkan koordinat palsu itu,
+ * sehingga siswa yang benar-benar berada di sekolah bisa ikut terhalang dan
+ * jarak yang ditampilkan salah. Nilai di sini bukan rahasia — hanya titik
+ * sekolah, radius, dan jam — jadi aman dibaca siswa.
+ */
+export async function getAttendanceConfig() {
+  const session = await optionalSession('STUDENT', 'TEACHER', 'ADMIN')
+  if (!session) return null
+
+  const cfg = await pengaturanPresensi()
+  return {
+    lat: cfg.lat,
+    lng: cfg.lng,
+    radius: cfg.radius,
+    batasMasuk: cfg.batasMasuk,
+    jamPulang: cfg.jamPulang,
+    // Kalau titiknya belum diatur admin, validasi lokasi memang dilewati.
+    terkonfigurasi: cfg.lat !== null && cfg.lng !== null && cfg.radius !== null,
+  }
+}
+
+/**
+ * Semua data beranda siswa dalam SATU perjalanan.
+ *
+ * Beranda sebelumnya memanggil enam server action terpisah
+ * (getTodayAttendance, getCurrentUser, getStudentMaterials,
+ * getStudentAssignments, getStudentViolations, getMyBroadcasts). Di Vercel
+ * tiap action adalah satu permintaan HTTP dan satu invokasi fungsi, dan
+ * masing-masing mengulang pencarian rombel siswa sendiri-sendiri — terukur
+ * 1.521 ms kueri basis data untuk sekali buka halaman.
+ */
+export async function getStudentHome() {
+  const session = await optionalSession('STUDENT')
+  if (!session) return null
+
+  const uid = session.uid
+  const dateKey = dateKeyWIB()
+
+  // Rombel dicari SEKALI, lalu dipakai semua kueri di bawah.
+  const kelas = await prisma.classStudent.findFirst({
+    where: { userId: uid },
+    select: {
+      classId: true,
+      classInfo: {
+        select: {
+          id: true,
+          name: true,
+          wali: { select: { id: true, name: true } },
+        },
+      },
+    },
+  })
+
+  const classId = kelas?.classId ?? null
+
+  const [user, presensiHariIni, materi, tugas, pelanggaran, pengumuman] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: uid },
+        select: { id: true, name: true, username: true, avatarUrl: true, mustChangePassword: true },
+      }),
+      prisma.attendance.findUnique({
+        where: { userId_slotKey: { userId: uid, slotKey: slotKeyPresensi(dateKey, null) } },
+      }),
+      classId
+        ? prisma.material.findMany({
+            where: { classId },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              url: true,
+              createdAt: true,
+              author: { select: { name: true } },
+              subject: { select: { name: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            // Beranda hanya menampilkan yang terbaru; daftar penuh ada di
+            // halaman Materi.
+            take: 10,
+          })
+        : Promise.resolve([]),
+      classId
+        ? prisma.assignment.findMany({
+            where: { classId },
+            select: {
+              id: true,
+              title: true,
+              dueDate: true,
+              maxScore: true,
+              subject: { select: { name: true } },
+              submissions: {
+                where: { userId: uid },
+                select: { status: true, score: true, submittedAt: true },
+              },
+            },
+            orderBy: { dueDate: 'asc' },
+            take: 20,
+          })
+        : Promise.resolve([]),
+      prisma.violation.findMany({
+        where: { studentId: uid },
+        select: { id: true, description: true, points: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+      prisma.broadcast.findMany({
+        where: {
+          OR: [
+            { target: { in: ['Semua Pengguna', 'ALL', 'SEMUA', 'Siswa', 'STUDENT'] } },
+            ...(classId ? [{ target: classId }] : []),
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          message: true,
+          createdAt: true,
+          reads: { where: { userId: uid }, select: { readAt: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ])
+
+  return {
+    user,
+    kelas: kelas?.classInfo ?? null,
+    presensiHariIni,
+    materials: materi,
+    assignments: tugas.map((a) => ({ ...a, mySubmission: a.submissions[0] || null })),
+    violations: pelanggaran,
+    broadcasts: pengumuman.map((b) => ({
+      id: b.id,
+      title: b.title,
+      message: b.message,
+      createdAt: b.createdAt,
+      sudahDibaca: b.reads.length > 0,
+    })),
   }
 }
 
@@ -627,7 +775,7 @@ export async function getExamPaper(
       id: q.id,
       question: q.question,
       imageUrl: q.imageUrl,
-      type: q.type as 'PG' | 'ESAI',
+      type: q.type as TipeSoal,
       points: q.points,
       options: parseOptions(q.options),
       correctAnswer: q.correctAnswer,
@@ -703,7 +851,7 @@ export async function submitExam(
     const { skorOtomatis, skorMaksOtomatis, bobotEsai } = koreksiOtomatis(
       exam.questions.map((q) => ({
         id: q.id,
-        type: q.type as 'PG' | 'ESAI',
+        type: q.type as TipeSoal,
         question: q.question,
         options: null,
         correctAnswer: q.correctAnswer,

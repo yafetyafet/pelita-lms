@@ -71,6 +71,35 @@ export async function getCurrentUser() {
   const session = await getSession()
   if (!session) return null
 
+  // Relasi diambil sesuai peran. Sebelumnya setiap pemanggilan menarik
+  // waliClasses, studentClasses, DAN teacherClasses sekaligus — untuk seorang
+  // siswa, dua di antaranya pasti kosong tetapi kuerinya tetap dijalankan.
+  // Terukur 9 kueri / ~400ms hanya untuk membaca profil.
+  const relasi =
+    session.role === 'STUDENT'
+      ? {
+          studentClasses: {
+            include: {
+              classInfo: {
+                include: { wali: { select: { id: true, name: true } } },
+              },
+            },
+          },
+        }
+      : session.role === 'TEACHER'
+        ? {
+            waliClasses: { select: { id: true, name: true, description: true } },
+            teacherClasses: {
+              select: {
+                classId: true,
+                subjectId: true,
+                classInfo: { select: { id: true, name: true } },
+                subject: { select: { id: true, name: true } },
+              },
+            },
+          }
+        : {}
+
   try {
     return await prisma.user.findUnique({
       where: { id: session.uid },
@@ -84,19 +113,7 @@ export async function getCurrentUser() {
         email: true,
         phone: true,
         mustChangePassword: true,
-        waliClasses: {
-          select: { id: true, name: true, description: true },
-        },
-        studentClasses: {
-          include: {
-            classInfo: {
-              include: { wali: { select: { id: true, name: true } } },
-            },
-          },
-        },
-        teacherClasses: {
-          include: { classInfo: true, subject: true },
-        },
+        ...relasi,
       },
     })
   } catch (err) {

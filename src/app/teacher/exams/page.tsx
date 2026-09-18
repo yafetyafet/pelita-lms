@@ -17,8 +17,14 @@ import {
   Upload,
   Sparkles,
   ClipboardPaste,
-  Settings2
+  Settings2,
+  FileSpreadsheet,
+  Download,
+  CalendarClock,
+  ListChecks,
+  CheckSquare
 } from "lucide-react"
+import * as XLSX from "xlsx"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -31,12 +37,18 @@ export default function TeacherExamsPage() {
   const [examClassId, setExamClassId] = useState("")
   const [examSubjectId, setExamSubjectId] = useState("")
   const [examDuration, setExamDuration] = useState(60)
+  // Jendela pelaksanaan ujian. Sebelumnya hanya bisa diatur setelah ujian
+  // dibuat, lewat halaman Kelola.
+  const [examStartAt, setExamStartAt] = useState("")
+  const [examEndAt, setExamEndAt] = useState("")
+  const [examPublish, setExamPublish] = useState(false)
   const [questions, setQuestions] = useState<any[]>([])
   const [creating, setCreating] = useState(false)
 
   // Import state
-  const [importMode, setImportMode] = useState<"manual" | "paste">("manual")
+  const [importMode, setImportMode] = useState<"manual" | "paste" | "excel">("manual")
   const [pasteText, setPasteText] = useState("")
+  const [importError, setImportError] = useState("")
 
   useEffect(() => {
     async function load() {
@@ -52,15 +64,59 @@ export default function TeacherExamsPage() {
     load()
   }, [])
 
+  /** Lima opsi A–E sesuai format ujian nasional. */
+  const OPSI_KOSONG = () => ["", "", "", "", ""]
+
   const addQuestion = () => {
     setQuestions([...questions, {
       question: "",
       imageUrl: "",
       type: "PG",
-      options: ["", "", "", ""],
+      options: OPSI_KOSONG(),
       correctAnswer: "0",
       points: 10
     }])
+  }
+
+  /**
+   * Untuk PG kompleks, kunci jawaban disimpan sebagai daftar indeks dipisah
+   * koma ("0,2,4"). Fungsi ini menyalakan/mematikan satu opsi.
+   */
+  const toggleKunciKompleks = (idx: number, oIdx: number) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== idx) return q
+      const dipilih = new Set(
+        String(q.correctAnswer || "").split(",").map((x: string) => x.trim()).filter(Boolean)
+      )
+      const kunci = String(oIdx)
+      if (dipilih.has(kunci)) dipilih.delete(kunci)
+      else dipilih.add(kunci)
+      return {
+        ...q,
+        correctAnswer: Array.from(dipilih).sort((a, b) => Number(a) - Number(b)).join(",")
+      }
+    }))
+  }
+
+  const kunciAktif = (q: any, oIdx: number) =>
+    String(q.correctAnswer || "")
+      .split(",")
+      .map((x: string) => x.trim())
+      .includes(String(oIdx))
+
+  /** Tambah/kurangi jumlah opsi per soal (minimal 2, maksimal 8). */
+  const ubahJumlahOpsi = (idx: number, delta: number) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== idx) return q
+      const opts = [...q.options]
+      if (delta > 0 && opts.length < 8) opts.push("")
+      if (delta < 0 && opts.length > 2) opts.pop()
+      // Buang kunci yang menunjuk opsi yang sudah tidak ada.
+      const kunci = String(q.correctAnswer || "")
+        .split(",").map((x: string) => x.trim()).filter(Boolean)
+        .filter((k: string) => Number(k) < opts.length)
+      return { ...q, options: opts, correctAnswer: kunci.join(",") || "0" }
+    }))
   }
 
   const updateQuestion = (idx: number, field: string, value: any) => {
@@ -78,6 +134,168 @@ export default function TeacherExamsPage() {
 
   const removeQuestion = (idx: number) => {
     setQuestions(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  /**
+   * Templat Excel untuk menyusun soal di luar aplikasi.
+   *
+   * Kolom "URL Gambar" menerima tautan gambar biasa maupun tautan embed —
+   * gambar ditampilkan langsung di atas soal, baik saat guru meninjau maupun
+   * saat siswa mengerjakan.
+   */
+  const handleDownloadTemplateSoal = () => {
+    const contoh = [
+      {
+        "Tipe": "PG",
+        "Pertanyaan": "Perangkat pada gambar berikut berfungsi untuk?",
+        "URL Gambar": "https://contoh.com/gambar-router.jpg",
+        "Opsi A": "Menghubungkan antar jaringan",
+        "Opsi B": "Menyimpan data",
+        "Opsi C": "Mencetak dokumen",
+        "Opsi D": "Menguatkan sinyal listrik",
+        "Opsi E": "Mendinginkan prosesor",
+        "Jawaban Benar": "A",
+        "Poin": 10
+      },
+      {
+        "Tipe": "PG_KOMPLEKS",
+        "Pertanyaan": "Manakah yang termasuk topologi jaringan? (jawaban bisa lebih dari satu)",
+        "URL Gambar": "",
+        "Opsi A": "Star",
+        "Opsi B": "Bus",
+        "Opsi C": "HTTP",
+        "Opsi D": "Ring",
+        "Opsi E": "SMTP",
+        "Jawaban Benar": "A,B,D",
+        "Poin": 15
+      },
+      {
+        "Tipe": "ESAI",
+        "Pertanyaan": "Jelaskan perbedaan HUB dan SWITCH beserta contoh penggunaannya.",
+        "URL Gambar": "",
+        "Opsi A": "", "Opsi B": "", "Opsi C": "", "Opsi D": "", "Opsi E": "",
+        "Jawaban Benar": "",
+        "Poin": 20
+      }
+    ]
+
+    const petunjuk = [
+      { Kolom: "Tipe", Keterangan: "PG = satu jawaban benar; PG_KOMPLEKS = boleh lebih dari satu; ESAI = dinilai guru" },
+      { Kolom: "Pertanyaan", Keterangan: "Wajib diisi" },
+      { Kolom: "URL Gambar", Keterangan: "Opsional. Tautan gambar (jpg/png) atau tautan embed; ditampilkan di atas soal" },
+      { Kolom: "Opsi A–E", Keterangan: "Isi minimal 2 opsi untuk PG dan PG_KOMPLEKS. Kosongkan untuk ESAI" },
+      { Kolom: "Jawaban Benar", Keterangan: "Huruf opsi. PG: satu huruf (mis. A). PG_KOMPLEKS: dipisah koma (mis. A,B,D). ESAI: kosongkan" },
+      { Kolom: "Poin", Keterangan: "Bobot nilai soal. Kosong berarti 10" },
+      { Kolom: "", Keterangan: "" },
+      { Kolom: "Catatan", Keterangan: "PG kompleks dinilai utuh: semua jawaban benar harus dipilih dan tidak boleh ada yang salah" }
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(contoh), "Soal")
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(petunjuk), "Petunjuk")
+    XLSX.writeFile(wb, "Template_Soal_Ujian.xlsx")
+  }
+
+  /** Baca berkas Excel/CSV berisi soal lalu masukkan ke daftar. */
+  const handleFileSoal = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError("")
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target?.result, { type: "binary" })
+        // Ambil lembar "Soal" bila ada; kalau tidak, lembar pertama.
+        const nama = wb.SheetNames.includes("Soal") ? "Soal" : wb.SheetNames[0]
+        const rows: any[] = XLSX.utils.sheet_to_json(wb.Sheets[nama], { defval: "" })
+
+        if (rows.length === 0) {
+          setImportError("Lembar soal kosong.")
+          return
+        }
+
+        const ambil = (row: any, ...kunci: string[]) => {
+          for (const k of Object.keys(row)) {
+            const bersih = k.trim().toLowerCase()
+            if (kunci.some(x => bersih === x || bersih.includes(x))) {
+              return String(row[k]).trim()
+            }
+          }
+          return ""
+        }
+
+        const hasil: any[] = []
+        const dilewati: string[] = []
+
+        rows.forEach((row, i) => {
+          const pertanyaan = ambil(row, "pertanyaan", "soal")
+          if (!pertanyaan) {
+            dilewati.push(`baris ${i + 2} (pertanyaan kosong)`)
+            return
+          }
+
+          let tipe = ambil(row, "tipe", "type").toUpperCase().replace(/[\s-]/g, "_")
+          if (tipe.includes("KOMPLEK")) tipe = "PG_KOMPLEKS"
+          else if (tipe.startsWith("ESAI") || tipe.startsWith("URAIAN")) tipe = "ESAI"
+          else tipe = "PG"
+
+          const opsi = ["a", "b", "c", "d", "e", "f", "g", "h"]
+            .map(h => ambil(row, `opsi ${h}`))
+          // Buang opsi kosong di ujung, sisakan minimal 5 kolom untuk PG.
+          while (opsi.length > 0 && opsi[opsi.length - 1] === "") opsi.pop()
+
+          const jawabanMentah = ambil(row, "jawaban benar", "jawaban", "kunci")
+          // Huruf opsi -> indeks. "A,B,D" menjadi "0,1,3".
+          const indeks = jawabanMentah
+            .split(",")
+            .map(x => x.trim().toUpperCase())
+            .filter(Boolean)
+            .map(x => (/^[A-H]$/.test(x) ? x.charCodeAt(0) - 65 : Number(x) - 1))
+            .filter(n => Number.isInteger(n) && n >= 0 && n < Math.max(opsi.length, 1))
+            .sort((a, b) => a - b)
+
+          if (tipe !== "ESAI") {
+            if (opsi.filter(Boolean).length < 2) {
+              dilewati.push(`baris ${i + 2} (opsi kurang dari 2)`)
+              return
+            }
+            if (indeks.length === 0) {
+              dilewati.push(`baris ${i + 2} (jawaban benar tidak dikenali)`)
+              return
+            }
+            if (tipe === "PG" && indeks.length > 1) tipe = "PG_KOMPLEKS"
+          }
+
+          const poin = parseInt(ambil(row, "poin", "bobot"), 10)
+
+          hasil.push({
+            question: pertanyaan,
+            imageUrl: ambil(row, "url gambar", "gambar", "image"),
+            type: tipe,
+            options: tipe === "ESAI" ? OPSI_KOSONG() : (opsi.length >= 5 ? opsi : [...opsi, ...Array(5 - opsi.length).fill("")]),
+            correctAnswer: tipe === "ESAI" ? "" : indeks.join(","),
+            points: Number.isFinite(poin) && poin > 0 ? poin : 10
+          })
+        })
+
+        if (hasil.length === 0) {
+          setImportError(`Tidak ada soal yang bisa dibaca. ${dilewati.slice(0, 3).join("; ")}`)
+          return
+        }
+
+        setQuestions(prev => [...prev, ...hasil])
+        setImportError(
+          dilewati.length > 0
+            ? `${hasil.length} soal masuk. Dilewati: ${dilewati.slice(0, 5).join("; ")}${dilewati.length > 5 ? ", dst." : ""}`
+            : ""
+        )
+        setImportMode("manual")
+      } catch (err: any) {
+        setImportError("Gagal membaca berkas: " + (err?.message || "format tidak valid"))
+      }
+    }
+    reader.readAsBinaryString(file)
   }
 
   const handlePasteImport = () => {
@@ -129,13 +347,39 @@ export default function TeacherExamsPage() {
       return
     }
 
+    // Soal pilihan ganda tanpa kunci jawaban mustahil dijawab benar, jadi
+    // dicegah di sini daripada ketahuan setelah ujian berjalan.
+    const tanpaKunci = questions
+      .map((q, i) => ({ q, no: i + 1 }))
+      .filter(({ q }) => q.type !== "ESAI" && !String(q.correctAnswer || "").trim())
+      .map(({ no }) => no)
+    if (tanpaKunci.length > 0) {
+      alert(`Kunci jawaban belum dipilih pada soal nomor: ${tanpaKunci.join(", ")}`)
+      return
+    }
+
+    const opsiKurang = questions
+      .map((q, i) => ({ q, no: i + 1 }))
+      .filter(({ q }) => q.type !== "ESAI" && q.options.filter((o: string) => o.trim()).length < 2)
+      .map(({ no }) => no)
+    if (opsiKurang.length > 0) {
+      alert(`Minimal 2 opsi jawaban harus diisi pada soal nomor: ${opsiKurang.join(", ")}`)
+      return
+    }
+
     setCreating(true)
+    const adaEsai = questions.some(q => q.type === "ESAI")
+    const adaKompleks = questions.some(q => q.type === "PG_KOMPLEKS")
+
     const res = await createExam({
       title: examTitle,
-      type: questions.some(q => q.type === "ESAI") ? "CAMPURAN" : "PG",
+      type: adaEsai ? "CAMPURAN" : adaKompleks ? "PG_KOMPLEKS" : "PG",
       classId: examClassId,
       subjectId: examSubjectId,
       duration: examDuration,
+      startAt: examStartAt ? new Date(examStartAt).toISOString() : undefined,
+      endAt: examEndAt ? new Date(examEndAt).toISOString() : undefined,
+      isPublished: examPublish,
       questions: questions.map(q => ({
         question: q.question,
         imageUrl: q.imageUrl || undefined,
@@ -152,6 +396,10 @@ export default function TeacherExamsPage() {
     } else {
       setShowCreateModal(false)
       setExamTitle("")
+      setExamStartAt("")
+      setExamEndAt("")
+      setExamPublish(false)
+      setImportError("")
       setQuestions([])
       const exm = await getTeacherExams()
       setExams(exm)
@@ -321,15 +569,98 @@ export default function TeacherExamsPage() {
                 </div>
               </div>
 
+              {/* Tanggal & jam pelaksanaan. Sebelumnya hanya bisa diatur
+                  setelah ujian dibuat, lewat halaman Kelola. */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                  <CalendarClock className="w-3.5 h-3.5 text-rose-600" />
+                  Tanggal &amp; Jam Ujian
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dibuka</span>
+                    <input
+                      type="datetime-local"
+                      value={examStartAt}
+                      onChange={e => setExamStartAt(e.target.value)}
+                      className="px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px] focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ditutup</span>
+                    <input
+                      type="datetime-local"
+                      value={examEndAt}
+                      onChange={e => setExamEndAt(e.target.value)}
+                      className="px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px] focus:outline-none"
+                    />
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Kosongkan bila ujian boleh dikerjakan kapan saja. Durasi tetap
+                  dihitung dari saat siswa mulai, dan diverifikasi di server.
+                </p>
+
+                <label className="flex items-center gap-2 pt-1 border-t border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={examPublish}
+                    onChange={e => setExamPublish(e.target.checked)}
+                  />
+                  <span className="text-[11px] text-slate-700">
+                    <strong>Terbitkan sekarang</strong> — tanpa ini ujian tersimpan
+                    sebagai draf dan tidak tampil ke siswa.
+                  </span>
+                </label>
+              </div>
+
               {/* Import mode tabs */}
-              <div className="grid grid-cols-2 gap-1 p-1 bg-slate-200/80 rounded-xl font-bold text-[11px]">
+              <div className="grid grid-cols-3 gap-1 p-1 bg-slate-200/80 rounded-xl font-bold text-[11px]">
                 <button type="button" onClick={() => setImportMode("manual")} className={`py-1.5 rounded-lg transition ${importMode === "manual" ? "bg-white text-rose-600 shadow-sm" : "text-slate-600"}`}>
                   Input Manual
                 </button>
                 <button type="button" onClick={() => setImportMode("paste")} className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 ${importMode === "paste" ? "bg-white text-rose-600 shadow-sm" : "text-slate-600"}`}>
-                  <ClipboardPaste className="w-3 h-3" /> Copy-Paste
+                  <ClipboardPaste className="w-3 h-3" /> Tempel
+                </button>
+                <button type="button" onClick={() => setImportMode("excel")} className={`py-1.5 rounded-lg transition flex items-center justify-center gap-1 ${importMode === "excel" ? "bg-white text-rose-600 shadow-sm" : "text-slate-600"}`}>
+                  <FileSpreadsheet className="w-3 h-3" /> Excel
                 </button>
               </div>
+
+              {importMode === "excel" && (
+                <div className="flex flex-col gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                  <p className="text-[10px] text-emerald-900 leading-relaxed">
+                    Templat berisi kolom <strong>URL Gambar</strong> (soal bergambar),
+                    <strong> Opsi A–E</strong>, dan tipe <strong>PG_KOMPLEKS</strong>
+                    untuk soal berjawaban lebih dari satu. Ada lembar
+                    <strong> Petunjuk</strong> di dalamnya.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplateSoal}
+                    className="py-2 bg-white border border-emerald-300 text-emerald-800 font-bold rounded-xl transition hover:bg-emerald-100 flex items-center justify-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Unduh Templat Soal (.xlsx)
+                  </button>
+
+                  <label className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" /> Pilih Berkas Soal
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFileSoal}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {importError && (
+                    <p className="text-[10px] font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-xl px-2.5 py-2">
+                      {importError}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {importMode === "paste" && (
                 <div className="flex flex-col gap-2 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
@@ -357,7 +688,8 @@ export default function TeacherExamsPage() {
                       <span className="text-[10px] font-bold text-slate-500">Soal #{idx + 1}</span>
                       <div className="flex items-center gap-2">
                         <select value={q.type} onChange={e => updateQuestion(idx, "type", e.target.value)} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 bg-white">
-                          <option value="PG">Pilihan Ganda</option>
+                          <option value="PG">PG (1 jawaban)</option>
+                          <option value="PG_KOMPLEKS">PG Kompleks (&gt;1 jawaban)</option>
                           <option value="ESAI">Esai</option>
                         </select>
                         <button type="button" onClick={() => removeQuestion(idx)} className="text-red-400 hover:text-red-600">
@@ -386,17 +718,43 @@ export default function TeacherExamsPage() {
                       />
                     </div>
 
-                    {q.type === "PG" && (
+                    {q.type !== "ESAI" && (
                       <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                            {q.type === "PG_KOMPLEKS" ? (
+                              <><CheckSquare className="w-3 h-3 text-emerald-600" /> Centang SEMUA jawaban benar</>
+                            ) : (
+                              <><ListChecks className="w-3 h-3 text-emerald-600" /> Pilih satu jawaban benar</>
+                            )}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <button type="button" onClick={() => ubahJumlahOpsi(idx, -1)} title="Kurangi opsi"
+                              className="w-5 h-5 rounded bg-slate-200 text-slate-700 font-bold text-[11px] leading-none hover:bg-slate-300">−</button>
+                            <span className="text-[10px] text-slate-500 w-10 text-center">{q.options.length} opsi</span>
+                            <button type="button" onClick={() => ubahJumlahOpsi(idx, 1)} title="Tambah opsi"
+                              className="w-5 h-5 rounded bg-slate-200 text-slate-700 font-bold text-[11px] leading-none hover:bg-slate-300">+</button>
+                          </span>
+                        </div>
+
                         {q.options.map((opt: string, oIdx: number) => (
                           <div key={oIdx} className="flex items-center gap-1.5">
-                            <input
-                              type="radio"
-                              name={`correct-${idx}`}
-                              checked={q.correctAnswer === String(oIdx)}
-                              onChange={() => updateQuestion(idx, "correctAnswer", String(oIdx))}
-                              className="accent-emerald-600"
-                            />
+                            {q.type === "PG_KOMPLEKS" ? (
+                              <input
+                                type="checkbox"
+                                checked={kunciAktif(q, oIdx)}
+                                onChange={() => toggleKunciKompleks(idx, oIdx)}
+                                className="accent-emerald-600"
+                              />
+                            ) : (
+                              <input
+                                type="radio"
+                                name={`correct-${idx}`}
+                                checked={q.correctAnswer === String(oIdx)}
+                                onChange={() => updateQuestion(idx, "correctAnswer", String(oIdx))}
+                                className="accent-emerald-600"
+                              />
+                            )}
                             <span className="text-[10px] font-bold text-slate-500 w-4">{String.fromCharCode(65 + oIdx)}.</span>
                             <input
                               type="text"

@@ -13,13 +13,25 @@ import {
   Building2,
   LogOut
 } from "lucide-react"
-import { submitAttendance, submitCheckOut, getTodayAttendance } from "@/app/actions/student"
+import { submitAttendance, submitCheckOut, getTodayAttendance, getAttendanceConfig } from "@/app/actions/student"
 
-const SCHOOL_COORDS = {
-  lat: -7.472145,
-  lng: 109.381210,
-  maxRadiusMeters: 120, // radius toleransi presensi
-  name: "Kampus SMKN 1 Kemangkon"
+/**
+ * Titik sekolah TIDAK boleh ditulis di sini.
+ *
+ * Sebelumnya berkas ini memuat koordinat tetap (-7.472145, 109.381210) dengan
+ * radius 120 m, terpisah sama sekali dari yang diatur admin di
+ * /admin/attendance-settings. Karena tombol presensi diblokir di sisi klien
+ * berdasarkan angka itu, siswa yang benar-benar berada di sekolah bisa ikut
+ * terhalang dan jarak yang ditampilkan salah. Sekarang nilainya diambil dari
+ * pengaturan admin lewat getAttendanceConfig().
+ */
+type Geofence = {
+  lat: number | null
+  lng: number | null
+  radius: number | null
+  batasMasuk: string
+  jamPulang: string
+  terkonfigurasi: boolean
 }
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -41,6 +53,8 @@ export default function StudentAttendancePage() {
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
   const [distance, setDistance] = useState<number | null>(null)
   const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null)
+  // Titik & radius sekolah dibaca dari pengaturan admin, bukan ditulis di kode.
+  const [geo, setGeo] = useState<Geofence | null>(null)
   const [statusMessage, setStatusMessage] = useState<string>("Menunggu pendeteksian lokasi...")
   
   // Real DB state
@@ -64,10 +78,16 @@ export default function StudentAttendancePage() {
       }
     }
     fetchAttendance()
-    detectLocation()
+
+    // Pengaturan harus tiba lebih dulu, karena perhitungan jarak
+    // bergantung padanya.
+    getAttendanceConfig().then((cfg) => {
+      setGeo(cfg)
+      detectLocation(cfg)
+    })
   }, [])
 
-  const detectLocation = () => {
+  const detectLocation = (cfg: Geofence | null) => {
     setLoading(true)
     setStatusMessage("Mendeteksi sinyal satelit GPS...")
 
@@ -80,15 +100,29 @@ export default function StudentAttendancePage() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords
-        const dist = calculateDistance(latitude, longitude, SCHOOL_COORDS.lat, SCHOOL_COORDS.lng)
         setCurrentCoords({ lat: latitude, lng: longitude, accuracy })
+
+        // Kalau admin belum mengisi titik sekolah, tidak ada yang bisa
+        // dibandingkan. Presensi tetap boleh dikirim — server yang menandainya
+        // sebagai perlu ditinjau.
+        if (!cfg?.terkonfigurasi || cfg.lat === null || cfg.lng === null || cfg.radius === null) {
+          setDistance(null)
+          setIsWithinRadius(true)
+          setStatusMessage(
+            "Titik sekolah belum diatur admin, jadi lokasi tidak divalidasi. Presensi akan ditandai untuk ditinjau guru."
+          )
+          setLoading(false)
+          return
+        }
+
+        const dist = calculateDistance(latitude, longitude, cfg.lat, cfg.lng)
         setDistance(dist)
-        const valid = dist <= SCHOOL_COORDS.maxRadiusMeters
+        const valid = dist <= cfg.radius
         setIsWithinRadius(valid)
         setStatusMessage(
           valid
             ? `Berada dalam radius sekolah (${dist} meter)`
-            : `Di luar radius sekolah (${dist} meter dari gerbang)`
+            : `Di luar radius sekolah (${dist} meter, maksimal ${cfg.radius} meter)`
         )
         setLoading(false)
       },
@@ -102,7 +136,12 @@ export default function StudentAttendancePage() {
   }
 
   const handlePresensi = async () => {
-    if (!currentCoords || !isWithinRadius || isSubmitting) return
+    // Radius tidak lagi memblokir pengiriman di sisi klien: validasi
+    // sebenarnya ada di server, yang memakai pengaturan admin dan menandai
+    // presensi di luar radius sebagai "perlu verifikasi" alih-alih menolaknya.
+    // Pemblokiran sebelumnya membuat siswa terhalang bila koordinat di kode
+    // tidak sama dengan pengaturan sekolah.
+    if (!currentCoords || isSubmitting) return
     setIsSubmitting(true)
     
     if (!attended) {
@@ -145,7 +184,7 @@ export default function StudentAttendancePage() {
         </div>
 
         <button
-          onClick={detectLocation}
+          onClick={() => detectLocation(geo)}
           disabled={loading}
           className="p-2.5 rounded-2xl bg-white border border-slate-200/80 text-blue-600 hover:bg-blue-50 transition shadow-sm flex items-center gap-1 text-xs font-semibold"
           title="Segarkan Titik GPS"
@@ -165,11 +204,11 @@ export default function StudentAttendancePage() {
               <span className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">
                 Titik Presensi Terdaftar
               </span>
-              <h3 className="text-sm font-bold text-white">{SCHOOL_COORDS.name}</h3>
+              <h3 className="text-sm font-bold text-white">Titik Presensi Sekolah</h3>
             </div>
           </div>
           <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full font-semibold">
-            Maks Radius: {SCHOOL_COORDS.maxRadiusMeters}m
+            {geo?.terkonfigurasi ? `Maks Radius: ${geo.radius}m` : "Radius belum diatur"}
           </span>
         </div>
 
@@ -215,7 +254,7 @@ export default function StudentAttendancePage() {
           {!attended ? (
             <button
               onClick={handlePresensi}
-              disabled={!isWithinRadius || loading || isSubmitting}
+              disabled={loading || isSubmitting || !currentCoords}
               className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
                 isWithinRadius && !loading
                   ? "bg-white text-blue-700 hover:bg-blue-50 active:scale-[0.98] shadow-white/20"
@@ -224,7 +263,11 @@ export default function StudentAttendancePage() {
             >
               <ShieldCheck className="w-4 h-4" />
               <span>
-                {isSubmitting ? "Memproses..." : (isWithinRadius ? "Kirim Presensi Hadir (1-Tap)" : "Belum Memenuhi Radius")}
+                {isSubmitting
+                  ? "Memproses..."
+                  : isWithinRadius
+                    ? "Kirim Presensi Hadir (1-Tap)"
+                    : "Kirim Presensi (di luar radius, akan ditinjau)"}
               </span>
             </button>
           ) : (
@@ -237,7 +280,7 @@ export default function StudentAttendancePage() {
           {attended && !checkedOut && (
             <button
               onClick={handlePresensi}
-              disabled={!isWithinRadius || loading || isSubmitting}
+              disabled={loading || isSubmitting || !currentCoords}
               className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
                 isWithinRadius && !loading
                   ? "bg-rose-500 text-white hover:bg-rose-600 active:scale-[0.98] shadow-rose-500/30"
@@ -246,7 +289,11 @@ export default function StudentAttendancePage() {
             >
               <LogOut className="w-4 h-4" />
               <span>
-                {isSubmitting ? "Memproses..." : (isWithinRadius ? "Kirim Presensi Pulang (1-Tap)" : "Belum Memenuhi Radius")}
+                {isSubmitting
+                  ? "Memproses..."
+                  : isWithinRadius
+                    ? "Kirim Presensi Pulang (1-Tap)"
+                    : "Kirim Presensi Pulang (di luar radius, akan ditinjau)"}
               </span>
             </button>
           )}
