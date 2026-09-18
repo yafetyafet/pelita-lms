@@ -16,13 +16,31 @@ import {
   AlertCircle, 
   X,
   Search,
-  Filter
+  Filter,
+  School,
+  AlertTriangle
 } from "lucide-react"
 import * as XLSX from "xlsx"
-import { getUsers, createUser, deleteUser, bulkCreateUsers } from "@/app/actions/admin"
+import {
+  getUsers,
+  createUser,
+  deleteUser,
+  bulkCreateUsers,
+  getClassOptions,
+  setStudentClass
+} from "@/app/actions/admin"
+
+/**
+ * Pencocokan nama rombel dibuat longgar terhadap huruf besar/kecil dan spasi
+ * ganda, sama seperti di server, karena nama rombel pada berkas Dapodik sering
+ * tidak konsisten ("X RPL 1" vs "x rpl  1").
+ */
+const kunciRombel = (nama: string) =>
+  String(nama || "").trim().toLowerCase().replace(/\s+/g, " ")
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   
   // Modals
@@ -34,13 +52,18 @@ export default function AdminUsersPage() {
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("ALL")
+  // "ALL" | "NONE" (belum punya rombel) | <classId>
+  const [classFilter, setClassFilter] = useState("ALL")
+  // Rombel yang sedang disimpan, agar barisnya bisa menampilkan status.
+  const [savingClassFor, setSavingClassFor] = useState<string | null>(null)
 
   // Single User Form State
   const [formData, setFormData] = useState({
     name: "",
     username: "",
     password: "",
-    role: "STUDENT"
+    role: "STUDENT",
+    classId: ""
   })
 
   // Import State
@@ -48,6 +71,9 @@ export default function AdminUsersPage() {
   const [parsedData, setParsedData] = useState<any[]>([])
   const [importPreview, setImportPreview] = useState<any[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
+  // Lengkapi rombel siswa yang akunnya sudah terdaftar tetapi belum
+  // ditempatkan. Tidak pernah memindahkan siswa yang sudah punya rombel.
+  const [tempatkanSiswaLama, setTempatkanSiswaLama] = useState(true)
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message })
@@ -56,10 +82,19 @@ export default function AdminUsersPage() {
 
   const loadUsers = async () => {
     setIsLoading(true)
-    const data = await getUsers()
+    const [data, cls] = await Promise.all([getUsers(), getClassOptions()])
     setUsers(data)
+    setClasses(cls)
     setIsLoading(false)
   }
+
+  /** Rombel siswa saat ini, atau null bila belum ditempatkan. */
+  const rombelOf = (u: any) => u.studentClasses?.[0]?.classInfo ?? null
+
+  const petaRombel = useMemo(
+    () => new Map(classes.map((c: any) => [kunciRombel(c.name), c])),
+    [classes]
+  )
 
   useEffect(() => {
     loadUsers()
@@ -71,9 +106,25 @@ export default function AdminUsersPage() {
       const matchRole = roleFilter === "ALL" || u.role === roleFilter
       const matchSearch = (u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (u.username || "").toLowerCase().includes(searchQuery.toLowerCase())
-      return matchRole && matchSearch
+
+      // Penyaring rombel hanya berlaku untuk siswa; akun lain tidak punya rombel.
+      let matchClass = true
+      if (classFilter !== "ALL") {
+        if (u.role !== "STUDENT") matchClass = false
+        else if (classFilter === "NONE") matchClass = !u.studentClasses?.length
+        else matchClass = u.studentClasses?.[0]?.classInfo?.id === classFilter
+      }
+
+      return matchRole && matchSearch && matchClass
     })
-  }, [users, roleFilter, searchQuery])
+  }, [users, roleFilter, searchQuery, classFilter])
+
+  // Dipakai spanduk peringatan: siswa yang belum masuk rombel tidak akan
+  // melihat jadwal, materi, tugas, maupun ujian.
+  const siswaTanpaRombel = useMemo(
+    () => users.filter(u => u.role === "STUDENT" && !u.studentClasses?.length).length,
+    [users]
+  )
 
   // Single User Submit
   const handleSingleSubmit = async (e: React.FormEvent) => {
@@ -87,10 +138,27 @@ export default function AdminUsersPage() {
       showToast("error", res.error)
     } else {
       setShowSingleModal(false)
-      setFormData({ name: "", username: "", password: "", role: "STUDENT" })
+      setFormData({ name: "", username: "", password: "", role: "STUDENT", classId: "" })
       showToast("success", "Pengguna baru berhasil ditambahkan!")
       loadUsers()
     }
+  }
+
+  /** Tetapkan atau kosongkan rombel siswa langsung dari daftar akun. */
+  const handleClassChange = async (userId: string, classId: string) => {
+    setSavingClassFor(userId)
+    const res = await setStudentClass(userId, classId || null)
+    setSavingClassFor(null)
+
+    if (res.error) {
+      showToast("error", res.error)
+      return
+    }
+    showToast(
+      "success",
+      res.className ? `Rombel diubah ke ${res.className}.` : "Rombel dikosongkan."
+    )
+    loadUsers()
   }
 
   // Delete User
@@ -107,14 +175,59 @@ export default function AdminUsersPage() {
   }
 
   // Download Excel Templates
+  /**
+   * Templat siswa diisi dengan nama rombel yang BENAR-BENAR ada di database,
+   * plus satu lembar berisi daftar rombel yang sah. Sebelumnya kolom "Kelas"
+   * hanya berisi contoh "X RPL 1" dan nilainya tidak pernah dibaca saat impor,
+   * sehingga siswa hasil impor selalu tanpa rombel.
+   */
   const handleDownloadTemplateSiswa = () => {
+    if (classes.length === 0) {
+      showToast(
+        "error",
+        "Belum ada rombel. Buat rombel dulu di menu Rombel, lalu unduh templat ini agar kolom Kelas bisa terisi."
+      )
+      return
+    }
+
+    const contohKelas = classes.map((c: any) => c.name)
     const templateData = [
-      { "Nama Lengkap": "Fajar Pratama", "Username (NISN)": "0067821943", "Password": "password123", "Kelas": "X RPL 1", "Role": "STUDENT" },
-      { "Nama Lengkap": "Siti Rahmawati", "Username (NISN)": "0067821990", "Password": "password123", "Kelas": "X RPL 1", "Role": "STUDENT" }
+      {
+        "Nama Lengkap": "Fajar Pratama",
+        "Username (NISN)": "0067821943",
+        "Password": "password123",
+        "Kelas": contohKelas[0],
+        "Role": "STUDENT"
+      },
+      {
+        "Nama Lengkap": "Siti Rahmawati",
+        "Username (NISN)": "0067821990",
+        "Password": "password123",
+        "Kelas": contohKelas[Math.min(1, contohKelas.length - 1)],
+        "Role": "STUDENT"
+      }
     ]
-    const worksheet = XLSX.utils.json_to_sheet(templateData)
+
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Siswa")
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(templateData),
+      "Data Siswa"
+    )
+
+    // Lembar rujukan: nama rombel harus ditulis sama persis dengan daftar ini.
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        classes.map((c: any) => ({
+          "Nama Rombel (tulis persis seperti ini)": c.name,
+          "Tingkat": c.level ?? "",
+          "Jumlah Siswa Saat Ini": c._count?.students ?? 0
+        }))
+      ),
+      "Daftar Rombel"
+    )
+
     XLSX.writeFile(workbook, "Template_Import_Siswa.xlsx")
   }
 
@@ -169,13 +282,22 @@ export default function AdminUsersPage() {
           let username = ""
           let password = "password123"
           let role = "STUDENT"
+          let kelas = ""
 
           for (const key of Object.keys(row)) {
             const cleanKey = key.trim().toLowerCase()
             const val = String(row[key]).trim()
 
-            if (cleanKey.includes("nama") || cleanKey === "name") {
+            if (cleanKey.includes("nama rombel")) {
+              // Lembar "Daftar Rombel" pada templat memakai judul ini; jangan
+              // sampai terbaca sebagai nama siswa.
+              continue
+            } else if (cleanKey.includes("nama") || cleanKey === "name") {
               name = val
+            } else if (cleanKey.includes("kelas") || cleanKey.includes("rombel")) {
+              // Diperiksa sebelum cabang username, supaya judul seperti
+              // "Kelas ID" tidak salah terbaca sebagai username.
+              kelas = val
             } else if (cleanKey.includes("user") || cleanKey.includes("nisn") || cleanKey.includes("nip") || cleanKey.includes("id")) {
               username = val
             } else if (cleanKey.includes("pass") || cleanKey.includes("sandi")) {
@@ -189,7 +311,7 @@ export default function AdminUsersPage() {
           if (!name && row["__EMPTY"]) name = String(row["__EMPTY"]).trim()
           if (!username && row["__EMPTY_1"]) username = String(row["__EMPTY_1"]).trim()
 
-          return { name, username, password, role }
+          return { name, username, password, role, kelas }
         }).filter(r => r.name || r.username)
 
         if (cleanRows.length === 0) {
@@ -213,7 +335,7 @@ export default function AdminUsersPage() {
     if (parsedData.length === 0) return
     setIsSubmitting(true)
 
-    const res = await bulkCreateUsers(parsedData)
+    const res = await bulkCreateUsers(parsedData, { tempatkanSiswaLama })
     setIsSubmitting(false)
 
     if (res.error) {
@@ -223,7 +345,25 @@ export default function AdminUsersPage() {
       setImportFile(null)
       setParsedData([])
       setImportPreview([])
-      showToast("success", `Berhasil mengimpor ${res.count} pengguna baru! (${res.skipped || 0} dilewati/sudah terdaftar)`)
+
+      const bagian = [`${res.count} akun baru`]
+      if (res.ditempatkan) bagian.push(`${res.ditempatkan} masuk rombel`)
+      if (res.ditempatkanLama) {
+        bagian.push(`${res.ditempatkanLama} siswa lama dilengkapi rombel`)
+      }
+      if (res.skipped) bagian.push(`${res.skipped} dilewati`)
+      showToast("success", `Impor selesai: ${bagian.join(", ")}.`)
+
+      if (res.rombelTidakDikenal?.length) {
+        setTimeout(
+          () =>
+            showToast(
+              "error",
+              `Rombel tidak dikenal dan dilewati: ${res.rombelTidakDikenal!.join(", ")}. Buat rombel itu dulu, lalu impor ulang.`
+            ),
+          4200
+        )
+      }
       loadUsers()
     }
   }
@@ -274,6 +414,48 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {/* Peringatan integrasi rombel */}
+      {!isLoading && classes.length === 0 && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="text-[11px] text-rose-800 leading-relaxed">
+            <strong className="block">Belum ada rombel.</strong>
+            Buat rombel dulu di{" "}
+            <Link href="/admin/rombel" className="font-bold underline">
+              menu Rombel
+            </Link>
+            . Kolom <strong>Kelas</strong> pada templat impor baru bisa dipakai
+            setelah rombelnya ada — tanpa itu siswa hasil impor tidak akan
+            melihat jadwal, materi, tugas, maupun ujian.
+          </div>
+        </div>
+      )}
+
+      {!isLoading && classes.length > 0 && siswaTanpaRombel > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-[11px] text-amber-900 leading-relaxed">
+              <strong className="block">
+                {siswaTanpaRombel} siswa belum masuk rombel.
+              </strong>
+              Selama belum ditempatkan, menu Jadwal, Materi, Tugas, dan Ujian
+              mereka akan kosong. Tetapkan rombel langsung dari daftar di bawah,
+              atau impor ulang dengan kolom Kelas terisi.
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setRoleFilter("STUDENT")
+              setClassFilter("NONE")
+            }}
+            className="shrink-0 bg-white border border-amber-300 text-amber-800 px-2.5 py-1.5 rounded-xl text-[11px] font-bold hover:bg-amber-100 transition"
+          >
+            Tampilkan
+          </button>
+        </div>
+      )}
+
       {/* Search & Filter Bar */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-2.5 items-center justify-between">
         <div className="relative w-full sm:w-72">
@@ -310,6 +492,37 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {/* Penyaring Rombel — memudahkan menemukan siswa yang belum ditempatkan */}
+      {classes.length > 0 && (
+        <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 shrink-0">
+            <School className="w-3.5 h-3.5 text-slate-400" />
+            <span className="hidden sm:inline">Rombel</span>
+          </div>
+          <select
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            className="flex-1 text-xs p-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition"
+          >
+            <option value="ALL">Semua rombel</option>
+            <option value="NONE">Siswa belum punya rombel ({siswaTanpaRombel})</option>
+            {classes.map((c: any) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c._count?.students ?? 0} siswa)
+              </option>
+            ))}
+          </select>
+          {classFilter !== "ALL" && (
+            <button
+              onClick={() => setClassFilter("ALL")}
+              className="shrink-0 px-2.5 py-2 rounded-xl bg-slate-100 text-slate-600 text-[11px] font-bold hover:bg-slate-200 transition"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Users List */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
         {isLoading ? (
@@ -341,32 +554,74 @@ export default function AdminUsersPage() {
                 u.role === "TEACHER" ? <User className="w-4 h-4 text-emerald-600" /> :
                 <User className="w-4 h-4 text-blue-600" />
 
+              const rombel = rombelOf(u)
+
               return (
-                <div key={u.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center">
+                <div key={u.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0">
                       {roleIcon}
                     </div>
-                    <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">{u.name}</h4>
-                      <div className="flex items-center gap-2 mt-0.5">
+                    <div className="min-w-0">
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">{u.name}</h4>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-[11px] font-mono text-slate-500">@{u.username}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${roleBg}`}>
                           {u.role}
                         </span>
+                        {/* Rombel hanya bermakna untuk siswa. */}
+                        {u.role === "STUDENT" && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${
+                              rombel
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                          >
+                            <School className="w-2.5 h-2.5" />
+                            {rombel ? rombel.name : "Tanpa Rombel"}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                  
-                  {u.username !== 'admin' && (
-                    <button 
-                      onClick={() => handleDelete(u.id, u.name)}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                      title="Hapus Pengguna"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Ubah rombel langsung dari sini, tanpa pindah menu. */}
+                    {u.role === "STUDENT" && classes.length > 0 && (
+                      <div className="relative">
+                        <select
+                          value={rombel?.id || ""}
+                          disabled={savingClassFor === u.id}
+                          onChange={(e) => handleClassChange(u.id, e.target.value)}
+                          title="Tetapkan rombel siswa ini"
+                          className={`text-[11px] py-1.5 pl-2 pr-6 rounded-xl border outline-none transition appearance-none disabled:opacity-50 ${
+                            rombel
+                              ? "bg-white border-slate-200 text-slate-700"
+                              : "bg-amber-50 border-amber-300 text-amber-800 font-bold"
+                          }`}
+                        >
+                          <option value="">— Tanpa rombel —</option>
+                          {classes.map((c: any) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                        {savingClassFor === u.id && (
+                          <Loader2 className="w-3 h-3 animate-spin text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                    )}
+
+                    {u.username !== 'admin' && (
+                      <button
+                        onClick={() => handleDelete(u.id, u.name)}
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                        title="Hapus Pengguna"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -411,6 +666,31 @@ export default function AdminUsersPage() {
                 </select>
               </div>
 
+              {/* Penempatan rombel sekaligus saat akun siswa dibuat. */}
+              {formData.role === "STUDENT" && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Rombel {classes.length === 0 && <span className="text-rose-600">(belum ada rombel)</span>}
+                  </label>
+                  <select
+                    value={formData.classId}
+                    onChange={e => setFormData({ ...formData, classId: e.target.value })}
+                    disabled={classes.length === 0}
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition disabled:opacity-60"
+                  >
+                    <option value="">— Belum ditempatkan —</option>
+                    {classes.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                    {classes.length === 0
+                      ? "Buat rombel dulu di menu Rombel agar siswa bisa langsung ditempatkan."
+                      : "Siswa tanpa rombel tidak melihat jadwal, materi, tugas, maupun ujian."}
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-2 mt-3">
                 <button type="button" onClick={() => setShowSingleModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition">Batal</button>
                 <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 disabled:opacity-50 transition">
@@ -447,6 +727,19 @@ export default function AdminUsersPage() {
                 <div>
                   <h4 className="text-xs font-bold text-blue-900">Belum punya format file?</h4>
                   <p className="text-[10px] text-blue-700 mt-0.5">Unduh template Excel resmi yang sudah disesuaikan dengan sistem PELITA berdasarkan role.</p>
+                  {classes.length > 0 ? (
+                    <p className="text-[10px] text-blue-800 mt-1.5 leading-relaxed">
+                      Templat siswa sudah berisi kolom <strong>Kelas</strong> dan satu
+                      lembar <strong>Daftar Rombel</strong> berisi {classes.length} rombel
+                      yang ada. Tulis nama rombel sama persis seperti daftar itu agar
+                      siswa langsung masuk rombelnya saat diimpor.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-rose-700 font-semibold mt-1.5 leading-relaxed">
+                      Belum ada rombel, jadi kolom Kelas belum bisa dipakai. Buat rombel
+                      dulu di menu Rombel.
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={handleDownloadTemplateSiswa} className="flex-1 bg-white border border-blue-200 text-blue-700 px-2 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-100 shadow-sm flex items-center justify-center gap-1.5 transition">
@@ -513,6 +806,7 @@ export default function AdminUsersPage() {
                           <th className="p-2">Nama Lengkap</th>
                           <th className="p-2">Username</th>
                           <th className="p-2">Role</th>
+                          <th className="p-2">Rombel</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
@@ -525,6 +819,25 @@ export default function AdminUsersPage() {
                                 {row.role}
                               </span>
                             </td>
+                            <td className="p-2">
+                              {/* Tandai apakah nama rombel di berkas cocok
+                                  dengan rombel yang ada, sebelum impor jalan. */}
+                              {row.role !== "STUDENT" ? (
+                                <span className="text-slate-300">—</span>
+                              ) : !row.kelas ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                  kosong
+                                </span>
+                              ) : petaRombel.has(kunciRombel(row.kelas)) ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  {row.kelas}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200" title="Rombel ini belum ada di database">
+                                  {row.kelas} · tidak ada
+                                </span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -535,6 +848,67 @@ export default function AdminUsersPage() {
                       ... dan {parsedData.length - 5} data lainnya akan otomatis diproses.
                     </p>
                   )}
+
+                  {/* Ringkasan rombel dari SELURUH baris, bukan hanya 5 pratinjau. */}
+                  {(() => {
+                    const siswa = parsedData.filter(r => r.role === "STUDENT")
+                    const tanpaKelas = siswa.filter(r => !r.kelas).length
+                    const takDikenal = Array.from(
+                      new Set(
+                        siswa
+                          .filter(r => r.kelas && !petaRombel.has(kunciRombel(r.kelas)))
+                          .map(r => r.kelas)
+                      )
+                    )
+                    const cocok = siswa.length - tanpaKelas - siswa.filter(
+                      r => r.kelas && !petaRombel.has(kunciRombel(r.kelas))
+                    ).length
+
+                    if (siswa.length === 0) return null
+
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[10px] text-slate-700 flex flex-wrap gap-x-3 gap-y-1">
+                          <span><strong className="text-emerald-700">{cocok}</strong> siswa akan masuk rombel</span>
+                          {tanpaKelas > 0 && (
+                            <span><strong className="text-amber-700">{tanpaKelas}</strong> tanpa kolom Kelas</span>
+                          )}
+                          {takDikenal.length > 0 && (
+                            <span><strong className="text-rose-700">{takDikenal.length}</strong> nama rombel tidak dikenal</span>
+                          )}
+                        </div>
+
+                        {takDikenal.length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[10px] text-rose-800 leading-relaxed flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <span>
+                              Rombel berikut belum ada di database dan akan dilewati:{" "}
+                              <strong>{takDikenal.join(", ")}</strong>. Akunnya tetap dibuat,
+                              tetapi tanpa rombel. Buat rombel itu dulu di menu Rombel kalau
+                              ingin siswanya langsung ditempatkan.
+                            </span>
+                          </div>
+                        )}
+
+                        <label className="flex items-start gap-2 p-2.5 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempatkanSiswaLama}
+                            onChange={(e) => setTempatkanSiswaLama(e.target.checked)}
+                            className="mt-0.5"
+                          />
+                          <span className="text-[10px] text-slate-700 leading-relaxed">
+                            <strong className="block">
+                              Lengkapi juga rombel siswa yang sudah terdaftar
+                            </strong>
+                            Untuk baris yang usernamenya sudah ada, rombelnya diisikan
+                            bila siswa itu belum punya rombel. Siswa yang sudah punya
+                            rombel tidak akan dipindahkan.
+                          </span>
+                        </label>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
             </div>

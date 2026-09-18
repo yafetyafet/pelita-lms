@@ -35,14 +35,61 @@ dan mendapat akses presensi rombelnya walau tidak mengampu mapel di sana.
 
 ## Langkah 2 — Tempatkan siswa ke rombel
 
-`/admin/rombel` → pilih rombel → tambahkan siswa
-
 Ini **langkah paling menentukan**. Tanpa ini siswa tidak melihat apa pun.
-Tersedia penempatan massal (pilih banyak siswa sekaligus), dan daftar
-"siswa belum punya rombel" membantu memastikan tidak ada yang terlewat.
+Ada tiga jalan, pilih yang paling cocok:
 
-> Satu siswa hanya boleh aktif di satu rombel. Kalau naik kelas, keluarkan dulu
-> dari rombel lama.
+**a. Penempatan massal dari menu rombel** — `/admin/rombel` → pilih rombel →
+**Tempatkan Banyak Siswa Sekaligus**. Daftar hanya memuat siswa yang belum
+punya rombel, bisa dicari, dan bisa dicentang sekaligus ("Pilih semua"). Ini
+cara tercepat untuk membereskan ratusan siswa yang sudah terdaftar.
+
+**b. Satu per satu dari manajemen akun** — `/admin/users`. Tiap baris siswa
+punya dropdown rombel; mengubahnya langsung menyimpan. Halaman ini juga punya
+penyaring **"Siswa belum punya rombel"** dan spanduk peringatan berisi
+jumlahnya, jadi mudah menyisir yang terlewat.
+
+**c. Lewat impor Excel** — lihat Langkah 2b di bawah.
+
+> Satu siswa hanya aktif di satu rombel. Mengubah dropdown rombel akan
+> *memindahkan*, bukan menambah rombel kedua.
+
+## Langkah 2b — Impor massal dengan kolom rombel
+
+`/admin/users` → **Import Excel / CSV**
+
+Templat siswa yang diunduh dari halaman itu **mengambil nama rombel dari
+database**, bukan contoh karangan:
+
+- kolom **Kelas** pada lembar *Data Siswa* sudah terisi nama rombel yang ada,
+- ada lembar tambahan **Daftar Rombel** berisi seluruh nama rombel yang sah.
+
+Karena itu **rombel harus dibuat lebih dulu** (Langkah 1) sebelum mengunduh
+templat. Kalau belum ada rombel, tombol unduh templat siswa akan menolak dan
+memberi tahu alasannya.
+
+Aturan pencocokannya:
+
+| Kondisi kolom Kelas | Yang terjadi |
+| --- | --- |
+| Cocok dengan nama rombel | Siswa langsung masuk rombel itu |
+| Beda huruf besar/kecil atau spasi ganda | Tetap dianggap cocok (`X RPL 1` = `x rpl  1`) |
+| Nama rombel tidak ada di database | Akun tetap dibuat, **tanpa** rombel; namanya dilaporkan agar bisa dibuat lalu diimpor ulang |
+| Kosong | Akun dibuat tanpa rombel |
+| Baris ber-role guru/admin/DUDI | Kolom Kelas diabaikan |
+
+Sebelum impor dijalankan, tabel pratinjau menandai tiap baris dengan warna
+hijau (rombel ditemukan), kuning (kolom kosong), atau merah (rombel tidak
+dikenal), plus ringkasan jumlahnya. Jadi kesalahan penulisan nama rombel
+ketahuan **sebelum** ratusan akun terbuat.
+
+Ada juga centang **"Lengkapi juga rombel siswa yang sudah terdaftar"**
+(menyala secara bawaan). Dengan ini, baris yang usernamenya sudah ada tetap
+dipakai untuk mengisi rombel siswa tersebut — berguna untuk membereskan siswa
+lama yang belum ditempatkan. Siswa yang **sudah** punya rombel tidak pernah
+dipindahkan oleh impor.
+
+> Menambah akun satuan lewat **+ Tambah Manual** juga sudah bisa sekaligus
+> memilih rombel, selama role-nya Siswa.
 
 ## Langkah 3 — Mata pelajaran
 
@@ -126,7 +173,7 @@ token khusus, jadwal buka/tutup, durasi, pengacakan soal, dan status terbit.
 ```
 Akun pengguna
    │
-   ├─→ Rombel ──→ Penempatan siswa ──┐
+   ├─→ Rombel ──→ Penempatan siswa ──┐   (manual, massal, atau impor Excel)
    │      │                          │
    │      └─→ Guru pengampu ─────────┤
    │             (guru+rombel+mapel) │
