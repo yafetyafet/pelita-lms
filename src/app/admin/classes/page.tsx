@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, Trash2, School, Loader2, Users, UserPlus, UserMinus, X, ChevronRight } from "lucide-react"
-import { getClasses, getTeachers, createClass, deleteClass, addStudentToClass, addStudentsToClass, removeStudentFromClass, getStudentsWithoutClass, getClassStudents, getAllStudents } from "@/app/actions/admin"
+import { ArrowLeft, Plus, Trash2, School, Loader2, Users, UserPlus, UserMinus, X, ChevronRight, UserCog, Save, AlertTriangle } from "lucide-react"
+import { getClasses, getTeachers, createClass, updateClass, deleteClass, addStudentToClass, addStudentsToClass, removeStudentFromClass, getStudentsWithoutClass, getClassStudents, getAllStudents } from "@/app/actions/admin"
 
 export default function AdminClassesPage() {
   const [classes, setClasses] = useState<any[]>([])
@@ -25,6 +25,19 @@ export default function AdminClassesPage() {
   const [bulkPicked, setBulkPicked] = useState<Set<string>>(new Set())
   const [bulkSearch, setBulkSearch] = useState("")
   const [manageSaving, setManageSaving] = useState(false)
+
+  // Penyuntingan data rombel. Sebelumnya wali kelas hanya bisa diisi saat
+  // rombel DIBUAT; setelah itu tidak ada jalan mengubahnya sama sekali,
+  // sehingga rombel yang dibuat tanpa wali akan selamanya kosong.
+  const [editForm, setEditForm] = useState({
+    name: "",
+    description: "",
+    level: "",
+    waliKelasId: ""
+  })
+  const [editSaving, setEditSaving] = useState(false)
+  // Rombel yang walinya sedang disimpan lewat dropdown di baris daftar.
+  const [savingWaliFor, setSavingWaliFor] = useState<string | null>(null)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -73,6 +86,15 @@ export default function AdminClassesPage() {
   const openManageStudents = async (classId: string, className: string) => {
     setManageClassId(classId)
     setManageClassName(className)
+
+    const c = classes.find((x: any) => x.id === classId)
+    setEditForm({
+      name: c?.name ?? className,
+      description: c?.description ?? "",
+      level: c?.level != null ? String(c.level) : "",
+      waliKelasId: c?.waliId ?? ""
+    })
+
     setManageSaving(true)
     const [students, unassigned, all] = await Promise.all([
       getClassStudents(classId),
@@ -103,6 +125,45 @@ export default function AdminClassesPage() {
     setUnassignedStudents(unassigned)
     setSelectedStudentToAdd("")
     setManageSaving(false)
+    loadData()
+  }
+
+  /** Simpan perubahan data rombel (nama, tingkat, deskripsi, wali kelas). */
+  const handleSaveClassInfo = async () => {
+    if (!manageClassId) return
+    if (!editForm.name.trim()) {
+      alert("Nama rombel tidak boleh kosong.")
+      return
+    }
+
+    setEditSaving(true)
+    const res = await updateClass({
+      id: manageClassId,
+      name: editForm.name,
+      description: editForm.description,
+      level: editForm.level === "" ? null : Number(editForm.level),
+      waliKelasId: editForm.waliKelasId || null
+    })
+    setEditSaving(false)
+
+    if (res.error) {
+      alert(res.error)
+      return
+    }
+    setManageClassName(editForm.name.trim())
+    loadData()
+  }
+
+  /** Tetapkan wali kelas langsung dari daftar, tanpa membuka modal. */
+  const handleWaliChange = async (classId: string, waliKelasId: string) => {
+    setSavingWaliFor(classId)
+    const res = await updateClass({ id: classId, waliKelasId: waliKelasId || null })
+    setSavingWaliFor(null)
+
+    if (res.error) {
+      alert(res.error)
+      return
+    }
     loadData()
   }
 
@@ -174,6 +235,31 @@ export default function AdminClassesPage() {
         </button>
       </div>
 
+      {/* Peringatan wali kelas belum lengkap */}
+      {!isLoading && teachers.length === 0 && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="text-[11px] text-rose-800 leading-relaxed">
+            <strong className="block">Belum ada akun guru.</strong>
+            Wali kelas dipilih dari akun ber-role Guru. Tambahkan akun guru dulu di{" "}
+            <Link href="/admin/users" className="font-bold underline">Manajemen Akun</Link>.
+          </div>
+        </div>
+      )}
+
+      {!isLoading && teachers.length > 0 && classes.filter((c: any) => !c.waliId).length > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-[11px] text-amber-900 leading-relaxed">
+            <strong className="block">
+              {classes.filter((c: any) => !c.waliId).length} rombel belum punya wali kelas.
+            </strong>
+            Wali kelas dibutuhkan untuk tindak lanjut pelanggaran siswa dan akses
+            presensi rombel. Pilih walinya langsung dari dropdown di daftar bawah.
+          </div>
+        </div>
+      )}
+
       {/* Classes List */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
         {isLoading ? (
@@ -189,22 +275,50 @@ export default function AdminClassesPage() {
               const wali = c.wali ? c.wali.name : "Belum Ditentukan"
               
               return (
-                <div key={c.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                <div key={c.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
                       <School className="w-6 h-6" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h4 className="text-sm font-bold text-slate-900">{c.name}</h4>
-                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">Wali Kelas: <span className="text-slate-800">{wali}</span></p>
-                      
+                      <p className="text-[10px] font-medium mt-0.5 text-slate-500">
+                        Wali Kelas:{" "}
+                        <span className={c.wali ? "text-slate-800 font-bold" : "text-amber-700 font-bold"}>
+                          {wali}
+                        </span>
+                      </p>
+
                       <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-flex">
                         <Users className="w-3 h-3" /> {c.students.length} Siswa
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-1">
+
+                  {/* Wali kelas bisa ditetapkan langsung di sini — untuk mengisi
+                      belasan rombel, tidak perlu membuka modal satu per satu. */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="relative flex-1 sm:flex-none">
+                      <select
+                        value={c.waliId || ""}
+                        disabled={savingWaliFor === c.id || teachers.length === 0}
+                        onChange={e => handleWaliChange(c.id, e.target.value)}
+                        title="Tetapkan wali kelas"
+                        className={`w-full sm:w-44 text-[11px] py-1.5 pl-2 pr-6 rounded-xl border outline-none transition appearance-none disabled:opacity-50 ${
+                          c.wali
+                            ? "bg-white border-slate-200 text-slate-700"
+                            : "bg-amber-50 border-amber-300 text-amber-800 font-bold"
+                        }`}
+                      >
+                        <option value="">— Tanpa wali kelas —</option>
+                        {teachers.map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                      {savingWaliFor === c.id && (
+                        <Loader2 className="w-3 h-3 animate-spin text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
+                      )}
+                    </div>
                     <button 
                       onClick={() => openManageStudents(c.id, c.name)}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition flex items-center gap-1 text-[10px] font-bold"
@@ -277,11 +391,87 @@ export default function AdminClassesPage() {
           <div className="w-full max-w-md bg-white rounded-t-[32px] sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Kelola Siswa — {manageClassName}</h3>
+                <h3 className="text-sm font-bold text-slate-900">Kelola Rombel — {manageClassName}</h3>
                 <p className="text-[10px] text-slate-500">{classStudentsList.length} siswa terdaftar</p>
               </div>
               <button onClick={() => setManageClassId(null)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Data rombel: nama, tingkat, deskripsi, wali kelas */}
+            <div className="flex flex-col gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <h4 className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                <UserCog className="w-3.5 h-3.5 text-indigo-600" />
+                Data Rombel & Wali Kelas
+              </h4>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nama Rombel</label>
+                  <input
+                    value={editForm.name}
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Tingkat</label>
+                  <select
+                    value={editForm.level}
+                    onChange={e => setEditForm({ ...editForm, level: e.target.value })}
+                    className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500"
+                  >
+                    <option value="">—</option>
+                    <option value="10">10 (X)</option>
+                    <option value="11">11 (XI)</option>
+                    <option value="12">12 (XII)</option>
+                    <option value="13">13 (XIII)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 block mb-1">Deskripsi / Jurusan</label>
+                <input
+                  value={editForm.description}
+                  onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Contoh: Teknik Jaringan Komputer & Telekomunikasi"
+                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 block mb-1">Wali Kelas</label>
+                <select
+                  value={editForm.waliKelasId}
+                  onChange={e => setEditForm({ ...editForm, waliKelasId: e.target.value })}
+                  disabled={teachers.length === 0}
+                  className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 disabled:opacity-60"
+                >
+                  <option value="">— Belum ditentukan —</option>
+                  {teachers.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                {teachers.length === 0 && (
+                  <p className="text-[10px] text-rose-700 mt-1">
+                    Belum ada akun guru. Tambahkan dulu di Manajemen Akun.
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={handleSaveClassInfo}
+                disabled={editSaving}
+                className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {editSaving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                <span>{editSaving ? "Menyimpan..." : "Simpan Data Rombel"}</span>
               </button>
             </div>
 
