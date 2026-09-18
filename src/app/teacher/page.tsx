@@ -307,8 +307,11 @@ export default function TeacherDashboard() {
         <div className="flex flex-col gap-1.5">
           {teacherClasses.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
-              {teacherClasses.map((tc: any, i: number) => (
-                <span key={i} className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+              {teacherClasses.map((tc: any) => (
+                <span
+                  key={`${tc.classId}|${tc.subjectId}`}
+                  className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full"
+                >
                   {tc.classInfo.name} — {tc.subject.name}
                 </span>
               ))}
@@ -403,24 +406,27 @@ export default function TeacherDashboard() {
 
         <form onSubmit={handleSaveMateri} className="flex flex-col gap-2.5">
           <div className="grid grid-cols-2 gap-2">
+            {/* Kelas dan mapel adalah satu pasangan penugasan. Dua select
+                terpisah sebelumnya tidak saling menyaring, sehingga guru yang
+                mengampu beberapa mapel bisa memilih kombinasi kelas+mapel yang
+                tidak diampunya — lalu ditolak server saat disimpan. */}
             <select
-              value={materiClassId}
-              onChange={(e) => setMateriClassId(e.target.value)}
-              className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
+              value={materiClassId && materiSubjectId ? `${materiClassId}|${materiSubjectId}` : ""}
+              onChange={(e) => {
+                const [c, sb] = e.target.value.split("|")
+                setMateriClassId(c || "")
+                setMateriSubjectId(sb || "")
+              }}
+              className="col-span-2 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
             >
-              <option value="">Pilih Kelas</option>
-              {teacherClasses.map((tc: any, i: number) => (
-                <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
-              ))}
-            </select>
-            <select
-              value={materiSubjectId}
-              onChange={(e) => setMateriSubjectId(e.target.value)}
-              className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
-            >
-              <option value="">Pilih Mapel</option>
-              {teacherClasses.map((tc: any, i: number) => (
-                <option key={i} value={tc.subjectId}>{tc.subject.name}</option>
+              <option value="">Pilih Kelas &amp; Mapel</option>
+              {teacherClasses.map((tc: any) => (
+                <option
+                  key={`${tc.classId}|${tc.subjectId}`}
+                  value={`${tc.classId}|${tc.subjectId}`}
+                >
+                  {tc.classInfo.name} — {tc.subject.name}
+                </option>
               ))}
             </select>
           </div>
@@ -596,8 +602,15 @@ export default function TeacherDashboard() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
                 >
                   <option value="">-- Pilih Kelas --</option>
-                  {teacherClasses.map((tc: any, i: number) => (
-                    <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
+                  {/* Di sini hanya kelasnya yang relevan (untuk memuat daftar
+                      siswa), jadi kelas yang sama tidak boleh muncul berulang
+                      hanya karena guru mengampu beberapa mapel di dalamnya. */}
+                  {Array.from(
+                    new Map(
+                      teacherClasses.map((tc: any) => [tc.classId, tc.classInfo])
+                    ).entries()
+                  ).map(([classId, info]: [string, any]) => (
+                    <option key={classId} value={classId}>{info.name}</option>
                   ))}
                 </select>
               </div>

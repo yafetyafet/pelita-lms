@@ -325,7 +325,9 @@ export default function TeacherClassesPage() {
                     : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50"
                 }`}
               >
-                {tc.classInfo.name}
+                {/* Sertakan mapel: satu guru bisa mengampu beberapa mapel di
+                    kelas yang sama, dan pil bernama sama tidak bisa dibedakan. */}
+                {tc.classInfo.name} · {tc.subject.name}
               </button>
             ))}
           </div>

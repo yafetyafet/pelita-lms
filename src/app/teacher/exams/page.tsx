@@ -291,15 +291,28 @@ export default function TeacherExamsPage() {
                 required
               />
 
-              <div className="grid grid-cols-3 gap-2">
-                <select value={examClassId} onChange={e => setExamClassId(e.target.value)} className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
-                  {teacherClasses.map((tc: any, i: number) => (
-                    <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
-                  ))}
-                </select>
-                <select value={examSubjectId} onChange={e => setExamSubjectId(e.target.value)} className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
-                  {teacherClasses.map((tc: any, i: number) => (
-                    <option key={i} value={tc.subjectId}>{tc.subject.name}</option>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Kelas dan mapel dipilih sebagai satu pasangan penugasan.
+                    Dua select terpisah sebelumnya tidak saling menyaring, jadi
+                    guru bisa memilih kombinasi kelas+mapel yang tidak
+                    diampunya — lalu ditolak server saat disimpan. */}
+                <select
+                  value={examClassId && examSubjectId ? `${examClassId}|${examSubjectId}` : ""}
+                  onChange={e => {
+                    const [c, sb] = e.target.value.split("|")
+                    setExamClassId(c || "")
+                    setExamSubjectId(sb || "")
+                  }}
+                  className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
+                >
+                  <option value="">Pilih Kelas &amp; Mapel</option>
+                  {teacherClasses.map((tc: any) => (
+                    <option
+                      key={`${tc.classId}|${tc.subjectId}`}
+                      value={`${tc.classId}|${tc.subjectId}`}
+                    >
+                      {tc.classInfo.name} — {tc.subject.name}
+                    </option>
                   ))}
                 </select>
                 <div className="flex items-center gap-1.5">

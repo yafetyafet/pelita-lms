@@ -46,10 +46,15 @@ export default function TeacherScheduleInputPage() {
     load()
   }, [])
 
-  const handleClassChange = (classId: string) => {
-    setTargetClassId(classId)
-    const match = teacherClasses.find((tc: any) => tc.classId === classId)
-    if (match) setSubjectId(match.subjectId)
+  /**
+   * Halaman ini dulu sama sekali tidak punya pemilih mapel: mapelnya ditebak
+   * dari penugasan pertama pada kelas terpilih. Guru yang mengampu dua mapel
+   * di satu kelas karena itu hanya bisa menjadwalkan mapel pertama.
+   */
+  const handlePenugasanChange = (nilai: string) => {
+    const [classId, subjectIdBaru] = nilai.split("|")
+    setTargetClassId(classId || "")
+    setSubjectId(subjectIdBaru || "")
   }
 
   const handleAddSlot = async (e: React.FormEvent) => {
@@ -164,11 +169,20 @@ export default function TeacherScheduleInputPage() {
 
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="font-bold text-slate-700 text-[11px]">Kelas:</label>
-              <select value={targetClassId} onChange={(e) => handleClassChange(e.target.value)} className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:outline-none">
-                <option value="">Pilih Kelas</option>
-                {teacherClasses.map((tc: any, i: number) => (
-                  <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
+              <label className="font-bold text-slate-700 text-[11px]">Kelas & Mapel:</label>
+              <select
+                value={targetClassId && subjectId ? `${targetClassId}|${subjectId}` : ""}
+                onChange={(e) => handlePenugasanChange(e.target.value)}
+                className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:outline-none"
+              >
+                <option value="">Pilih Kelas &amp; Mapel</option>
+                {teacherClasses.map((tc: any) => (
+                  <option
+                    key={`${tc.classId}|${tc.subjectId}`}
+                    value={`${tc.classId}|${tc.subjectId}`}
+                  >
+                    {tc.classInfo.name} — {tc.subject.name}
+                  </option>
                 ))}
               </select>
             </div>

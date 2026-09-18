@@ -40,10 +40,16 @@ export default function TeacherJournalPage() {
   }, [])
 
   // Auto-set subject when class changes
-  const handleClassChange = (classId: string) => {
-    setFormClassId(classId)
-    const match = teacherClasses.find((tc: any) => tc.classId === classId)
-    if (match) setFormSubjectId(match.subjectId)
+  /**
+   * Satu penugasan = satu pasangan kelas + mapel, jadi pemilihnya pun harus
+   * memakai pasangan itu sebagai nilai. Sebelumnya nilainya hanya classId
+   * sehingga guru yang mengampu beberapa mapel di satu kelas selalu terkunci
+   * ke mapel pertama.
+   */
+  const handlePenugasanChange = (nilai: string) => {
+    const [classId, subjectId] = nilai.split("|")
+    setFormClassId(classId || "")
+    setFormSubjectId(subjectId || "")
   }
 
   const handleAddJournal = async (e: React.FormEvent) => {
@@ -120,29 +126,20 @@ export default function TeacherJournalPage() {
         <form onSubmit={handleAddJournal} className="flex flex-col gap-2.5">
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-600">Rombel / Kelas:</label>
+              <label className="text-[10px] font-bold text-slate-600">Kelas & Mata Pelajaran:</label>
               <select
-                value={formClassId}
-                onChange={(e) => handleClassChange(e.target.value)}
+                value={formClassId && formSubjectId ? `${formClassId}|${formSubjectId}` : ""}
+                onChange={(e) => handlePenugasanChange(e.target.value)}
                 className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
               >
-                <option value="">Pilih Kelas</option>
-                {teacherClasses.map((tc: any, i: number) => (
-                  <option key={i} value={tc.classId}>{tc.classInfo.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-600">Mata Pelajaran:</label>
-              <select
-                value={formSubjectId}
-                onChange={(e) => setFormSubjectId(e.target.value)}
-                className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none"
-              >
-                <option value="">Pilih Mapel</option>
-                {teacherClasses.map((tc: any, i: number) => (
-                  <option key={i} value={tc.subjectId}>{tc.subject.name}</option>
+                <option value="">Pilih Kelas & Mapel</option>
+                {teacherClasses.map((tc: any) => (
+                  <option
+                    key={`${tc.classId}|${tc.subjectId}`}
+                    value={`${tc.classId}|${tc.subjectId}`}
+                  >
+                    {tc.classInfo.name} — {tc.subject.name}
+                  </option>
                 ))}
               </select>
             </div>
