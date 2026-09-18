@@ -18,7 +18,8 @@ import {
   Search,
   Filter,
   School,
-  AlertTriangle
+  AlertTriangle,
+  KeyRound
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import {
@@ -27,7 +28,8 @@ import {
   deleteUser,
   bulkCreateUsers,
   getClassOptions,
-  setStudentClass
+  setStudentClass,
+  resetUserPassword
 } from "@/app/actions/admin"
 
 /**
@@ -56,6 +58,10 @@ export default function AdminUsersPage() {
   const [classFilter, setClassFilter] = useState("ALL")
   // Rombel yang sedang disimpan, agar barisnya bisa menampilkan status.
   const [savingClassFor, setSavingClassFor] = useState<string | null>(null)
+  const [resetFor, setResetFor] = useState<string | null>(null)
+  // Sandi hasil reset ditampilkan sekali supaya admin bisa menyerahkannya;
+  // setelah ini tidak bisa dibaca lagi karena tersimpan sebagai hash.
+  const [sandiBaru, setSandiBaru] = useState<{ nama: string; sandi: string } | null>(null)
 
   // Single User Form State
   const [formData, setFormData] = useState({
@@ -189,6 +195,30 @@ export default function AdminUsersPage() {
       "success",
       res.className ? `Rombel diubah ke ${res.className}.` : "Rombel dikosongkan."
     )
+  }
+
+  /**
+   * Setel ulang kata sandi pengguna. Dibutuhkan admin untuk menyerahkan akses
+   * awal kepada guru dan siswa — kata sandi tersimpan sebagai hash scrypt,
+   * jadi tidak ada cara lain melihat atau memulihkannya.
+   */
+  const handleResetPassword = async (id: string, nama: string) => {
+    const masukan = window.prompt(
+      `Setel ulang kata sandi ${nama}.\n\nKosongkan untuk memakai sandi bawaan 123456, atau tulis sandi baru (min. 6 karakter).`,
+      ""
+    )
+    // prompt() mengembalikan null bila dibatalkan; string kosong berarti pakai bawaan.
+    if (masukan === null) return
+
+    setResetFor(id)
+    const res = await resetUserPassword(id, masukan.trim() || undefined)
+    setResetFor(null)
+
+    if (res.error) {
+      showToast("error", res.error)
+      return
+    }
+    setSandiBaru({ nama, sandi: res.password || "123456" })
   }
 
   // Delete User
@@ -409,6 +439,34 @@ export default function AdminUsersPage() {
         }`}>
           {toast.type === "success" ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertCircle className="w-5 h-5 text-rose-600" />}
           <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Hasil setel ulang sandi — tampil sekali, lalu hilang */}
+      {sandiBaru && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-emerald-900">
+              Kata sandi {sandiBaru.nama} berhasil disetel ulang
+            </p>
+            <p className="text-[11px] text-emerald-800 mt-1">
+              Sandi baru:{" "}
+              <code className="font-mono font-bold bg-white border border-emerald-300 px-1.5 py-0.5 rounded">
+                {sandiBaru.sandi}
+              </code>
+            </p>
+            <p className="text-[10px] text-emerald-700 mt-1 leading-relaxed">
+              Catat sekarang — sandi tersimpan sebagai hash, jadi tidak bisa dilihat
+              lagi setelah panel ini ditutup. Pengguna akan diminta menggantinya.
+            </p>
+          </div>
+          <button
+            onClick={() => setSandiBaru(null)}
+            className="shrink-0 p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-100 transition"
+            title="Tutup"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -641,6 +699,19 @@ export default function AdminUsersPage() {
                         )}
                       </div>
                     )}
+
+                    <button
+                      onClick={() => handleResetPassword(u.id, u.name)}
+                      disabled={resetFor === u.id}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition disabled:opacity-50"
+                      title="Setel ulang kata sandi"
+                    >
+                      {resetFor === u.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <KeyRound className="w-4 h-4" />
+                      )}
+                    </button>
 
                     {u.username !== 'admin' && (
                       <button
