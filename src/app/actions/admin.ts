@@ -236,6 +236,8 @@ export async function createUser(data: {
   name: string
   role: string
   nomorInduk?: string
+  /** Rombel tujuan; hanya dipakai bila role-nya STUDENT. */
+  classId?: string
 }): Promise<AksiHasil> {
   try {
     await requireSession('ADMIN')
@@ -248,7 +250,18 @@ export async function createUser(data: {
     if (existing) return { error: 'Username sudah terdaftar!' }
 
     const plain = data.password?.trim() || PASSWORD_DEFAULT
+    const classId = data.role === 'STUDENT' ? data.classId?.trim() : ''
 
+    if (classId) {
+      const kelas = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { id: true },
+      })
+      if (!kelas) return { error: 'Rombel tujuan tidak ditemukan.' }
+    }
+
+    // Akun dan penempatan rombel dibuat dalam satu transaksi supaya tidak
+    // pernah ada siswa yang terbuat tapi gagal masuk rombel.
     await prisma.user.create({
       data: {
         username,
@@ -258,11 +271,59 @@ export async function createUser(data: {
         nomorInduk: data.nomorInduk?.trim() || null,
         // Paksa ganti kata sandi bila masih memakai bawaan.
         mustChangePassword: plain === PASSWORD_DEFAULT,
+        ...(classId ? { studentClasses: { create: { classId } } } : {}),
       },
     })
 
     revalidatePath('/', 'layout')
     return { success: true }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
+/**
+ * Tetapkan (atau kosongkan) rombel satu siswa dari halaman manajemen akun.
+ *
+ * Seorang siswa hanya aktif di satu rombel, jadi penempatan lama digantikan.
+ * Tanpa fungsi ini, admin harus berpindah ke menu rombel hanya untuk
+ * memindahkan satu siswa.
+ */
+export async function setStudentClass(
+  userId: string,
+  classId: string | null
+): Promise<AksiHasil<{ className: string | null }>> {
+  try {
+    await requireSession('ADMIN')
+
+    const siswa = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    })
+    if (!siswa) return { error: 'Pengguna tidak ditemukan.' }
+    if (siswa.role !== 'STUDENT') {
+      return { error: 'Rombel hanya berlaku untuk akun siswa.' }
+    }
+
+    let className: string | null = null
+    if (classId) {
+      const kelas = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { id: true, name: true },
+      })
+      if (!kelas) return { error: 'Rombel tidak ditemukan.' }
+      className = kelas.name
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.classStudent.deleteMany({ where: { userId } })
+      if (classId) {
+        await tx.classStudent.create({ data: { userId, classId } })
+      }
+    })
+
+    revalidatePath('/', 'layout')
+    return { success: true, className }
   } catch (err) {
     return gagal(err)
   }
@@ -358,8 +419,30 @@ export async function deleteUser(id: string): Promise<AksiHasil> {
 }
 
 export async function bulkCreateUsers(
-  users: { username: string; password?: string; name: string; role?: string }[]
-): Promise<AksiHasil<{ count: number; skipped: number }>> {
+  users: {
+    username: string
+    password?: string
+    name: string
+    role?: string
+    /** Nama rombel dari kolom "Kelas"/"Rombel" pada berkas impor. */
+    kelas?: string
+  }[],
+  opsi?: {
+    /**
+     * Tempatkan juga siswa yang usernamenya sudah terdaftar tetapi belum
+     * punya rombel. Tidak pernah memindahkan siswa yang sudah punya rombel.
+     */
+    tempatkanSiswaLama?: boolean
+  }
+): Promise<
+  AksiHasil<{
+    count: number
+    skipped: number
+    ditempatkan: number
+    ditempatkanLama: number
+    rombelTidakDikenal: string[]
+  }>
+> {
   try {
     await requireSession('ADMIN')
 
@@ -367,10 +450,19 @@ export async function bulkCreateUsers(
       return { error: 'Data kosong atau format tidak sesuai!' }
     }
 
-    const existingUsers = await prisma.user.findMany({
-      select: { username: true },
-    })
+    const [existingUsers, kelasTersedia] = await Promise.all([
+      prisma.user.findMany({ select: { username: true } }),
+      prisma.class.findMany({ select: { id: true, name: true } }),
+    ])
+
     const existingSet = new Set(existingUsers.map((u) => u.username.toLowerCase()))
+
+    // Pencocokan nama rombel dibuat longgar terhadap huruf besar/kecil dan
+    // spasi ganda, karena nama rombel di berkas Dapodik sering tidak konsisten
+    // ("X RPL 1" vs "x rpl  1").
+    const kunciRombel = (nama: string) =>
+      nama.trim().toLowerCase().replace(/\s+/g, ' ')
+    const petaKelas = new Map(kelasTersedia.map((k) => [kunciRombel(k.name), k.id]))
 
     const validRoles = ['STUDENT', 'TEACHER', 'ADMIN', 'DUDI']
     const toInsert: {
@@ -380,22 +472,22 @@ export async function bulkCreateUsers(
       role: Role
       mustChangePassword: boolean
     }[] = []
+    // username -> classId, untuk penempatan setelah akun terbuat.
+    const rencanaRombel = new Map<string, string>()
+    const rombelTidakDikenal = new Set<string>()
+    // Baris yang usernamenya sudah ada tapi menyebut rombel.
+    // Kuncinya huruf kecil (untuk pencocokan), sedangkan ejaan aslinya
+    // disimpan terpisah karena kueri `username: { in: ... }` peka huruf
+    // besar/kecil — mencari versi huruf kecil tidak akan menemukan apa pun.
+    const usernameLamaBerombel = new Map<string, string>()
+    const usernameLamaAsli: string[] = []
+
     let skippedCount = 0
     const seenInBatch = new Set<string>()
 
     for (const u of users) {
       const username = String(u.username || '').trim()
       const name = String(u.name || '').trim()
-      if (!username || !name) {
-        skippedCount++
-        continue
-      }
-      const lowerUser = username.toLowerCase()
-      if (existingSet.has(lowerUser) || seenInBatch.has(lowerUser)) {
-        skippedCount++
-        continue
-      }
-      seenInBatch.add(lowerUser)
 
       let role = String(u.role || 'STUDENT').toUpperCase().trim()
       if (!validRoles.includes(role)) {
@@ -405,6 +497,33 @@ export async function bulkCreateUsers(
         else if (role.includes('ADMIN')) role = 'ADMIN'
         else role = 'STUDENT'
       }
+
+      // Rombel hanya relevan untuk siswa.
+      const namaKelas = role === 'STUDENT' ? String(u.kelas || '').trim() : ''
+      let classId: string | undefined
+      if (namaKelas) {
+        classId = petaKelas.get(kunciRombel(namaKelas))
+        // Rombel harus sudah dibuat lebih dulu di menu rombel; nama yang tidak
+        // dikenal dilaporkan, bukan dibuat otomatis, supaya salah tulis tidak
+        // menghasilkan rombel siluman.
+        if (!classId) rombelTidakDikenal.add(namaKelas)
+      }
+
+      if (!username || !name) {
+        skippedCount++
+        continue
+      }
+
+      const lowerUser = username.toLowerCase()
+      if (existingSet.has(lowerUser) || seenInBatch.has(lowerUser)) {
+        skippedCount++
+        if (classId && existingSet.has(lowerUser)) {
+          usernameLamaBerombel.set(lowerUser, classId)
+          usernameLamaAsli.push(username)
+        }
+        continue
+      }
+      seenInBatch.add(lowerUser)
 
       const plain = String(u.password || PASSWORD_DEFAULT).trim()
       toInsert.push({
@@ -416,22 +535,106 @@ export async function bulkCreateUsers(
         role: role as Role,
         mustChangePassword: plain === PASSWORD_DEFAULT,
       })
+      if (classId) rencanaRombel.set(lowerUser, classId)
     }
 
-    if (toInsert.length === 0) {
-      return {
-        error:
-          'Tidak ada data baru yang dapat diimpor (semua username sudah terdaftar atau format kosong).',
+    let ditempatkan = 0
+    let ditempatkanLama = 0
+
+    if (toInsert.length > 0) {
+      await prisma.user.createMany({ data: toInsert, skipDuplicates: true })
+
+      // createMany tidak mengembalikan id, jadi akun yang baru dibuat dicari
+      // ulang berdasarkan username untuk dipasangkan ke rombelnya.
+      if (rencanaRombel.size > 0) {
+        const dibuat = await prisma.user.findMany({
+          where: { username: { in: toInsert.map((t) => t.username) } },
+          select: { id: true, username: true },
+        })
+        const penempatan = dibuat
+          .map((d) => ({
+            userId: d.id,
+            classId: rencanaRombel.get(d.username.toLowerCase()),
+          }))
+          .filter((x): x is { userId: string; classId: string } => Boolean(x.classId))
+
+        if (penempatan.length > 0) {
+          const res = await prisma.classStudent.createMany({
+            data: penempatan,
+            skipDuplicates: true,
+          })
+          ditempatkan = res.count
+        }
       }
     }
 
-    await prisma.user.createMany({ data: toInsert, skipDuplicates: true })
+    // Opsional: lengkapi rombel siswa yang akunnya sudah ada tapi belum
+    // ditempatkan. Siswa yang sudah punya rombel tidak pernah dipindahkan.
+    if (opsi?.tempatkanSiswaLama && usernameLamaBerombel.size > 0) {
+      const kandidat = await prisma.user.findMany({
+        where: {
+          role: 'STUDENT',
+          studentClasses: { none: {} },
+          username: { in: usernameLamaAsli },
+        },
+        select: { id: true, username: true },
+      })
+
+      const penempatanLama = kandidat
+        .map((k) => ({
+          userId: k.id,
+          classId: usernameLamaBerombel.get(k.username.toLowerCase()),
+        }))
+        .filter((x): x is { userId: string; classId: string } => Boolean(x.classId))
+
+      if (penempatanLama.length > 0) {
+        const res = await prisma.classStudent.createMany({
+          data: penempatanLama,
+          skipDuplicates: true,
+        })
+        ditempatkanLama = res.count
+      }
+    }
+
+    if (toInsert.length === 0 && ditempatkanLama === 0) {
+      return {
+        error:
+          'Tidak ada data baru yang dapat diimpor (semua username sudah terdaftar atau format kosong).',
+        rombelTidakDikenal: Array.from(rombelTidakDikenal),
+      }
+    }
 
     revalidatePath('/', 'layout')
-    return { success: true, count: toInsert.length, skipped: skippedCount }
+    return {
+      success: true,
+      count: toInsert.length,
+      skipped: skippedCount,
+      ditempatkan,
+      ditempatkanLama,
+      rombelTidakDikenal: Array.from(rombelTidakDikenal),
+    }
   } catch (err) {
     return gagal(err)
   }
+}
+
+/**
+ * Daftar rombel ringkas untuk dropdown dan templat impor. Sengaja terpisah
+ * dari `getClasses()` yang memuat relasi berat.
+ */
+export async function getClassOptions() {
+  const session = await optionalSession('ADMIN', 'TEACHER')
+  if (!session) return []
+
+  return await prisma.class.findMany({
+    select: {
+      id: true,
+      name: true,
+      level: true,
+      _count: { select: { students: true } },
+    },
+    orderBy: { name: 'asc' },
+  })
 }
 
 // ==========================================

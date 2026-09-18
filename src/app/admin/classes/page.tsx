@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Plus, Trash2, School, Loader2, Users, UserPlus, UserMinus, X, ChevronRight } from "lucide-react"
-import { getClasses, getTeachers, createClass, deleteClass, addStudentToClass, removeStudentFromClass, getStudentsWithoutClass, getClassStudents, getAllStudents } from "@/app/actions/admin"
+import { getClasses, getTeachers, createClass, deleteClass, addStudentToClass, addStudentsToClass, removeStudentFromClass, getStudentsWithoutClass, getClassStudents, getAllStudents } from "@/app/actions/admin"
 
 export default function AdminClassesPage() {
   const [classes, setClasses] = useState<any[]>([])
@@ -19,6 +19,11 @@ export default function AdminClassesPage() {
   const [unassignedStudents, setUnassignedStudents] = useState<any[]>([])
   const [allStudents, setAllStudents] = useState<any[]>([])
   const [selectedStudentToAdd, setSelectedStudentToAdd] = useState("")
+  // Penempatan massal: kumpulan id siswa yang dicentang, plus kata kunci
+  // pencarian. Dengan ratusan siswa belum punya rombel, menambah satu per satu
+  // tidak masuk akal.
+  const [bulkPicked, setBulkPicked] = useState<Set<string>>(new Set())
+  const [bulkSearch, setBulkSearch] = useState("")
   const [manageSaving, setManageSaving] = useState(false)
 
   // Form State
@@ -77,6 +82,8 @@ export default function AdminClassesPage() {
     setClassStudentsList(students)
     setUnassignedStudents(unassigned)
     setAllStudents(all)
+    setBulkPicked(new Set())
+    setBulkSearch("")
     setManageSaving(false)
   }
 
@@ -97,6 +104,36 @@ export default function AdminClassesPage() {
     setSelectedStudentToAdd("")
     setManageSaving(false)
     loadData()
+  }
+
+  const handleAddStudentsBulk = async () => {
+    if (bulkPicked.size === 0 || !manageClassId) return
+    setManageSaving(true)
+    const res = await addStudentsToClass(Array.from(bulkPicked), manageClassId)
+
+    if (res.error) {
+      alert(res.error)
+    }
+
+    const [students, unassigned] = await Promise.all([
+      getClassStudents(manageClassId),
+      getStudentsWithoutClass()
+    ])
+    setClassStudentsList(students)
+    setUnassignedStudents(unassigned)
+    setBulkPicked(new Set())
+    setBulkSearch("")
+    setManageSaving(false)
+    loadData()
+  }
+
+  const toggleBulk = (id: string) => {
+    setBulkPicked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const handleRemoveStudent = async (userId: string) => {
@@ -283,6 +320,104 @@ export default function AdminClassesPage() {
                 </button>
               </div>
             </div>
+
+            {/* Penempatan massal */}
+            {unassignedStudents.length > 0 && (
+              <div className="flex flex-col gap-2 p-3 rounded-2xl bg-blue-50/60 border border-blue-200/80">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    Tempatkan Banyak Siswa Sekaligus
+                  </h4>
+                  <span className="text-[10px] font-bold text-blue-700 bg-white border border-blue-200 px-2 py-0.5 rounded-full shrink-0">
+                    {unassignedStudents.length} belum punya rombel
+                  </span>
+                </div>
+
+                <input
+                  value={bulkSearch}
+                  onChange={e => setBulkSearch(e.target.value)}
+                  placeholder="Cari nama atau username siswa..."
+                  className="px-2.5 py-2 bg-white border border-blue-200 rounded-xl text-xs outline-none focus:border-blue-500"
+                />
+
+                {(() => {
+                  const q = bulkSearch.trim().toLowerCase()
+                  const daftar = unassignedStudents.filter((s: any) =>
+                    !q ||
+                    (s.name || "").toLowerCase().includes(q) ||
+                    (s.username || "").toLowerCase().includes(q)
+                  )
+
+                  return (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBulkPicked(new Set(daftar.map((s: any) => s.id)))}
+                          className="text-[10px] font-bold text-blue-700 bg-white border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-100 transition"
+                        >
+                          Pilih semua {q && "hasil pencarian"} ({daftar.length})
+                        </button>
+                        {bulkPicked.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setBulkPicked(new Set())}
+                            className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
+                          >
+                            Kosongkan pilihan
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="max-h-44 overflow-y-auto rounded-xl bg-white border border-blue-200 divide-y divide-slate-100">
+                        {daftar.length === 0 ? (
+                          <p className="p-3 text-[11px] text-slate-400 italic text-center">
+                            Tidak ada siswa yang cocok.
+                          </p>
+                        ) : (
+                          daftar.map((s: any) => (
+                            <label
+                              key={s.id}
+                              className="flex items-center gap-2 px-2.5 py-2 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={bulkPicked.has(s.id)}
+                                onChange={() => toggleBulk(s.id)}
+                              />
+                              <span className="text-[11px] text-slate-800 font-semibold truncate">
+                                {s.name}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400 truncate">
+                                @{s.username}
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )
+                })()}
+
+                <button
+                  onClick={handleAddStudentsBulk}
+                  disabled={bulkPicked.size === 0 || manageSaving}
+                  className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-40"
+                >
+                  {manageSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {bulkPicked.size > 0
+                      ? `Tempatkan ${bulkPicked.size} siswa ke ${manageClassName}`
+                      : "Pilih siswa dulu"}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Student List */}
             <div className="flex flex-col gap-2">
