@@ -217,6 +217,14 @@ export async function getSystemHealth() {
       href: '/admin/attendance-settings',
     },
     {
+      key: 'jenis-pelanggaran',
+      label: 'Jenis & poin pelanggaran',
+      count: 0,
+      severity: 'info',
+      hint: 'Atur sendiri jenis pelanggaran beserta poinnya; dipakai guru saat mencatat dan dibaca siswa di Buku Disiplin.',
+      href: '/admin/pelanggaran',
+    },
+    {
       key: 'token-cbt',
       label: 'Token CBT global',
       count: h.tokenCbtAda > 0 ? 0 : 1,

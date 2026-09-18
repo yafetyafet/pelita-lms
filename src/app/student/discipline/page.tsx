@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getStudentViolations } from "@/app/actions/student"
+import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
 import { 
   ArrowLeft, 
   ShieldCheck, 
@@ -14,12 +15,18 @@ import {
 
 export default function DisciplinePage() {
   const [violations, setViolations] = useState<any[]>([])
+  const [rules, setRules] = useState<JenisPelanggaran[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const data = await getStudentViolations()
+      // Daftar acuan dibaca dari pengaturan admin, bukan ditulis di kode.
+      const [data, jenis] = await Promise.all([
+        getStudentViolations(),
+        getViolationCategories()
+      ])
       setViolations(data)
+      setRules(jenis)
       setIsLoading(false)
     }
     load()
@@ -38,12 +45,9 @@ export default function DisciplinePage() {
   const points = Math.max(0, 100 - totalDeductions)
   const predikat = points >= 90 ? "A" : points >= 75 ? "B" : points >= 60 ? "C" : "D"
 
-  const rules = [
-    { title: "Keterlambatan Hadir (> 07:15 WIB)", deduction: "-5 Poin" },
-    { title: "Meninggalkan Kelas Tanpa Izin Guru", deduction: "-10 Poin" },
-    { title: "Ketidaklengkapan Seragam & Atribut", deduction: "-5 Poin" },
-    { title: "Kecurangan Akademik / Ujian", deduction: "-25 Poin" },
-  ]
+  // Daftar acuan sebelumnya ditulis mati di sini, terpisah dari dropdown
+  // guru — angka yang dilihat siswa bisa berbeda dari yang benar-benar
+  // dipakai saat mencatat pelanggaran.
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -128,12 +132,23 @@ export default function DisciplinePage() {
         </h3>
 
         <div className="flex flex-col gap-2">
-          {rules.map((r, idx) => (
-            <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-700 font-medium">{r.title}</span>
-              <span className="font-bold text-rose-600 shrink-0">{r.deduction}</span>
-            </div>
-          ))}
+          {rules.length === 0 ? (
+            <p className="text-[11px] text-slate-400 italic py-2 text-center">
+              Daftar poin pelanggaran belum diatur sekolah.
+            </p>
+          ) : (
+            rules.map((r) => (
+              <div key={r.nama} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-2 text-xs">
+                <span className="text-slate-700 font-medium">
+                  {r.nama}
+                  {r.kelompok && (
+                    <span className="text-slate-400 font-normal"> · {r.kelompok}</span>
+                  )}
+                </span>
+                <span className="font-bold text-rose-600 shrink-0">-{r.poin} Poin</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -72,6 +72,7 @@ export default function AdminDashboard() {
     { id: "jadwal", title: "Plotting Jadwal Mandiri Guru", desc: "Guru Mapel Menginput Jadwal Sendiri", icon: Calendar },
     { id: "attendance-settings", title: "Aturan Presensi (GPS)", desc: "Set Titik Koordinat & Radius Absen", icon: MapPin },
     { id: "ujian", title: "Jadwal & Token Ujian PTS CBT", desc: "Pengaturan Token & Ruang CBT", icon: BookOpen },
+    { id: "pelanggaran", title: "Kesiswaan & Catatan Pelanggaran", desc: "Atur Jenis, Poin & Tindak Lanjut", icon: AlertTriangle },
     { id: "library", title: "Perpustakaan Digital", desc: "Isi Koleksi Buku yang Dibaca Siswa", icon: BookMarked },
     { id: "pkl", title: "PKL / Prakerin & Mitra DUDI", desc: "Mitra Industri & Penempatan Siswa", icon: Building2 },
     { id: "backup", title: "Backup Database Supabase", desc: "Sinkronisasi & Snapshot Data", icon: Database },

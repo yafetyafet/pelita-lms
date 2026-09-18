@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
 import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
+import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
 import { 
   Bell, 
   BookOpen, 
@@ -36,14 +37,20 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     async function loadUser() {
-      const [user, cls, mats] = await Promise.all([
+      const [user, cls, mats, jenis] = await Promise.all([
         getCurrentUser(),
         getTeacherClasses(),
-        getTeacherMaterials()
+        getTeacherMaterials(),
+        getViolationCategories()
       ])
       if (user) setCurrentUser(user)
       setTeacherClasses(cls)
       setMaterials(mats)
+      setJenisPelanggaran(jenis)
+      if (jenis.length > 0) {
+        setViolationType(jenis[0].nama)
+        setViolationPoints(jenis[0].poin)
+      }
       setHasLoadedUser(true)
     }
     loadUser()
@@ -70,8 +77,12 @@ export default function TeacherDashboard() {
 
   // State Pelanggaran
   const [selectedStudentId, setSelectedStudentId] = useState("")
-  const [violationType, setViolationType] = useState("Keterlambatan Hadir (> 07:15 WIB)")
-  const [violationPoints, setViolationPoints] = useState(5)
+  // Jenis pelanggaran dibaca dari pengaturan admin. Sebelumnya empat jenis
+  // beserta poinnya ditulis mati di dropdown ini DAN di halaman disiplin
+  // siswa — dua daftar terpisah yang bisa tidak sinkron.
+  const [jenisPelanggaran, setJenisPelanggaran] = useState<JenisPelanggaran[]>([])
+  const [violationType, setViolationType] = useState("")
+  const [violationPoints, setViolationPoints] = useState(0)
   const [violationClassId, setViolationClassId] = useState("")
   const [violationSaving, setViolationSaving] = useState(false)
 
@@ -138,7 +149,8 @@ export default function TeacherDashboard() {
     const res = await createViolation({
       studentId: selectedStudentId,
       description: violationType,
-      points: violationPoints
+      points: violationPoints,
+      category: jenisPelanggaran.find(x => x.nama === violationType)?.kelompok
     })
     setViolationSaving(false)
     if (res.error) {
@@ -185,6 +197,7 @@ export default function TeacherDashboard() {
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
     { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
     { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
+    { id: "riwayat-pelanggaran", title: "Riwayat Pelanggaran", desc: "Tindak Lanjut Laporan Saya", icon: AlertOctagon, color: "from-red-600 to-rose-700", count: null, href: "/teacher/pelanggaran" },
     { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
     { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
   ]
@@ -637,18 +650,22 @@ export default function TeacherDashboard() {
                 <select
                   value={violationType}
                   onChange={(e) => {
+                    // Poin mengikuti jenis yang dipilih; tidak lagi ditebak
+                    // dari potongan teks namanya.
                     setViolationType(e.target.value)
-                    if (e.target.value.includes("Keterlambatan")) setViolationPoints(5)
-                    else if (e.target.value.includes("Meninggalkan")) setViolationPoints(10)
-                    else if (e.target.value.includes("Seragam")) setViolationPoints(5)
-                    else setViolationPoints(25)
+                    const j = jenisPelanggaran.find(x => x.nama === e.target.value)
+                    if (j) setViolationPoints(j.poin)
                   }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
                 >
-                  <option value="Keterlambatan Hadir (> 07:15 WIB)">Keterlambatan Hadir (&gt; 07:15 WIB) (-5 Poin)</option>
-                  <option value="Ketidaklengkapan Seragam / Atribut">Ketidaklengkapan Seragam / Atribut (-5 Poin)</option>
-                  <option value="Meninggalkan Kelas Tanpa Izin">Meninggalkan Kelas Tanpa Izin (-10 Poin)</option>
-                  <option value="Kecurangan Akademik / Ujian">Kecurangan Akademik / Ujian (-25 Poin)</option>
+                  {jenisPelanggaran.length === 0 && (
+                    <option value="">Belum ada jenis pelanggaran</option>
+                  )}
+                  {jenisPelanggaran.map((j) => (
+                    <option key={j.nama} value={j.nama}>
+                      {j.nama} (-{j.poin} Poin){j.kelompok ? ` · ${j.kelompok}` : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
 
