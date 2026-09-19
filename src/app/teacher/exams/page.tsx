@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { getTeacherClasses, getTeacherExams, createExam, deleteExam } from "@/app/actions/teacher"
+import { getTeacherClasses, getTeacherExams, createExam, deleteExam, updateExamSettings } from "@/app/actions/teacher"
 import { 
   ArrowLeft, 
   Plus, 
@@ -549,6 +549,47 @@ export default function TeacherExamsPage() {
     }
   }
 
+  // Status terbit sebelumnya hanya berupa label di daftar ujian; satu-satunya
+  // cara menerbitkan adalah membuka Kelola lalu menggeser sakelar di sana.
+  // Sekarang labelnya menjadi tombol.
+  const [publishing, setPublishing] = useState<string | null>(null)
+  const [pesanTerbit, setPesanTerbit] = useState("")
+
+  const handleTogglePublish = async (exam: any) => {
+    const menerbitkan = !exam.isPublished
+
+    if (menerbitkan && (exam.questions?.length || 0) === 0) {
+      alert("Ujian ini belum punya soal, jadi belum bisa diterbitkan.")
+      return
+    }
+    if (
+      !menerbitkan &&
+      !confirm(
+        `Tarik kembali "${exam.title}" menjadi draf?\n\nUjian akan hilang dari perangkat siswa. Pengerjaan yang sudah masuk tidak terhapus.`
+      )
+    ) {
+      return
+    }
+
+    setPesanTerbit("")
+    setPublishing(exam.id)
+    const res = await updateExamSettings({ examId: exam.id, isPublished: menerbitkan })
+    setPublishing(null)
+
+    if (res.error) {
+      alert(res.error)
+      return
+    }
+
+    setPesanTerbit(
+      res.peringatan ||
+        (menerbitkan
+          ? `"${exam.title}" diterbitkan — sekarang tampil di perangkat siswa.`
+          : `"${exam.title}" ditarik kembali menjadi draf.`)
+    )
+    setExams(await getTeacherExams())
+  }
+
   const handleDeleteExam = async (examId: string) => {
     if (!confirm("Yakin hapus ujian ini?")) return
     await deleteExam(examId)
@@ -607,6 +648,21 @@ export default function TeacherExamsPage() {
           Daftar Ujian ({exams.length})
         </h3>
 
+        {pesanTerbit && (
+          <p className="text-[11px] font-semibold text-slate-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+            {pesanTerbit}
+          </p>
+        )}
+
+        {exams.length > 0 && exams.some((e: any) => !e.isPublished) && (
+          <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
+            Ujian berstatus <strong>DRAF</strong> tidak tampil di perangkat siswa.
+            Klik labelnya untuk menerbitkan. Pastikan tokennya sudah diisi —
+            lewat <strong>Kelola</strong> untuk token khusus ujian, atau menu admin
+            untuk token CBT global.
+          </p>
+        )}
+
         {exams.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 italic flex flex-col items-center gap-2">
             <FileText className="w-8 h-8 text-slate-300" />
@@ -619,14 +675,28 @@ export default function TeacherExamsPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <h4 className="text-xs font-bold text-slate-900">{exam.title}</h4>
-                    {/* Status terbit menentukan apakah siswa bisa melihat ujian. */}
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      exam.isPublished
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-200 text-slate-600"
-                    }`}>
-                      {exam.isPublished ? "TERBIT" : "DRAF"}
-                    </span>
+                    {/* Status terbit menentukan apakah siswa bisa melihat
+                        ujian — jadi dibuat bisa diklik langsung di sini. */}
+                    <button
+                      onClick={() => handleTogglePublish(exam)}
+                      disabled={publishing === exam.id}
+                      title={
+                        exam.isPublished
+                          ? "Klik untuk menarik kembali menjadi draf"
+                          : "Klik untuk menerbitkan agar tampil di perangkat siswa"
+                      }
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded border transition disabled:opacity-50 ${
+                        exam.isPublished
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200"
+                          : "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+                      }`}
+                    >
+                      {publishing === exam.id
+                        ? "..."
+                        : exam.isPublished
+                          ? "TERBIT"
+                          : "DRAF · klik untuk terbitkan"}
+                    </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-0.5">
                     {exam.classInfo?.name} • {exam.subject?.name}
