@@ -729,6 +729,12 @@ export async function getExamPaper(
   sisaDetik: number
   questions: unknown[]
   exam: { id: string; title: string; duration: number; type: string }
+  /**
+   * Id pengerjaan milik siswa ini. Dipakai browser sebagai kunci simpanan
+   * jawaban sementara, supaya jawaban tidak tertukar bila satu perangkat
+   * dipakai bergantian oleh beberapa siswa.
+   */
+  submissionId: string
 }>> {
   try {
     const session = await requireSession('STUDENT')
@@ -788,6 +794,7 @@ export async function getExamPaper(
       // Kunci jawaban dibuang sebelum dikirim ke browser.
       questions: tanpaKunci(urut),
       sisaDetik: kelayakan.sisaDetik,
+      submissionId: submission.id,
       exam: {
         id: exam.id,
         title: exam.title,
