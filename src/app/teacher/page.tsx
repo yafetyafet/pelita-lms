@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
+import { LayananGrid } from "@/components/LayananGrid"
 import { getCurrentUser, logout } from "@/app/actions/auth"
 import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
 import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
@@ -19,6 +20,7 @@ import {
   MapPin, 
   ChevronRight,
   Sparkles,
+  Sprout,
   Award,
   Clock,
   Send,
@@ -194,6 +196,10 @@ export default function TeacherDashboard() {
 
   const teacherMenus = [
     { id: "jurnal", title: "Jurnal Mengajar", desc: "Isi Administrasi", icon: PenTool, color: "from-emerald-600 to-teal-600", count: "Wajib", href: "/teacher/journal" },
+    // Siswa punya menu "Tugas & Kuis" sejak awal, tapi guru tidak punya satu
+    // pun pintu untuk membuatnya - createAssignment tidak pernah dipanggil
+    // dari halaman mana pun.
+    { id: "tugas", title: "Beri Tugas", desc: "Buat & nilai tugas", icon: FileText, color: "from-green-600 to-emerald-700", count: null, href: "/teacher/assignments" },
     { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, action: "scroll-materi" },
     { id: "absensi", title: "Presensi Kelas", desc: "Input Hadir/Sakit/Izin", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/attendance" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
@@ -203,6 +209,7 @@ export default function TeacherDashboard() {
     { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
     { id: "cetak", title: "Cetak Laporan", desc: "Jurnal, Nilai & Kehadiran", icon: Printer, color: "from-slate-600 to-slate-800", count: null, href: "/teacher/cetak" },
     { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
+    { id: "pembiasaan", title: "Pembiasaan Kelas", desc: "Jurnal anak wali", icon: Sprout, color: "from-teal-600 to-emerald-700", count: null, href: "/teacher/pembiasaan" },
   ]
 
   return (
@@ -352,61 +359,29 @@ export default function TeacherDashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2.5">
-          {teacherMenus.map((menu) => {
-            const Icon = menu.icon
-
-            const handleClick = () => {
-              if (menu.action === "modal-violation") {
-                setShowViolationModal(true)
-              } else if (menu.action === "scroll-materi") {
-                const el = document.getElementById("materi-section")
-                el?.scrollIntoView({ behavior: "smooth" })
-              }
-            }
-
-            if (menu.href) {
-              return (
-                <Link
-                  key={menu.id}
-                  href={menu.href}
-                  className="group flex flex-col items-center text-center p-2 rounded-2xl bg-white border border-slate-200/70 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95"
-                >
-                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${menu.color} flex items-center justify-center text-white shadow-sm shadow-slate-300 group-hover:scale-105 transition-transform mb-1.5`}>
-                    <Icon className="w-5 h-5 stroke-[2.2px]" />
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-800 leading-tight line-clamp-1">
-                    {menu.title}
-                  </span>
-                  <span className="text-[9px] text-slate-400 mt-0.5 line-clamp-1 font-medium">
-                    {/* `desc` sebelumnya tidak pernah tampil karena kartu hanya
-                        merender `count`, sehingga sebagian besar kartu terlihat
-                        tanpa keterangan apa pun. */}
-                    {menu.count || menu.desc}
-                  </span>
-                </Link>
-              )
-            }
-
-            return (
-              <button
-                key={menu.id}
-                onClick={handleClick}
-                className="group flex flex-col items-center text-center p-2 rounded-2xl bg-white border border-slate-200/70 hover:border-emerald-300 hover:shadow-md transition-all active:scale-95"
-              >
-                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${menu.color} flex items-center justify-center text-white shadow-sm shadow-slate-300 group-hover:scale-105 transition-transform mb-1.5`}>
-                  <Icon className="w-5 h-5 stroke-[2.2px]" />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight line-clamp-1">
-                  {menu.title}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5 line-clamp-1 font-medium">
-                  {menu.count || menu.desc}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        <LayananGrid
+          accent="emerald"
+          items={teacherMenus.map((menu) => ({
+            id: menu.id,
+            title: menu.title,
+            // `desc` sebelumnya tidak pernah tampil karena kartu hanya
+            // merender `count`, sehingga sebagian besar kartu terlihat tanpa
+            // keterangan apa pun.
+            subtitle: menu.count || menu.desc,
+            icon: menu.icon,
+            color: menu.color,
+            href: menu.href,
+            onClick:
+              menu.action === "modal-violation"
+                ? () => setShowViolationModal(true)
+                : menu.action === "scroll-materi"
+                  ? () =>
+                      document
+                        .getElementById("materi-section")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                  : undefined,
+          }))}
+        />
       </div>
 
       {/* Fitur Upload Materi + Daftar Materi Terupload */}

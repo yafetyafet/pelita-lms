@@ -309,15 +309,24 @@ model Violation {
   @@index([studentId, createdAt])
 }
 
+/// Jurnal pembiasaan harian siswa.
+///
+/// Semula bernama "Jurnal Iman" dan hanya menampung kegiatan ibadah. Di SMK
+/// negeri dengan siswa lintas agama cakupan itu terlalu sempit, sehingga
+/// kolom `category` ditambahkan agar jurnal yang sama menampung pembiasaan
+/// ibadah, literasi, kebersihan, dan kegiatan sosial. Nama modelnya
+/// dipertahankan supaya tidak perlu memindahkan tabel.
 model SpiritualJournal {
   id        String   @id @default(uuid())
   userId    String
+  category  String   @default("Ibadah")
   activity  String
   notes     String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 // =====================================================

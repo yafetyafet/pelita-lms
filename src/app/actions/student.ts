@@ -662,6 +662,21 @@ export async function getStudentViolations() {
   })
 }
 
+/**
+ * Kategori pembiasaan yang boleh dipilih siswa.
+ *
+ * Dulu jurnal ini khusus ibadah ("Jurnal Iman"). Di SMK negeri dengan siswa
+ * lintas agama, cakupan itu menyisihkan sebagian siswa; kategori di bawah
+ * membuat pembiasaan literasi, kebersihan, dan kegiatan sosial ikut tercatat
+ * di jurnal yang sama.
+ */
+export const KATEGORI_PEMBIASAAN = [
+  'Ibadah',
+  'Literasi',
+  'Kebersihan',
+  'Sosial',
+] as const
+
 export async function getSpiritualJournals() {
   const session = await optionalSession('STUDENT')
   if (!session) return []
@@ -669,20 +684,31 @@ export async function getSpiritualJournals() {
   return await prisma.spiritualJournal.findMany({
     where: { userId: session.uid },
     orderBy: { createdAt: 'desc' },
+    take: 100,
   })
 }
 
 export async function createSpiritualJournal(data: {
   activity: string
   notes: string
+  category?: string
 }): Promise<AksiHasil> {
   try {
     const session = await requireSession('STUDENT')
     if (!data.activity?.trim()) return { error: 'Kegiatan harus diisi.' }
 
+    // Kategori divalidasi di server: nilai bebas dari klien akan membuat
+    // rekap wali kelas menampilkan kategori yang tidak dikenal.
+    const kategori = (KATEGORI_PEMBIASAAN as readonly string[]).includes(
+      data.category || ''
+    )
+      ? (data.category as string)
+      : 'Ibadah'
+
     await prisma.spiritualJournal.create({
       data: {
         userId: session.uid,
+        category: kategori,
         activity: data.activity.trim(),
         notes: data.notes?.trim() || null,
       },

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
+import { LayananGrid } from "@/components/LayananGrid"
 import { submitAttendance, submitCheckOut, getStudentHome } from "@/app/actions/student"
 import { logout } from "@/app/actions/auth"
 import { markAllBroadcastsRead } from "@/app/actions/broadcast"
@@ -17,6 +18,7 @@ import {
   Timer, 
   MessageSquareText, 
   Sparkles, 
+  Sprout,
   BookMarked, 
   AlertTriangle,
   ChevronRight,
@@ -191,13 +193,13 @@ export default function StudentDashboard() {
       href: "/student/pkl"
     },
     { 
-      id: "iman", 
-      title: "Jurnal Iman", 
-      subtitle: "Ibadah & Karakter", 
-      icon: Sparkles, 
+      id: "pembiasaan", 
+      title: "Pembiasaan", 
+      subtitle: "Ibadah, Literasi, Sosial", 
+      icon: Sprout, 
       color: "from-teal-500 to-emerald-600", 
       badge: null,
-      href: "/student/jurnal-iman"
+      href: "/student/pembiasaan"
     },
     { 
       id: "perpus", 
@@ -403,35 +405,7 @@ export default function StudentDashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-4 gap-2.5">
-          {appMenus.map((menu) => {
-            const Icon = menu.icon
-            return (
-              <Link
-                key={menu.id}
-                href={menu.href}
-                className="group flex flex-col items-center text-center p-2 rounded-2xl bg-white border border-slate-200/70 hover:border-blue-300 hover:shadow-md transition-all active:scale-95"
-              >
-                <div className="relative mb-1.5">
-                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${menu.color} flex items-center justify-center text-white shadow-sm shadow-slate-300 group-hover:scale-105 transition-transform`}>
-                    <Icon className="w-5 h-5 stroke-[2.2px]" />
-                  </div>
-                  {menu.badge && (
-                    <span className="absolute -top-1 -right-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-red-500 text-white shadow-sm">
-                      {menu.badge}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] font-semibold text-slate-800 leading-tight line-clamp-1">
-                  {menu.title}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5 line-clamp-1">
-                  {menu.subtitle}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
+        <LayananGrid accent="blue" items={appMenus} />
       </div>
 
       {/* Jadwal Pelajaran Hari Ini */}
