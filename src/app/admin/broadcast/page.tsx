@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { ArrowLeft, Bell, Send, CheckCircle2, Megaphone, Users, Clock, Loader2 } from "lucide-react"
 import { getBroadcasts, createBroadcast } from "@/app/actions/admin"
@@ -146,10 +147,7 @@ export default function AdminBroadcastPage() {
         </h3>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs">Memuat riwayat...</span>
-          </div>
+          <PemuatData pesan="Memuat riwayat..." />
         ) : history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-slate-400">
             <Bell className="w-8 h-8 mb-2 opacity-50" />

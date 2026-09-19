@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { ArrowLeft, Calendar, Plus, Trash2, ShieldCheck, Loader2, X, Flag } from "lucide-react"
+import { ArrowLeft, Calendar, Plus, Trash2, ShieldCheck,  X, Flag } from "lucide-react"
 import { getSchedules, createScheduleAdmin, deleteScheduleAdmin, getClasses, getTeachers, getSubjects, getSessions, getAppSetting, setAppSetting } from "@/app/actions/admin"
 
 export default function AdminJadwalPage() {
@@ -183,10 +184,7 @@ export default function AdminJadwalPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-8 flex flex-col items-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs">Memuat jadwal...</span>
-          </div>
+          <PemuatData pesan="Memuat jadwal..." />
         ) : schedules.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 italic flex flex-col items-center gap-2">
             <Calendar className="w-8 h-8 text-slate-300" />

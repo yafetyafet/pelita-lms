@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { ArrowLeft, Plus, Trash2, School, Loader2, Users, UserPlus, UserMinus, X, ChevronRight, UserCog, Save, AlertTriangle } from "lucide-react"
 import { getClasses, getTeachers, createClass, updateClass, deleteClass, addStudentToClass, addStudentsToClass, removeStudentFromClass, getStudentsWithoutClass, getClassStudents, getAllStudents } from "@/app/actions/admin"
@@ -273,10 +274,7 @@ export default function AdminClassesPage() {
       {/* Classes List */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="p-8 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs font-medium">Memuat data kelas...</span>
-          </div>
+          <PemuatData pesan="Memuat data kelas..." />
         ) : classes.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 italic">Belum ada kelas yang terdaftar.</div>
         ) : (

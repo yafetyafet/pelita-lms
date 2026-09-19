@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { getCurrentUser, logout } from "@/app/actions/auth"
 import { GantiSandiForm } from "@/components/GantiSandiForm"
@@ -10,7 +11,6 @@ import {
   LogOut, 
   CheckCircle2,
   Smartphone,
-  Loader2
 } from "lucide-react"
 
 export default function StudentProfilePage() {
@@ -28,10 +28,7 @@ export default function StudentProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-        <span className="text-xs text-slate-500">Memuat profil...</span>
-      </div>
+      <PemuatData pesan="Memuat profil..." />
     )
   }
 

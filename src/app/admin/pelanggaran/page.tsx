@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -131,10 +132,7 @@ export default function AdminPelanggaranPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-red-600" />
-        <span className="text-xs text-slate-500">Memuat data kesiswaan...</span>
-      </div>
+      <PemuatData pesan="Memuat data kesiswaan..." />
     )
   }
 

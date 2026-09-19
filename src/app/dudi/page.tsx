@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import { getCurrentUser, logout } from "@/app/actions/auth"
 import { getMentorDashboard, verifyPklJournal } from "@/app/actions/pkl"
 import { getMyBroadcasts } from "@/app/actions/broadcast"
@@ -69,10 +70,7 @@ export default function DudiDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-        <span className="text-xs text-slate-500">Memuat data bimbingan...</span>
-      </div>
+      <PemuatData pesan="Memuat data bimbingan..." />
     )
   }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -280,12 +281,7 @@ export default function ExamsCBTPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
-        <span className="text-sm font-bold text-slate-600">
-          Memuat Jadwal Ujian CBT...
-        </span>
-      </div>
+      <PemuatData pesan="Memuat Jadwal Ujian CBT..." />
     )
   }
 

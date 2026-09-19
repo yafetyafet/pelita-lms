@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
   Sprout,
-  Loader2,
   ChevronDown,
   ChevronUp,
   Info,
@@ -63,10 +63,7 @@ export default function TeacherPembiasaanPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-        <span className="text-xs text-slate-500">Memuat pembiasaan kelas...</span>
-      </div>
+      <PemuatData pesan="Memuat pembiasaan kelas..." />
     )
   }
 

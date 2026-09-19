@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { getStudentViolations } from "@/app/actions/student"
 import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
@@ -10,7 +11,6 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Sparkles,
-  Loader2
 } from "lucide-react"
 
 export default function DisciplinePage() {
@@ -34,10 +34,7 @@ export default function DisciplinePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-        <span className="text-xs text-slate-500">Memuat data disiplin...</span>
-      </div>
+      <PemuatData pesan="Memuat data disiplin..." />
     )
   }
 

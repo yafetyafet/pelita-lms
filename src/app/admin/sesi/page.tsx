@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { ArrowLeft, Clock, Plus, Trash2, X, Loader2 } from "lucide-react"
+import { ArrowLeft, Clock, Plus, Trash2, X } from "lucide-react"
 import { getSessions, createSession, deleteSession } from "@/app/actions/admin"
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"]
@@ -187,10 +188,7 @@ export default function AdminSesiPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-8 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs">Memuat sesi dari database...</span>
-          </div>
+          <PemuatData pesan="Memuat sesi dari database..." />
         ) : filteredSesi.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 italic flex flex-col items-center gap-2">
             <Clock className="w-8 h-8 text-slate-300" />

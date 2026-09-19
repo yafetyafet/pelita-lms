@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { login } from "@/app/actions/auth"
 import { 
@@ -59,14 +60,26 @@ export default function LoginPage() {
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mt-2 mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/30 ring-4 ring-blue-500/20 mb-3">
-            P
+          {/* Lambang sekolah menggantikan kotak berhuruf "P" yang sebelumnya
+              menjadi penanda sementara. Latar putih lembut dipakai agar warna
+              biru-jingga lambang tetap terbaca di atas kartu gelap. */}
+          <div className="w-16 h-16 rounded-2xl bg-white/95 flex items-center justify-center shadow-lg shadow-blue-500/30 ring-4 ring-blue-500/20 mb-3 p-1.5">
+            <Image
+              src="/logo-pelita.png"
+              alt="Logo PELITA"
+              width={56}
+              height={56}
+              priority
+            />
           </div>
           <h1 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-1.5">
             PELITA <span className="text-blue-500">LMS</span>
           </h1>
           <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-            Pusat Ekselensi, Literasi, Iman, Teknologi dan Akademik
+            Platform Edukasi, Layanan Informasi, dan Tata Kelola Akademik
+          </p>
+          <p className="text-[11px] text-blue-300/90 italic mt-0.5">
+            Menerangi Jalan Pendidikan
           </p>
           <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] text-blue-300 font-semibold">
             <Sparkles className="w-3 h-3 text-blue-400" />

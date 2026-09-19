@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -273,10 +274,7 @@ export default function AdminAttendanceSettingsPage() {
         </div>
 
         {isLoading ? (
-          <div className="py-10 flex flex-col items-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-emerald-500" />
-            <span className="text-xs">Memuat pengaturan...</span>
-          </div>
+          <PemuatData pesan="Memuat pengaturan..." />
         ) : (
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             {error && (

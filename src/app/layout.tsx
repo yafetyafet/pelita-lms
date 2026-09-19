@@ -10,12 +10,18 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "PELITA - LMS Mobile SMKN 1 Kemangkon",
-  description: "Pusat Ekselensi, Literasi, Iman, Teknologi dan Akademik",
+  title: "PELITA - LMS SMKN 1 Kemangkon",
+  description: "Platform Edukasi, Layanan Informasi, dan Tata Kelola Akademik",
+  // Ikon aplikasi sebelumnya memakai globe.svg bawaan Next.js, sehingga
+  // pintasan di layar utama ponsel tidak mengenali sekolah sama sekali.
+  icons: {
+    icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PELITA LMS",
+    title: "PELITA",
   },
 };
 
@@ -25,7 +31,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#2563eb",
+  themeColor: "#1e4d8b",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { 
   ArrowLeft, MessageSquare, Users, Sparkles, Send, BookOpen, Loader2, Plus, MessageCircle 
@@ -84,10 +85,7 @@ export default function TeacherForumPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm">
-          <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
-          <span className="text-sm font-bold text-slate-600">Memuat Diskusi...</span>
-        </div>
+        <PemuatData pesan="Memuat Diskusi..." />
       ) : discussions.length === 0 ? (
         <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-sm flex flex-col items-center text-center gap-4">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center">
