@@ -1571,7 +1571,7 @@ export async function getTeacherSchedules() {
   const session = await optionalSession('TEACHER', 'ADMIN')
   if (!session) return []
 
-  return await prisma.schedule.findMany({
+  const jadwal = await prisma.schedule.findMany({
     where: session.role === 'ADMIN' ? {} : { teacherId: session.uid },
     include: {
       classInfo: { select: { id: true, name: true } },
@@ -1580,6 +1580,221 @@ export async function getTeacherSchedules() {
     },
     orderBy: [{ day: 'asc' }, { sessionStart: 'asc' }],
   })
+
+  // Satu baris jadwal bisa membentang beberapa jam pelajaran. Nama rentangnya
+  // diturunkan di sini supaya komponen klien tidak perlu memuat seluruh tabel
+  // sesi hanya untuk menampilkan "Jam 1 - Jam 3".
+  const sesi = await prisma.session.findMany({
+    select: { day: true, name: true, startTime: true, endTime: true, type: true },
+    orderBy: [{ startTime: 'asc' }],
+  })
+
+  return jadwal.map((j) => {
+    const tercakup = sesi.filter(
+      (x) =>
+        x.day === j.day &&
+        x.startTime >= j.sessionStart &&
+        x.endTime <= j.sessionEnd
+    )
+    const sesiLabel =
+      tercakup.length === 0
+        ? null
+        : tercakup.length === 1
+          ? tercakup[0].name
+          : `${tercakup[0].name} - ${tercakup[tercakup.length - 1].name}`
+
+    return {
+      ...j,
+      sesiLabel,
+      // Istirahat ikut tercakup dalam rentang waktu tapi bukan jam mengajar.
+      jumlahJam: tercakup.filter((x) => x.type !== 'Istirahat').length,
+    }
+  })
+}
+
+/**
+ * Jam pelajaran yang sudah ditetapkan admin (tabel `Session`).
+ *
+ * Guru butuh daftar ini supaya bisa memilih sesi yang tersedia alih-alih
+ * mengetik jam bebas. Hanya membaca, jadi aman dibuka untuk peran guru.
+ */
+export async function getJamPelajaran() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return []
+
+  return await prisma.session.findMany({
+    select: {
+      id: true,
+      day: true,
+      name: true,
+      startTime: true,
+      endTime: true,
+      type: true,
+      order: true,
+    },
+    orderBy: [{ day: 'asc' }, { order: 'asc' }, { startTime: 'asc' }],
+  })
+}
+
+/** Periksa tabrakan jadwal untuk satu rentang waktu. */
+async function cariBentrok(
+  day: string,
+  mulai: string,
+  selesai: string,
+  classId: string,
+  teacherId: string,
+  room?: string | null
+): Promise<string | null> {
+  const tumpang = {
+    day,
+    sessionStart: { lt: selesai },
+    sessionEnd: { gt: mulai },
+  }
+
+  const bentrokKelas = await prisma.schedule.findFirst({
+    where: { ...tumpang, classId },
+    include: { subject: { select: { name: true } } },
+  })
+  if (bentrokKelas) {
+    return `Kelas ini sudah terisi jam ${bentrokKelas.sessionStart}-${bentrokKelas.sessionEnd} (${bentrokKelas.subject?.name || bentrokKelas.label || 'lain'}).`
+  }
+
+  const bentrokGuru = await prisma.schedule.findFirst({
+    where: { ...tumpang, teacherId },
+    include: { classInfo: { select: { name: true } } },
+  })
+  if (bentrokGuru) {
+    return `Kamu sudah punya jadwal jam ${bentrokGuru.sessionStart}-${bentrokGuru.sessionEnd} di kelas ${bentrokGuru.classInfo.name}.`
+  }
+
+  if (room?.trim()) {
+    const bentrokRuang = await prisma.schedule.findFirst({
+      where: { ...tumpang, room: room.trim() },
+      include: { classInfo: { select: { name: true } } },
+    })
+    if (bentrokRuang) {
+      return `Ruang ${room.trim()} sedang dipakai kelas ${bentrokRuang.classInfo.name} pada jam tersebut.`
+    }
+  }
+
+  return null
+}
+
+/** Kebijakan admin: apakah guru boleh menjadwalkan dirinya sendiri. */
+async function penjadwalanMandiriDikunci(role: string): Promise<boolean> {
+  if (role !== 'TEACHER') return false
+  const kebijakan = await prisma.appSetting.findUnique({
+    where: { key: 'TEACHER_SELF_SCHEDULE' },
+  })
+  return kebijakan?.value === '0'
+}
+
+/**
+ * Buat jadwal mengajar dari sesi yang sudah disediakan admin.
+ *
+ * Sebelumnya guru mengetik jam mulai dan jam selesai secara bebas, sehingga
+ * jadwalnya kerap meleset beberapa menit dari jam pelajaran resmi sekolah dan
+ * tidak pernah terhubung ke tabel `Session` — kolom `sessionId` selalu kosong.
+ * Sekarang guru memilih sesi, dan jamnya diambil dari sesi itu di server.
+ *
+ * Beberapa sesi berurutan boleh dipilih sekaligus (mapel 2-3 jam pelajaran).
+ * Hasilnya tetap satu baris jadwal yang membentang dari sesi pertama sampai
+ * sesi terakhir, supaya presensi dan jurnal tidak terpecah-pecah.
+ */
+export async function createScheduleFromSessions(data: {
+  sessionIds: string[]
+  classId: string
+  subjectId?: string
+  room?: string
+}): Promise<AksiHasil<{ mulai: string; selesai: string }>> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await pastikanAksesKelas(session, data.classId, data.subjectId)
+
+    if (await penjadwalanMandiriDikunci(session.role)) {
+      return {
+        error:
+          'Penjadwalan mandiri oleh guru sedang dikunci admin. Hubungi admin untuk memplot jadwalmu.',
+      }
+    }
+
+    if (!data.sessionIds?.length) {
+      return { error: 'Pilih minimal satu jam pelajaran.' }
+    }
+
+    const sesi = await prisma.session.findMany({
+      where: { id: { in: data.sessionIds } },
+      orderBy: [{ order: 'asc' }, { startTime: 'asc' }],
+    })
+    if (sesi.length !== data.sessionIds.length) {
+      return { error: 'Ada jam pelajaran yang sudah dihapus admin. Muat ulang halaman.' }
+    }
+
+    // Semua sesi harus berada di hari yang sama; kalau tidak, rentang
+    // jamnya tidak bermakna.
+    const hari = sesi[0].day
+    if (sesi.some((x) => x.day !== hari)) {
+      return { error: 'Jam pelajaran yang dipilih harus berada di hari yang sama.' }
+    }
+
+    const mulai = sesi[0].startTime
+    const selesai = sesi[sesi.length - 1].endTime
+    if (selesai <= mulai) {
+      return { error: 'Rentang jam pelajaran tidak valid.' }
+    }
+
+    // Sesi yang dipilih harus berurutan tanpa lompat. Kalau ada jam
+    // pelajaran lain yang terlewat di tengah, jadwalnya akan menutupi jam
+    // itu juga tanpa disadari guru.
+    //
+    // Istirahat dikecualikan: blok 2 jam pelajaran sering terpisah jam
+    // istirahat (mis. Jam 2 dan Jam 3 pada hari Senin), dan menolaknya akan
+    // memaksa guru memecah satu mapel menjadi dua entri tanpa alasan.
+    const terlewat = await prisma.session.findFirst({
+      where: {
+        day: hari,
+        startTime: { gte: mulai },
+        endTime: { lte: selesai },
+        id: { notIn: data.sessionIds },
+        type: { not: 'Istirahat' },
+      },
+      select: { name: true },
+    })
+    if (terlewat) {
+      return {
+        error: `Pilihan jam pelajaran harus berurutan — "${terlewat.name}" ada di tengah rentang tapi tidak ikut dipilih.`,
+      }
+    }
+
+    const bentrok = await cariBentrok(
+      hari,
+      mulai,
+      selesai,
+      data.classId,
+      session.uid,
+      data.room
+    )
+    if (bentrok) return { error: bentrok }
+
+    await prisma.schedule.create({
+      data: {
+        day: hari,
+        sessionStart: mulai,
+        sessionEnd: selesai,
+        classId: data.classId,
+        subjectId: data.subjectId || null,
+        // Menunjuk sesi pertama; rentang penuhnya diturunkan dari jam.
+        sessionId: sesi[0].id,
+        teacherId: session.uid,
+        room: data.room?.trim() || null,
+        type: sesi[0].type === 'Reguler' ? 'REGULAR' : sesi[0].type.toUpperCase(),
+      },
+    })
+
+    return { success: true, mulai, selesai }
+  } catch (err) {
+    return gagal(err)
+  }
 }
 
 export async function createSchedule(data: {
@@ -1599,15 +1814,10 @@ export async function createSchedule(data: {
 
     // Kebijakan "guru input jadwal mandiri" di menu admin sebelumnya hanya
     // tombol di layar tanpa efek apa pun. Sekarang benar-benar ditegakkan.
-    if (session.role === 'TEACHER') {
-      const kebijakan = await prisma.appSetting.findUnique({
-        where: { key: 'TEACHER_SELF_SCHEDULE' },
-      })
-      if (kebijakan?.value === '0') {
-        return {
-          error:
-            'Penjadwalan mandiri oleh guru sedang dikunci admin. Hubungi admin untuk memplot jadwalmu.',
-        }
+    if (await penjadwalanMandiriDikunci(session.role)) {
+      return {
+        error:
+          'Penjadwalan mandiri oleh guru sedang dikunci admin. Hubungi admin untuk memplot jadwalmu.',
       }
     }
 
@@ -1615,37 +1825,15 @@ export async function createSchedule(data: {
       return { error: 'Jam selesai harus setelah jam mulai.' }
     }
 
-    // Cegah dua jadwal saling tumpang tindih di kelas yang sama.
-    const bentrok = await prisma.schedule.findFirst({
-      where: {
-        day: data.day,
-        classId: data.classId,
-        sessionStart: { lt: data.sessionEnd },
-        sessionEnd: { gt: data.sessionStart },
-      },
-      include: { subject: { select: { name: true } } },
-    })
-    if (bentrok) {
-      return {
-        error: `Bentrok dengan jadwal ${bentrok.sessionStart}-${bentrok.sessionEnd} (${bentrok.subject?.name || bentrok.label || 'lain'}) di kelas ini.`,
-      }
-    }
-
-    // Guru yang sama tidak bisa mengajar dua kelas sekaligus.
-    const bentrokGuru = await prisma.schedule.findFirst({
-      where: {
-        day: data.day,
-        teacherId: session.uid,
-        sessionStart: { lt: data.sessionEnd },
-        sessionEnd: { gt: data.sessionStart },
-      },
-      include: { classInfo: { select: { name: true } } },
-    })
-    if (bentrokGuru) {
-      return {
-        error: `Kamu sudah punya jadwal jam ${bentrokGuru.sessionStart}-${bentrokGuru.sessionEnd} di kelas ${bentrokGuru.classInfo.name}.`,
-      }
-    }
+    const bentrok = await cariBentrok(
+      data.day,
+      data.sessionStart,
+      data.sessionEnd,
+      data.classId,
+      session.uid,
+      data.room
+    )
+    if (bentrok) return { error: bentrok }
 
     await prisma.schedule.create({
       data: {
