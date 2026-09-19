@@ -19,6 +19,63 @@ import {
 } from "lucide-react"
 import { getStudentExams, getExamPaper, submitExam } from "@/app/actions/student"
 
+/**
+ * Simpanan jawaban sementara di perangkat siswa.
+ *
+ * Sebelumnya jawaban hanya hidup di state React sampai tombol "Kumpulkan"
+ * ditekan — HP mati, browser ter-refresh, atau tab tertutup berarti seluruh
+ * jawaban hilang, sementara waktu ujian terus berjalan karena `startedAt`
+ * sudah tercatat di server.
+ *
+ * Kuncinya memakai id pengerjaan (unik per siswa per ujian), bukan id ujian
+ * saja, supaya jawaban tidak tertukar bila satu perangkat dipakai bergantian.
+ *
+ * Batasannya: hanya menolong di perangkat & peramban yang sama. Pindah HP atau
+ * membersihkan data situs tetap menghapus simpanan ini.
+ */
+type Simpanan = {
+  answers: Record<string, string>
+  doubtful: Record<string, boolean>
+  tabSwitch: number
+  disimpan: number
+}
+
+const kunciSimpanan = (submissionId: string) => `pelita:ujian:${submissionId}`
+
+function bacaSimpanan(submissionId: string): Simpanan | null {
+  try {
+    const raw = localStorage.getItem(kunciSimpanan(submissionId))
+    if (!raw) return null
+    const p = JSON.parse(raw)
+    if (!p || typeof p !== "object") return null
+    return {
+      answers: p.answers ?? {},
+      doubtful: p.doubtful ?? {},
+      tabSwitch: Number(p.tabSwitch) || 0,
+      disimpan: Number(p.disimpan) || 0,
+    }
+  } catch {
+    // Mode penyamaran atau penyimpanan penuh — jangan sampai menggagalkan ujian.
+    return null
+  }
+}
+
+function tulisSimpanan(submissionId: string, data: Simpanan) {
+  try {
+    localStorage.setItem(kunciSimpanan(submissionId), JSON.stringify(data))
+  } catch {
+    /* diabaikan: simpanan lokal hanyalah jaring pengaman */
+  }
+}
+
+function hapusSimpanan(submissionId: string) {
+  try {
+    localStorage.removeItem(kunciSimpanan(submissionId))
+  } catch {
+    /* diabaikan */
+  }
+}
+
 type Soal = {
   id: string
   question: string
@@ -53,6 +110,8 @@ export default function ExamsCBTPage() {
   } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tabSwitch, setTabSwitch] = useState(0)
+  const [submissionId, setSubmissionId] = useState("")
+  const [dipulihkan, setDipulihkan] = useState(false)
 
   // Dipakai handler timer/submit agar tidak menangkap state kedaluwarsa.
   const submitLock = useRef(false)
@@ -92,6 +151,9 @@ export default function ExamsCBTPage() {
         return
       }
 
+      // Jawaban sudah aman di server; simpanan lokal tidak diperlukan lagi.
+      if (submissionId) hapusSimpanan(submissionId)
+
       setHasil({
         score: res.score ?? null,
         scoreMax: res.scoreMax ?? null,
@@ -100,8 +162,32 @@ export default function ExamsCBTPage() {
       setIsFinished(true)
       await loadList()
     },
-    [selected]
+    [selected, submissionId]
   )
+
+  // Tulis simpanan lokal setiap ada perubahan jawaban, keraguan, atau
+  // hitungan perpindahan tab. Operasinya sinkron dan ringan, jadi aman
+  // dilakukan pada setiap perubahan tanpa perlu penjadwalan.
+  useEffect(() => {
+    if (!submissionId || !paper || isFinished) return
+    tulisSimpanan(submissionId, {
+      answers,
+      doubtful,
+      tabSwitch,
+      disimpan: Date.now(),
+    })
+  }, [submissionId, paper, isFinished, answers, doubtful, tabSwitch])
+
+  // Cegah siswa menutup tab tanpa sadar saat ujian berlangsung.
+  useEffect(() => {
+    if (!inExamRoom) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [inExamRoom])
 
   // Deteksi perpindahan tab; jumlahnya dikirim ke server saat pengumpulan
   // supaya pengawas punya catatan, bukan hanya peringatan di layar.
@@ -154,12 +240,29 @@ export default function ExamsCBTPage() {
       return
     }
 
+    const sid = res.submissionId || ""
+    setSubmissionId(sid)
     setQuestions((res.questions as Soal[]) || [])
     setPaper({ title: res.exam?.title || selected.title, type: res.exam?.type || "PG" })
     setTimeLeft(res.sisaDetik || 0)
     setCurrentIdx(0)
-    setAnswers({})
-    setDoubtful({})
+
+    // Pulihkan pekerjaan sebelumnya bila ujian ini pernah dibuka di perangkat
+    // yang sama. Sisa waktu TIDAK ikut dipulihkan — nilainya selalu dari
+    // server, supaya menyegarkan halaman tidak menambah waktu.
+    const simpan = sid ? bacaSimpanan(sid) : null
+    if (simpan && Object.keys(simpan.answers).length > 0) {
+      setAnswers(simpan.answers)
+      setDoubtful(simpan.doubtful)
+      setTabSwitch(simpan.tabSwitch)
+      setDipulihkan(true)
+    } else {
+      setAnswers({})
+      setDoubtful({})
+      setTabSwitch(0)
+      setDipulihkan(false)
+    }
+
     setIsFinished(false)
     setHasil(null)
     submitLock.current = false
@@ -266,6 +369,16 @@ export default function ExamsCBTPage() {
             {formatTimer(timeLeft)}
           </span>
         </div>
+
+        {dipulihkan && (
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+            <span>
+              Jawaban sebelumnya dipulihkan dari perangkat ini. Periksa kembali
+              sebelum mengumpulkan — sisa waktu tetap dihitung dari server.
+            </span>
+          </div>
+        )}
 
         {tabSwitch > 0 && (
           <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-2">
@@ -551,6 +664,12 @@ export default function ExamsCBTPage() {
               Selama ujian, setiap kali kamu meninggalkan halaman ini akan tercatat
               dan dilaporkan ke pengawas. Waktu pengerjaan dihitung di server, jadi
               menutup aplikasi tidak menghentikan hitungan.
+              <br />
+              <br />
+              Jawabanmu disimpan sementara di perangkat ini, jadi kalau halaman
+              tertutup atau ter-refresh kamu bisa masuk lagi dan melanjutkan.
+              Namun jangan berganti HP di tengah ujian — simpanan itu tidak ikut
+              berpindah.
             </span>
           </div>
 
