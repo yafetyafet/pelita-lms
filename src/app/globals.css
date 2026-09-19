@@ -154,3 +154,98 @@
 .animate-pulse-ring {
   animation: pulse-ring 2s infinite cubic-bezier(0.45, 0, 0.55, 1);
 }
+
+/* =====================================================================
+   ATURAN CETAK
+   =====================================================================
+   MobileShell membungkus seluruh halaman dalam wadah setinggi 100dvh,
+   selebar maksimum 28rem, dan ber-overflow-auto. Tanpa penyesuaian ini,
+   mencetak hanya menghasilkan satu layar terpotong selebar ponsel.
+
+   Pola pemakaian:
+     <div data-cetak>            -> bagian yang dicetak
+     <div data-no-cetak>         -> disembunyikan saat mencetak
+   ===================================================================== */
+
+@media print {
+  /* Lepaskan kungkungan tinggi & lebar dari shell aplikasi. */
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  [data-cetak],
+  [data-cetak] * {
+    visibility: visible;
+  }
+
+  /* Naikkan area cetak ke pojok kiri atas halaman. */
+  [data-cetak] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+
+  [data-no-cetak] {
+    display: none !important;
+  }
+
+  /* Netralkan pembatas visual milik shell. */
+  [data-cetak],
+  [data-cetak] * {
+    box-shadow: none !important;
+  }
+
+  /* Warna latar dan garis harus ikut tercetak, bukan dibuang peramban. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Baris tabel jangan terbelah antar halaman. */
+  tr,
+  .hindari-potong {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  .putus-halaman {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm 14mm;
+  }
+}
+
+/* Pratinjau di layar dibuat menyerupai kertas A4 agar hasil cetak
+   tidak mengejutkan. */
+.kertas-a4 {
+  width: 100%;
+  max-width: 210mm;
+  margin-inline: auto;
+  background: #fff;
+}
+
+@media print {
+  .kertas-a4 {
+    max-width: none;
+  }
+}

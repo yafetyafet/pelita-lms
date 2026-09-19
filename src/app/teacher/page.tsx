@@ -25,7 +25,8 @@ import {
   Calendar,
   LogOut,
   Loader2,
-  Eye
+  Eye,
+  Printer
 } from "lucide-react"
 
 export default function TeacherDashboard() {
@@ -199,6 +200,7 @@ export default function TeacherDashboard() {
     { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
     { id: "riwayat-pelanggaran", title: "Riwayat Pelanggaran", desc: "Tindak Lanjut Laporan Saya", icon: AlertOctagon, color: "from-red-600 to-rose-700", count: null, href: "/teacher/pelanggaran" },
     { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
+    { id: "cetak", title: "Cetak Laporan", desc: "Jurnal, Nilai & Kehadiran", icon: Printer, color: "from-slate-600 to-slate-800", count: null, href: "/teacher/cetak" },
     { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
   ]
 
