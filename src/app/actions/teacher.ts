@@ -378,7 +378,10 @@ export async function getAttendanceRecap(input: {
     const [students, records] = await Promise.all([
       prisma.classStudent.findMany({
         where: { classId: input.classId },
-        include: { user: { select: { id: true, name: true, username: true } } },
+        include: {
+          // nomorInduk (NIS) dipakai kolom identitas pada laporan cetak.
+          user: { select: { id: true, name: true, username: true, nomorInduk: true } },
+        },
         orderBy: { user: { name: 'asc' } },
       }),
       prisma.attendance.findMany({
@@ -738,6 +741,174 @@ export async function saveGrade(data: {
     return { success: true }
   } catch (err) {
     return gagal(err)
+  }
+}
+
+// ==========================================
+// LAPORAN CETAK
+// ==========================================
+
+/**
+ * Jurnal mengajar satu kelas+mapel pada rentang tanggal, untuk dicetak.
+ *
+ * `getTeacherJournals()` yang sudah ada mengambil seluruh jurnal guru tanpa
+ * penyaringan kelas maupun tanggal, sehingga tidak bisa dipakai membuat
+ * laporan per rombel.
+ */
+export async function getLaporanJurnal(input: {
+  classId: string
+  subjectId: string
+  from: string
+  to: string
+}) {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await pastikanAksesKelas(session, input.classId, input.subjectId)
+
+    const { mulai } = rentangHariWIB(input.from)
+    const { selesai } = rentangHariWIB(input.to)
+
+    const [jurnal, kelas, mapel, guru] = await Promise.all([
+      prisma.journal.findMany({
+        where: {
+          classId: input.classId,
+          subjectId: input.subjectId,
+          ...(session.role === 'ADMIN' ? {} : { authorId: session.uid }),
+          tanggal: { gte: mulai, lt: selesai },
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          tanggal: true,
+          jamKe: true,
+          hadir: true,
+          author: { select: { name: true } },
+        },
+        orderBy: { tanggal: 'asc' },
+      }),
+      prisma.class.findUnique({
+        where: { id: input.classId },
+        select: { name: true, _count: { select: { students: true } } },
+      }),
+      prisma.subject.findUnique({
+        where: { id: input.subjectId },
+        select: { name: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: session.uid },
+        select: { name: true, nomorInduk: true },
+      }),
+    ])
+
+    return { jurnal, kelas, mapel, guru }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Daftar nilai satu kelas+mapel siap cetak: matriks siswa x penilaian,
+ * lengkap dengan rata-rata per siswa.
+ */
+export async function getLaporanNilai(input: {
+  classId: string
+  subjectId: string
+}) {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await pastikanAksesKelas(session, input.classId, input.subjectId)
+
+    const [tugas, siswa, kelas, mapel, guru] = await Promise.all([
+      prisma.assignment.findMany({
+        where: { classId: input.classId, subjectId: input.subjectId },
+        select: {
+          id: true,
+          title: true,
+          maxScore: true,
+          submissions: { select: { userId: true, score: true, status: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.classStudent.findMany({
+        where: { classId: input.classId },
+        select: { user: { select: { id: true, name: true, nomorInduk: true, username: true } } },
+        orderBy: { user: { name: 'asc' } },
+      }),
+      prisma.class.findUnique({ where: { id: input.classId }, select: { name: true } }),
+      prisma.subject.findUnique({ where: { id: input.subjectId }, select: { name: true } }),
+      prisma.user.findUnique({
+        where: { id: session.uid },
+        select: { name: true, nomorInduk: true },
+      }),
+    ])
+
+    // Susun matriks di server agar komponen cetak tinggal menampilkan.
+    const rows = siswa.map((s) => {
+      const nilai = tugas.map((t) => {
+        const sub = t.submissions.find((x) => x.userId === s.user.id)
+        return sub?.status === 'GRADED' && sub.score !== null ? sub.score : null
+      })
+      const terisi = nilai.filter((n): n is number => n !== null)
+      const rata =
+        terisi.length > 0
+          ? Math.round((terisi.reduce((a, b) => a + b, 0) / terisi.length) * 100) / 100
+          : null
+      return { siswa: s.user, nilai, rata }
+    })
+
+    return {
+      tugas: tugas.map((t) => ({ id: t.id, title: t.title, maxScore: t.maxScore })),
+      rows,
+      kelas,
+      mapel,
+      guru,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Rekap kehadiran siap cetak. Berbeda dari `getAttendanceRecap()` yang dipakai
+ * layar: di sini ikut dibawa identitas kelas, mapel, dan guru untuk kop.
+ */
+export async function getLaporanKehadiran(input: {
+  classId: string
+  subjectId?: string | null
+  from: string
+  to: string
+}) {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await pastikanAksesKelas(session, input.classId, input.subjectId)
+
+    const [rekap, kelas, mapel, guru] = await Promise.all([
+      getAttendanceRecap({
+        classId: input.classId,
+        from: input.from,
+        to: input.to,
+        subjectId: input.subjectId ?? null,
+      }),
+      prisma.class.findUnique({
+        where: { id: input.classId },
+        select: { name: true, wali: { select: { name: true } } },
+      }),
+      input.subjectId
+        ? prisma.subject.findUnique({
+            where: { id: input.subjectId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+      prisma.user.findUnique({
+        where: { id: session.uid },
+        select: { name: true, nomorInduk: true },
+      }),
+    ])
+
+    return { rows: rekap.rows, kelas, mapel, guru }
+  } catch {
+    return null
   }
 }
 

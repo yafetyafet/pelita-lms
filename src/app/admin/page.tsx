@@ -64,6 +64,7 @@ export default function AdminDashboard() {
   ]
 
   const quickActions = [
+    { id: "sekolah", title: "Identitas Sekolah & Kop Surat", desc: "Kop & Tanda Tangan Laporan Cetak", icon: School },
     { id: "users", title: "Manajemen Akun & Upload Massal", desc: "Input Satuan / Upload Sekaligus (Excel)", icon: Users },
     { id: "broadcast", title: "Pengumuman Sekolah (Broadcast)", desc: "Kirim Pesan ke Semua HP", icon: Bell },
     { id: "rombel", title: "Master Rombel & Wali Kelas", desc: "Atur Tingkat & Penetapan Wali Kelas", icon: School },
