@@ -602,6 +602,121 @@ export async function getGradesByClass(classId: string, subjectId: string) {
   }
 }
 
+/**
+ * Daftar tugas yang dibuat guru ini, lengkap dengan hitungan pengumpulan.
+ *
+ * Sebelumnya tidak ada satu pun halaman guru yang mendaftar tugas: menu
+ * "Tugas & Kuis" hanya ada di sisi siswa, dan `createAssignment` tidak pernah
+ * dipanggil dari mana pun. Guru secara praktis tidak bisa memberi tugas.
+ */
+export async function getTeacherAssignments() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return []
+
+  const rows = await prisma.assignment.findMany({
+    where: session.role === 'ADMIN' ? {} : { authorId: session.uid },
+    include: {
+      classInfo: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true } },
+      // Jumlah siswa di rombel dipakai sebagai penyebut "x dari y".
+      _count: { select: { submissions: true } },
+    },
+    orderBy: { dueDate: 'desc' },
+    take: 100,
+  })
+
+  if (rows.length === 0) return []
+
+  // Hitung pengumpulan yang benar-benar masuk (bukan baris PENDING yang
+  // terbentuk saat siswa membuka tugas) dan jumlah siswa per rombel, dalam
+  // dua kueri agregat - bukan satu kueri per tugas.
+  const idTugas = rows.map((r) => r.id)
+  const idKelas = Array.from(new Set(rows.map((r) => r.classId)))
+
+  const [terkumpul, dinilai, siswaPerKelas] = await Promise.all([
+    prisma.userAssignment.groupBy({
+      by: ['assignmentId'],
+      where: { assignmentId: { in: idTugas }, status: { in: ['SUBMITTED', 'LATE', 'GRADED'] } },
+      _count: { _all: true },
+    }),
+    prisma.userAssignment.groupBy({
+      by: ['assignmentId'],
+      where: { assignmentId: { in: idTugas }, status: 'GRADED' },
+      _count: { _all: true },
+    }),
+    prisma.classStudent.groupBy({
+      by: ['classId'],
+      where: { classId: { in: idKelas } },
+      _count: { _all: true },
+    }),
+  ])
+
+  const petaTerkumpul = new Map(terkumpul.map((x) => [x.assignmentId, x._count._all]))
+  const petaDinilai = new Map(dinilai.map((x) => [x.assignmentId, x._count._all]))
+  const petaSiswa = new Map(siswaPerKelas.map((x) => [x.classId, x._count._all]))
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    dueDate: r.dueDate,
+    maxScore: r.maxScore,
+    allowLateSubmission: r.allowLateSubmission,
+    createdAt: r.createdAt,
+    classInfo: r.classInfo,
+    subject: r.subject,
+    jumlahSiswa: petaSiswa.get(r.classId) ?? 0,
+    jumlahTerkumpul: petaTerkumpul.get(r.id) ?? 0,
+    jumlahDinilai: petaDinilai.get(r.id) ?? 0,
+  }))
+}
+
+/** Ubah tugas yang sudah dibuat. */
+export async function updateAssignment(data: {
+  id: string
+  title?: string
+  description?: string
+  dueDate?: string
+  maxScore?: number
+  allowLateSubmission?: boolean
+}): Promise<AksiHasil> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    const tugas = await prisma.assignment.findUnique({
+      where: { id: data.id },
+      select: { authorId: true },
+    })
+    if (!tugas) return { error: 'Tugas tidak ditemukan.' }
+    if (session.role !== 'ADMIN' && tugas.authorId !== session.uid) {
+      return { error: 'Kamu hanya boleh mengubah tugasmu sendiri.' }
+    }
+
+    if (data.title !== undefined && !data.title.trim()) {
+      return { error: 'Judul tugas tidak boleh kosong.' }
+    }
+    if (data.maxScore !== undefined && (!Number.isFinite(data.maxScore) || data.maxScore < 1)) {
+      return { error: 'Nilai maksimal minimal 1.' }
+    }
+
+    await prisma.assignment.update({
+      where: { id: data.id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title.trim() } : {}),
+        ...(data.description !== undefined ? { description: data.description.trim() } : {}),
+        ...(data.dueDate ? { dueDate: new Date(data.dueDate) } : {}),
+        ...(data.maxScore !== undefined ? { maxScore: data.maxScore } : {}),
+        ...(data.allowLateSubmission !== undefined
+          ? { allowLateSubmission: data.allowLateSubmission }
+          : {}),
+      },
+    })
+    return { success: true }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
 export async function createAssignment(data: {
   title: string
   description?: string
@@ -1560,6 +1675,88 @@ export async function recomputeExamScores(examId: string): Promise<AksiHasil<{ c
     return { success: true, count: diperbarui }
   } catch (err) {
     return gagal(err)
+  }
+}
+
+// ==========================================
+// JURNAL PEMBIASAAN (WALI KELAS)
+// ==========================================
+
+/**
+ * Jurnal pembiasaan anak wali, untuk wali kelas.
+ *
+ * Sebelumnya jurnal ini sama sekali tidak bisa dibaca siapa pun selain
+ * penulisnya - tidak ada satu pun halaman guru yang menyentuhnya, sehingga
+ * siswa menulis ke ruang kosong dan tabelnya tetap nol baris.
+ *
+ * Aksesnya sengaja dibatasi wali kelas saja: isinya catatan pribadi siswa,
+ * bukan nilai. Admin diberi akses penuh untuk keperluan pembinaan.
+ */
+export async function getPembiasaanWali() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return { kelas: [], siswa: [], bukanWali: true }
+
+  const kelasWali = await prisma.class.findMany({
+    where: session.role === 'ADMIN' ? {} : { waliId: session.uid },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
+  if (kelasWali.length === 0) {
+    return { kelas: [], siswa: [], bukanWali: true }
+  }
+
+  const idKelas = kelasWali.map((k) => k.id)
+
+  const anggota = await prisma.classStudent.findMany({
+    where: { classId: { in: idKelas } },
+    select: {
+      classId: true,
+      user: { select: { id: true, name: true, username: true } },
+    },
+    orderBy: { user: { name: 'asc' } },
+  })
+
+  if (anggota.length === 0) {
+    return { kelas: kelasWali, siswa: [], bukanWali: false }
+  }
+
+  const idSiswa = anggota.map((a) => a.user.id)
+
+  // Satu kueri untuk seluruh anak wali, bukan satu kueri per siswa.
+  const jurnal = await prisma.spiritualJournal.findMany({
+    where: { userId: { in: idSiswa } },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  })
+
+  const perSiswa = new Map<string, typeof jurnal>()
+  for (const j of jurnal) {
+    const daftar = perSiswa.get(j.userId)
+    if (daftar) daftar.push(j)
+    else perSiswa.set(j.userId, [j])
+  }
+
+  const namaKelas = new Map(kelasWali.map((k) => [k.id, k.name]))
+
+  return {
+    kelas: kelasWali,
+    bukanWali: false,
+    siswa: anggota.map((a) => {
+      const entri = perSiswa.get(a.user.id) ?? []
+      return {
+        id: a.user.id,
+        name: a.user.name,
+        username: a.user.username,
+        classId: a.classId,
+        className: namaKelas.get(a.classId) ?? '-',
+        jumlah: entri.length,
+        terakhir: entri[0]?.createdAt ?? null,
+        // Hanya 10 terbaru yang dikirim ke klien; sisanya tidak pernah
+        // ditampilkan dan hanya memberatkan muatan halaman.
+        entri: entri.slice(0, 10),
+      }
+    }),
   }
 }
 
