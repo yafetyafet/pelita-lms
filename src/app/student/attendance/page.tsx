@@ -25,12 +25,15 @@ import { submitAttendance, submitCheckOut, getTodayAttendance, getAttendanceConf
  * terhalang dan jarak yang ditampilkan salah. Sekarang nilainya diambil dari
  * pengaturan admin lewat getAttendanceConfig().
  */
+type Lokasi = { nama: string; lat: number; lng: number; radius: number }
+
 type Geofence = {
-  lat: number | null
-  lng: number | null
-  radius: number | null
+  /** Sekolah menempati dua gedung; presensi sah di salah satunya. */
+  lokasi: Lokasi[]
   batasMasuk: string
   jamPulang: string
+  sumberJamPulang: "jam_pelajaran" | "pengaturan"
+  hari: string
   terkonfigurasi: boolean
 }
 
@@ -52,6 +55,7 @@ export default function StudentAttendancePage() {
   const [loading, setLoading] = useState(false)
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
   const [distance, setDistance] = useState<number | null>(null)
+  const [gedungTerdekat, setGedungTerdekat] = useState<Lokasi | null>(null)
   const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null)
   // Titik & radius sekolah dibaca dari pengaturan admin, bukan ditulis di kode.
   const [geo, setGeo] = useState<Geofence | null>(null)
@@ -105,8 +109,9 @@ export default function StudentAttendancePage() {
         // Kalau admin belum mengisi titik sekolah, tidak ada yang bisa
         // dibandingkan. Presensi tetap boleh dikirim — server yang menandainya
         // sebagai perlu ditinjau.
-        if (!cfg?.terkonfigurasi || cfg.lat === null || cfg.lng === null || cfg.radius === null) {
+        if (!cfg?.terkonfigurasi || cfg.lokasi.length === 0) {
           setDistance(null)
+          setGedungTerdekat(null)
           setIsWithinRadius(true)
           setStatusMessage(
             "Titik sekolah belum diatur admin, jadi lokasi tidak divalidasi. Presensi akan ditandai untuk ditinjau guru."
@@ -115,14 +120,22 @@ export default function StudentAttendancePage() {
           return
         }
 
-        const dist = calculateDistance(latitude, longitude, cfg.lat, cfg.lng)
-        setDistance(dist)
-        const valid = dist <= cfg.radius
-        setIsWithinRadius(valid)
+        // Dua gedung sekolah terpisah beberapa kilometer, jadi yang dipakai
+        // adalah gedung TERDEKAT - bukan gedung pertama dalam daftar.
+        const terukur = cfg.lokasi
+          .map((l) => ({ l, jarak: calculateDistance(latitude, longitude, l.lat, l.lng) }))
+          .sort((a, b) => a.jarak - b.jarak)
+
+        const lolos = terukur.find((t) => t.jarak <= t.l.radius)
+        const dipakai = lolos ?? terukur[0]
+
+        setDistance(dipakai.jarak)
+        setGedungTerdekat(dipakai.l)
+        setIsWithinRadius(Boolean(lolos))
         setStatusMessage(
-          valid
-            ? `Berada dalam radius sekolah (${dist} meter)`
-            : `Di luar radius sekolah (${dist} meter, maksimal ${cfg.radius} meter)`
+          lolos
+            ? `Berada di area ${dipakai.l.nama} (${dipakai.jarak} meter)`
+            : `Di luar radius semua gedung. Terdekat: ${dipakai.l.nama} ${dipakai.jarak} meter (maksimal ${dipakai.l.radius} meter)`
         )
         setLoading(false)
       },
@@ -204,21 +217,37 @@ export default function StudentAttendancePage() {
               <span className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">
                 Titik Presensi Terdaftar
               </span>
-              <h3 className="text-sm font-bold text-white">Titik Presensi Sekolah</h3>
+              <h3 className="text-sm font-bold text-white">
+                {gedungTerdekat
+                  ? gedungTerdekat.nama
+                  : geo && geo.lokasi.length > 1
+                    ? `${geo.lokasi.length} gedung sekolah`
+                    : "Titik Presensi Sekolah"}
+              </h3>
             </div>
           </div>
           <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full font-semibold">
-            {geo?.terkonfigurasi ? `Maks Radius: ${geo.radius}m` : "Radius belum diatur"}
+            {gedungTerdekat
+              ? `Maks Radius: ${gedungTerdekat.radius}m`
+              : geo?.terkonfigurasi
+                ? `Maks Radius: ${geo.lokasi[0].radius}m`
+                : "Radius belum diatur"}
           </span>
         </div>
 
         {/* Live Distance Meter Card */}
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/15 flex items-center justify-between">
           <div>
-            <span className="text-[10px] text-blue-200 block">Jarak Anda ke Titik Sekolah</span>
+            <span className="text-[10px] text-blue-200 block">
+              {gedungTerdekat
+                ? `Jarak Anda ke ${gedungTerdekat.nama}`
+                : "Jarak Anda ke Titik Sekolah"}
+            </span>
             <div className="text-2xl font-black text-white flex items-baseline gap-1 mt-0.5">
               {distance !== null ? `${distance} m` : "..."}
-              <span className="text-xs font-normal text-blue-200">dari gerbang</span>
+              <span className="text-xs font-normal text-blue-200">
+                {geo && geo.lokasi.length > 1 ? "gedung terdekat" : "dari gerbang"}
+              </span>
             </div>
           </div>
 
@@ -306,6 +335,33 @@ export default function StudentAttendancePage() {
           )}
         </div>
       </div>
+
+      {/* Jam pulang mengikuti jam pelajaran terakhir hari itu, bukan satu jam
+          tetap - siswa perlu tahu kapan tombol pulang terbuka. */}
+      {geo && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col gap-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Presensi masuk sampai</span>
+            <span className="font-bold text-slate-900">{geo.batasMasuk} WIB</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Presensi pulang mulai</span>
+            <span className="font-bold text-slate-900">{geo.jamPulang} WIB</span>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed border-t border-slate-100 pt-2">
+            {geo.sumberJamPulang === "jam_pelajaran"
+              ? `Mengikuti jam pelajaran terakhir hari ${geo.hari}.`
+              : "Jam pelajaran hari ini belum diatur, jadi memakai jam pulang tetap dari admin."}
+          </p>
+
+          {geo.lokasi.length > 1 && (
+            <p className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 py-2 leading-relaxed">
+              Presensi masuk maupun pulang sah bila kamu berada di salah satu
+              gedung: {geo.lokasi.map((l) => l.nama).join(" atau ")}.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
         <Navigation className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />

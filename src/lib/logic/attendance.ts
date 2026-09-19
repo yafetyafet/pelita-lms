@@ -133,6 +133,67 @@ export function jarakMeter(
   return Math.round(R * c);
 }
 
+/** Satu titik lokasi sekolah beserta radius tolerarnsinya. */
+export type LokasiSekolah = {
+  nama: string;
+  lat: number;
+  lng: number;
+  radius: number;
+};
+
+export type HasilMultiLokasi = {
+  validasi: HasilValidasi;
+  /** Jarak ke lokasi TERDEKAT, meter. */
+  distance: number;
+  /** Lokasi terdekat — bukan tentu lokasi yang lolos radius. */
+  terdekat: LokasiSekolah;
+};
+
+/**
+ * Validasi lokasi terhadap beberapa gedung sekolah sekaligus.
+ *
+ * Sekolah menempati dua gedung yang berjarak sekitar 5 km, sehingga satu
+ * titik pusat tidak mungkin mencakup keduanya — radius yang cukup besar untuk
+ * menjangkau dua-duanya juga akan meloloskan seluruh permukiman di antaranya.
+ * Karena itu presensi dianggap sah bila siswa berada dalam radius SALAH SATU
+ * gedung.
+ */
+export function hitungJarakMultiLokasi(
+  lat: number,
+  lng: number,
+  lokasi: LokasiSekolah[]
+): HasilMultiLokasi | null {
+  if (lokasi.length === 0) return null;
+
+  const terukur = lokasi
+    .map((l) => ({ lokasi: l, jarak: jarakMeter(lat, lng, l.lat, l.lng) }))
+    .sort((a, b) => a.jarak - b.jarak);
+
+  const terdekat = terukur[0];
+  const lolos = terukur.find((t) => t.jarak <= t.lokasi.radius);
+
+  if (lolos) {
+    return { validasi: { ok: true }, distance: lolos.jarak, terdekat: lolos.lokasi };
+  }
+
+  const rincian = terukur
+    .map((t) => `${t.lokasi.nama} ${t.jarak} m`)
+    .join(", ");
+
+  return {
+    validasi: {
+      ok: false,
+      alasan: "di_luar_radius",
+      pesan:
+        terukur.length === 1
+          ? `Gagal presensi. Anda berada di luar zona sekolah (Jarak Anda: ${terdekat.jarak} meter, Maksimal: ${terdekat.lokasi.radius} meter).`
+          : `Gagal presensi. Anda berada di luar zona kedua gedung sekolah (${rincian}).`,
+    },
+    distance: terdekat.jarak,
+    terdekat: terdekat.lokasi,
+  };
+}
+
 export function hitungJarakGeofence(
   lat: number,
   lng: number,

@@ -5,9 +5,9 @@ import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
 import {
-  hitungJarakGeofence,
-  jarakMeter,
+  hitungJarakMultiLokasi,
   tentukanStatus,
+  type LokasiSekolah,
 } from '@/lib/logic/attendance'
 import {
   acakPG,
@@ -19,6 +19,7 @@ import {
 } from '@/lib/logic/exam'
 import {
   dateKeyWIB,
+  hariWIB,
   jamDindingWIB,
   slotKeyPresensi,
 } from '@/lib/logic/waktu'
@@ -38,39 +39,98 @@ async function kelasSaya(userId: string): Promise<string | null> {
 }
 
 type PengaturanGeofence = {
-  lat: number | null
-  lng: number | null
-  radius: number | null
+  /** Gedung sekolah yang koordinatnya sudah lengkap. Bisa lebih dari satu. */
+  lokasi: LokasiSekolah[]
   batasMasuk: string
-  jamPulang: string
+  /** Jam pulang cadangan, dipakai bila jadwal hari itu tidak diketahui. */
+  jamPulangDefault: string
 }
+
+const KUNCI_PRESENSI = [
+  'SCHOOL_LATITUDE',
+  'SCHOOL_LONGITUDE',
+  'ATTENDANCE_RADIUS',
+  'SCHOOL_SITE1_NAME',
+  'SCHOOL_LATITUDE_2',
+  'SCHOOL_LONGITUDE_2',
+  'ATTENDANCE_RADIUS_2',
+  'SCHOOL_SITE2_NAME',
+  'ATTENDANCE_TIME_LIMIT',
+  'ATTENDANCE_CHECKOUT_TIME',
+]
 
 async function pengaturanPresensi(): Promise<PengaturanGeofence> {
   const rows = await prisma.appSetting.findMany({
-    where: {
-      key: {
-        in: [
-          'SCHOOL_LATITUDE',
-          'SCHOOL_LONGITUDE',
-          'ATTENDANCE_RADIUS',
-          'ATTENDANCE_TIME_LIMIT',
-          'ATTENDANCE_CHECKOUT_TIME',
-        ],
-      },
-    },
+    where: { key: { in: KUNCI_PRESENSI } },
   })
   const map = new Map(rows.map((r) => [r.key, r.value]))
   const num = (k: string) => {
-    const v = Number(map.get(k))
+    const raw = map.get(k)
+    if (raw === undefined || raw === null || raw.trim() === '') return null
+    const v = Number(raw)
     return Number.isFinite(v) ? v : null
   }
-  return {
-    lat: num('SCHOOL_LATITUDE'),
-    lng: num('SCHOOL_LONGITUDE'),
-    radius: num('ATTENDANCE_RADIUS'),
-    batasMasuk: map.get('ATTENDANCE_TIME_LIMIT') || '07:15',
-    jamPulang: map.get('ATTENDANCE_CHECKOUT_TIME') || '14:30',
+
+  // Gedung kedua memakai radius sendiri bila diisi; kalau tidak, ikut radius
+  // gedung pertama supaya admin tidak wajib mengisi dua kali.
+  const radius1 = num('ATTENDANCE_RADIUS')
+  const radius2 = num('ATTENDANCE_RADIUS_2') ?? radius1
+
+  const kandidat: Array<[string, number | null, number | null, number | null]> = [
+    [map.get('SCHOOL_SITE1_NAME')?.trim() || 'Gedung 1', num('SCHOOL_LATITUDE'), num('SCHOOL_LONGITUDE'), radius1],
+    [map.get('SCHOOL_SITE2_NAME')?.trim() || 'Gedung 2', num('SCHOOL_LATITUDE_2'), num('SCHOOL_LONGITUDE_2'), radius2],
+  ]
+
+  const lokasi: LokasiSekolah[] = []
+  for (const [nama, lat, lng, radius] of kandidat) {
+    // Titik yang koordinatnya belum lengkap diabaikan, bukan dianggap 0,0 —
+    // koordinat (0, 0) berada di Samudra Atlantik dan akan membuat seluruh
+    // presensi gagal tanpa penjelasan.
+    if (lat === null || lng === null || radius === null) continue
+    lokasi.push({ nama, lat, lng, radius })
   }
+
+  return {
+    lokasi,
+    batasMasuk: map.get('ATTENDANCE_TIME_LIMIT') || '07:15',
+    jamPulangDefault: map.get('ATTENDANCE_CHECKOUT_TIME') || '14:30',
+  }
+}
+
+export type SumberJamPulang = 'jam_pelajaran' | 'pengaturan'
+
+/**
+ * Jam paling awal presensi pulang boleh dilakukan, mengikuti jam pelajaran
+ * terakhir hari itu.
+ *
+ * Sebelumnya jam pulang adalah satu nilai tetap di pengaturan admin
+ * (`ATTENDANCE_CHECKOUT_TIME`), sehingga hari Jumat yang berakhir pukul 14:00
+ * tetap menunggu jam yang sama dengan hari Senin yang berakhir 15:10.
+ *
+ * Yang dipakai adalah jam pelajaran sekolah (tabel `Session`), BUKAN jadwal
+ * mengajar kelas siswa. Jadwal kelas memang lebih spesifik, tetapi baru terisi
+ * sebagian: kelas yang jadwal hari itu baru diisi sampai jam ke-4 akan
+ * membuka presensi pulang pukul 10:50 padahal sekolah berakhir 15:10. Jam
+ * pelajaran sekolah tidak punya lubang seperti itu.
+ *
+ * Istirahat dikecualikan agar jam terakhir tidak jatuh pada jeda.
+ */
+async function jamPulangHariIni(
+  cadangan: string
+): Promise<{ jam: string; sumber: SumberJamPulang; hari: string }> {
+  const hari = hariWIB()
+
+  const sesiTerakhir = await prisma.session.findFirst({
+    where: { day: hari, type: { not: 'Istirahat' } },
+    orderBy: { endTime: 'desc' },
+    select: { endTime: true },
+  })
+  if (sesiTerakhir?.endTime) {
+    return { jam: sesiTerakhir.endTime, sumber: 'jam_pelajaran', hari }
+  }
+
+  // Hari libur atau hari yang jam pelajarannya belum diisi admin.
+  return { jam: cadangan, sumber: 'pengaturan', hari }
 }
 
 /**
@@ -88,14 +148,17 @@ export async function getAttendanceConfig() {
   if (!session) return null
 
   const cfg = await pengaturanPresensi()
+
+  const pulang = await jamPulangHariIni(cfg.jamPulangDefault)
+
   return {
-    lat: cfg.lat,
-    lng: cfg.lng,
-    radius: cfg.radius,
+    lokasi: cfg.lokasi,
     batasMasuk: cfg.batasMasuk,
-    jamPulang: cfg.jamPulang,
-    // Kalau titiknya belum diatur admin, validasi lokasi memang dilewati.
-    terkonfigurasi: cfg.lat !== null && cfg.lng !== null && cfg.radius !== null,
+    jamPulang: pulang.jam,
+    sumberJamPulang: pulang.sumber,
+    hari: pulang.hari,
+    // Kalau tidak ada satu pun titik lengkap, validasi lokasi memang dilewati.
+    terkonfigurasi: cfg.lokasi.length > 0,
   }
 }
 
@@ -247,9 +310,14 @@ export async function submitAttendance(lat: number, lng: number): Promise<AksiHa
     let distance: number | null = null
     const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
 
-    if (cfg.lat !== null && cfg.lng !== null && cfg.radius !== null && adaKoordinat) {
-      distance = jarakMeter(lat, lng, cfg.lat, cfg.lng)
-      validasi = hitungJarakGeofence(lat, lng, cfg.lat, cfg.lng, cfg.radius)
+    if (adaKoordinat) {
+      // Sah bila berada di radius salah satu gedung; jarak yang dicatat
+      // adalah jarak ke gedung terdekat.
+      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+      if (hasil) {
+        validasi = hasil.validasi
+        distance = hasil.distance
+      }
     }
 
     // `tentukanStatus` memakai getHours() pada Date yang diterimanya, jadi
@@ -305,14 +373,19 @@ export async function submitCheckOut(lat: number, lng: number): Promise<AksiHasi
 
     let validasi = null
     const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
-    if (cfg.lat !== null && cfg.lng !== null && cfg.radius !== null && adaKoordinat) {
-      validasi = hitungJarakGeofence(lat, lng, cfg.lat, cfg.lng, cfg.radius)
+    if (adaKoordinat) {
+      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+      if (hasil) validasi = hasil.validasi
     }
+
+    // Presensi pulang dibuka mengikuti jam pelajaran terakhir hari itu,
+    // bukan satu jam tetap untuk semua hari.
+    const pulang = await jamPulangHariIni(cfg.jamPulangDefault)
 
     const keputusan = tentukanStatus({
       jenis: 'pulang',
       waktu: jamDindingWIB(),
-      jendela: { mulai: cfg.jamPulang, selesai: '23:59' },
+      jendela: { mulai: pulang.jam, selesai: '23:59' },
       validasi,
     })
 
