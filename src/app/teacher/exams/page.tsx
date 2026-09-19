@@ -366,7 +366,10 @@ export default function TeacherExamsPage() {
           type: "PG",
           options: [],
           correctAnswer: "",
-          points: 10
+          points: 10,
+          // Menjadi true begitu penanda akhir soal ditemui (Esai/Jawaban/Poin).
+          // Setelah itu baris tak dikenal TIDAK lagi disambung ke pertanyaan.
+          teksSelesai: false
         }
         continue
       }
@@ -398,12 +401,14 @@ export default function TeacherExamsPage() {
       if (mPoin) {
         const n = parseInt(mPoin[2], 10)
         if (n > 0) current.points = n
+        current.teksSelesai = true
         continue
       }
 
       // --- penanda esai ---
       if (/^(esai|essay|uraian)\s*$/i.test(t)) {
         current.type = "ESAI"
+        current.teksSelesai = true
         continue
       }
 
@@ -431,6 +436,7 @@ export default function TeacherExamsPage() {
           // Lebih dari satu jawaban benar berarti PG kompleks.
           if (indeks.length > 1) current.type = "PG_KOMPLEKS"
         }
+        current.teksSelesai = true
         continue
       }
 
@@ -441,8 +447,12 @@ export default function TeacherExamsPage() {
         continue
       }
 
-      // --- lanjutan teks soal (hanya sebelum opsi pertama) ---
-      if (current.options.length === 0) {
+      // --- lanjutan teks soal ---
+      // Hanya disambung selama pertanyaan belum "ditutup" oleh penanda akhir
+      // dan belum ada opsi. Tanpa syarat teksSelesai, soal esai akan menelan
+      // segala baris sesudahnya — label bagian, rambu-rambu jawaban, bahkan
+      // judul soal berikutnya — karena esai memang tidak punya opsi.
+      if (!current.teksSelesai && current.options.length === 0) {
         current.question += " " + t
       }
     }
