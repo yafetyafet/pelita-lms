@@ -1110,7 +1110,7 @@ export async function createExam(data: {
 async function examMilikSaya(session: { uid: string; role: string }, examId: string) {
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
-    select: { id: true, authorId: true, classId: true, subjectId: true },
+    select: { id: true, authorId: true, classId: true, subjectId: true, token: true },
   })
   if (!exam) throw new ForbiddenError('Ujian tidak ditemukan.')
   if (session.role !== 'ADMIN' && exam.authorId !== session.uid) {
@@ -1133,10 +1133,36 @@ export async function updateExamSettings(input: {
   isPublished?: boolean
   showResult?: boolean
   passingScore?: number | null
-}): Promise<AksiHasil> {
+}): Promise<AksiHasil<{ peringatan: string }>> {
   try {
     const session = await requireSession('TEACHER', 'ADMIN')
-    await examMilikSaya(session, input.examId)
+    const exam = await examMilikSaya(session, input.examId)
+
+    // Menerbitkan ujian tanpa soal membuatnya tampil ke siswa tetapi mustahil
+    // dikerjakan — ditolak di sini daripada baru ketahuan saat ujian mulai.
+    let peringatan = ''
+    if (input.isPublished === true) {
+      const jumlahSoal = await prisma.examQuestion.count({
+        where: { examId: input.examId },
+      })
+      if (jumlahSoal === 0) {
+        return { error: 'Ujian belum punya soal, jadi belum bisa diterbitkan.' }
+      }
+
+      // Tanpa token khusus DAN tanpa token global, siswa tidak akan pernah
+      // bisa membuka ujian ini. Bukan galat — tapi wajib diberitahukan.
+      const tokenBaru =
+        input.token !== undefined ? input.token?.trim() : exam.token?.trim()
+      if (!tokenBaru) {
+        const global = await prisma.appSetting.findUnique({
+          where: { key: 'CBT_TOKEN' },
+        })
+        if (!global?.value?.trim()) {
+          peringatan =
+            'Ujian terbit, tetapi belum ada token — baik token khusus ujian ini maupun token CBT global. Siswa belum bisa masuk sampai salah satunya diisi.'
+        }
+      }
+    }
 
     const startAt = input.startAt ? new Date(input.startAt) : null
     const endAt = input.endAt ? new Date(input.endAt) : null
@@ -1171,7 +1197,7 @@ export async function updateExamSettings(input: {
           : {}),
       },
     })
-    return { success: true }
+    return peringatan ? { success: true, peringatan } : { success: true }
   } catch (err) {
     return gagal(err)
   }
