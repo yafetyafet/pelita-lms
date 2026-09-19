@@ -26,7 +26,8 @@ import {
   LogOut,
   Loader2,
   Eye,
-  Printer
+  Printer,
+  ClipboardList
 } from "lucide-react"
 
 export default function TeacherDashboard() {
@@ -197,8 +198,8 @@ export default function TeacherDashboard() {
     { id: "absensi", title: "Presensi Kelas", desc: "Input Hadir/Sakit/Izin", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/attendance" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
     { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
-    { id: "pelanggaran", title: "Catatan Disiplin", desc: "Input Pelanggaran", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
-    { id: "riwayat-pelanggaran", title: "Riwayat Pelanggaran", desc: "Tindak Lanjut Laporan Saya", icon: AlertOctagon, color: "from-red-600 to-rose-700", count: null, href: "/teacher/pelanggaran" },
+    { id: "pelanggaran", title: "Catat Pelanggaran", desc: "Input pelanggaran baru", icon: AlertOctagon, color: "from-slate-700 to-slate-900", count: null, action: "modal-violation" },
+    { id: "riwayat-pelanggaran", title: "Riwayat Pelanggaran", desc: "Tindak lanjut laporan", icon: ClipboardList, color: "from-red-600 to-rose-700", count: null, href: "/teacher/pelanggaran" },
     { id: "nilai", title: "Rekap Penilaian", desc: "Formatif & Sumatif", icon: Award, color: "from-purple-600 to-violet-700", count: null, href: "/teacher/grades" },
     { id: "cetak", title: "Cetak Laporan", desc: "Jurnal, Nilai & Kehadiran", icon: Printer, color: "from-slate-600 to-slate-800", count: null, href: "/teacher/cetak" },
     { id: "diskusi", title: "Forum Diskusi", desc: "Tanya Jawab Siswa", icon: Users, color: "from-pink-600 to-rose-600", count: null, href: "/teacher/forum" },
@@ -378,7 +379,10 @@ export default function TeacherDashboard() {
                     {menu.title}
                   </span>
                   <span className="text-[9px] text-slate-400 mt-0.5 line-clamp-1 font-medium">
-                    {menu.count}
+                    {/* `desc` sebelumnya tidak pernah tampil karena kartu hanya
+                        merender `count`, sehingga sebagian besar kartu terlihat
+                        tanpa keterangan apa pun. */}
+                    {menu.count || menu.desc}
                   </span>
                 </Link>
               )
@@ -397,7 +401,7 @@ export default function TeacherDashboard() {
                   {menu.title}
                 </span>
                 <span className="text-[9px] text-slate-400 mt-0.5 line-clamp-1 font-medium">
-                  {menu.count}
+                  {menu.count || menu.desc}
                 </span>
               </button>
             )

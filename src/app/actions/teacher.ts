@@ -1215,6 +1215,179 @@ export async function deleteExam(examId: string): Promise<AksiHasil> {
 }
 
 /**
+ * Sunting satu soal ujian.
+ *
+ * Sebelumnya soal hanya bisa dibuat, tidak pernah bisa diubah — salah ketik
+ * atau kunci jawaban keliru berarti ujian harus dihapus lalu dibuat ulang dari
+ * nol beserta seluruh soalnya.
+ */
+export async function updateExamQuestion(input: {
+  questionId: string
+  question?: string
+  imageUrl?: string | null
+  type?: string
+  options?: string[]
+  correctAnswer?: string
+  points?: number
+}): Promise<AksiHasil<{ adaPengerjaan: number }>> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    const soal = await prisma.examQuestion.findUnique({
+      where: { id: input.questionId },
+      select: { id: true, examId: true, type: true },
+    })
+    if (!soal) return { error: 'Soal tidak ditemukan.' }
+    await examMilikSaya(session, soal.examId)
+
+    const tipe = input.type ?? soal.type
+    const esai = tipe === 'ESAI'
+
+    if (input.question !== undefined && !input.question.trim()) {
+      return { error: 'Pertanyaan tidak boleh kosong.' }
+    }
+
+    if (!esai) {
+      const opsi = input.options
+      if (opsi && opsi.filter((o) => o.trim()).length < 2) {
+        return { error: 'Soal pilihan ganda butuh minimal 2 opsi terisi.' }
+      }
+      const kunci = input.correctAnswer
+      if (kunci !== undefined && !kunci.trim()) {
+        return { error: 'Kunci jawaban belum dipilih.' }
+      }
+      // Kunci menunjuk indeks opsi; pastikan tidak menunjuk opsi yang hilang.
+      if (kunci && opsi) {
+        const diluar = kunci
+          .split(',')
+          .map((x) => Number(x.trim()))
+          .some((n) => !Number.isInteger(n) || n < 0 || n >= opsi.length)
+        if (diluar) {
+          return { error: 'Kunci jawaban menunjuk opsi yang tidak ada.' }
+        }
+      }
+    }
+
+    if (
+      input.points !== undefined &&
+      (!Number.isFinite(input.points) || input.points < 1)
+    ) {
+      return { error: 'Bobot soal minimal 1.' }
+    }
+
+    await prisma.examQuestion.update({
+      where: { id: soal.id },
+      data: {
+        ...(input.question !== undefined ? { question: input.question.trim() } : {}),
+        ...(input.imageUrl !== undefined
+          ? { imageUrl: input.imageUrl?.trim() || null }
+          : {}),
+        ...(input.type !== undefined ? { type: tipe } : {}),
+        // Soal esai tidak menyimpan opsi maupun kunci.
+        ...(esai
+          ? { options: null, correctAnswer: null }
+          : {
+              ...(input.options !== undefined
+                ? { options: JSON.stringify(input.options) }
+                : {}),
+              ...(input.correctAnswer !== undefined
+                ? { correctAnswer: input.correctAnswer }
+                : {}),
+            }),
+        ...(input.points !== undefined ? { points: input.points } : {}),
+      },
+    })
+
+    // Kalau sudah ada yang mengerjakan, nilai mereka dihitung dari kunci lama.
+    const adaPengerjaan = await prisma.examSubmission.count({
+      where: { examId: soal.examId, status: { in: ['FINISHED', 'GRADED'] } },
+    })
+
+    return { success: true, adaPengerjaan }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
+/** Tambah satu soal ke ujian yang sudah ada. */
+export async function addExamQuestion(input: {
+  examId: string
+  question: string
+  imageUrl?: string
+  type: string
+  options?: string[]
+  correctAnswer?: string
+  points: number
+}): Promise<AksiHasil> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await examMilikSaya(session, input.examId)
+
+    if (!input.question.trim()) return { error: 'Pertanyaan tidak boleh kosong.' }
+
+    const esai = input.type === 'ESAI'
+    if (!esai) {
+      if (!input.options || input.options.filter((o) => o.trim()).length < 2) {
+        return { error: 'Soal pilihan ganda butuh minimal 2 opsi terisi.' }
+      }
+      if (!input.correctAnswer?.trim()) {
+        return { error: 'Kunci jawaban belum dipilih.' }
+      }
+    }
+
+    // Soal baru diletakkan di urutan paling akhir.
+    const terakhir = await prisma.examQuestion.aggregate({
+      where: { examId: input.examId },
+      _max: { order: true },
+    })
+
+    await prisma.examQuestion.create({
+      data: {
+        examId: input.examId,
+        question: input.question.trim(),
+        imageUrl: input.imageUrl?.trim() || null,
+        type: input.type,
+        options: esai ? null : JSON.stringify(input.options),
+        correctAnswer: esai ? null : input.correctAnswer,
+        points: input.points > 0 ? input.points : 10,
+        order: (terakhir._max.order ?? -1) + 1,
+      },
+    })
+
+    return { success: true }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
+export async function deleteExamQuestion(
+  questionId: string
+): Promise<AksiHasil> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    const soal = await prisma.examQuestion.findUnique({
+      where: { id: questionId },
+      select: { examId: true },
+    })
+    if (!soal) return { error: 'Soal tidak ditemukan.' }
+    await examMilikSaya(session, soal.examId)
+
+    const jumlah = await prisma.examQuestion.count({
+      where: { examId: soal.examId },
+    })
+    if (jumlah <= 1) {
+      return { error: 'Ujian harus punya minimal satu soal.' }
+    }
+
+    await prisma.examQuestion.delete({ where: { id: questionId } })
+    return { success: true }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
+/**
  * Lembar koreksi: peserta, jawabannya, dan soal esai yang menunggu nilai.
  * Field `essayScore` sudah ada di basis data sejak awal tapi belum pernah
  * bisa diisi karena tidak ada action maupun antarmukanya.
