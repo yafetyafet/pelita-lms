@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -246,10 +247,7 @@ export default function JurnalPembiasaanPage() {
         </h3>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-8 text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-emerald-500" />
-            <span className="text-xs">Memuat riwayat...</span>
-          </div>
+          <PemuatData pesan="Memuat riwayat..." />
         ) : history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-slate-400 bg-white rounded-3xl border border-slate-200 shadow-sm text-center px-4">
             <Sprout className="w-8 h-8 mb-2 opacity-50" />

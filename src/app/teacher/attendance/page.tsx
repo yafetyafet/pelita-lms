@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -163,10 +164,7 @@ export default function TeacherAttendancePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-        <span className="text-xs text-slate-500">Memuat kelas...</span>
-      </div>
+      <PemuatData pesan="Memuat kelas..." />
     )
   }
 
@@ -439,10 +437,7 @@ export default function TeacherAttendancePage() {
 
           {/* Lembar presensi */}
           {memuatLembar ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span className="text-xs">Memuat lembar presensi...</span>
-            </div>
+            <PemuatData pesan="Memuat lembar presensi..." />
           ) : rows.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center">
               <p className="text-xs text-slate-500">

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { 
   ArrowLeft, 
@@ -614,10 +615,7 @@ export default function AdminUsersPage() {
       {/* Users List */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="p-12 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-7 h-7 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs font-medium">Memuat data pengguna dari server...</span>
-          </div>
+          <PemuatData pesan="Memuat data pengguna dari server..." />
         ) : filteredUsers.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
             <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-2">

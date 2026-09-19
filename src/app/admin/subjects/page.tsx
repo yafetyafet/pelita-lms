@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { ArrowLeft, Plus, Trash2, BookMarked, Loader2, Users, ChevronDown, ChevronUp, UserMinus, AlertTriangle } from "lucide-react"
 import {
@@ -130,10 +131,7 @@ export default function AdminSubjectsPage() {
       {/* Subjects List */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="p-8 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
-            <span className="text-xs font-medium">Memuat data mapel...</span>
-          </div>
+          <PemuatData pesan="Memuat data mapel..." />
         ) : subjects.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 italic">Belum ada mata pelajaran yang terdaftar.</div>
         ) : (

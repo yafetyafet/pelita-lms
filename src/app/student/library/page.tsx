@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { 
   ArrowLeft, Search, BookMarked, BookOpen, DownloadCloud, Sparkles, ExternalLink, Loader2
@@ -101,10 +102,7 @@ export default function LibraryPage() {
       {/* Book List */}
       <div className="flex flex-col gap-3">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
-            <span className="text-sm font-bold text-slate-600">Memuat Katalog Buku...</span>
-          </div>
+          <PemuatData pesan="Memuat Katalog Buku..." />
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center text-center gap-3">
             <BookOpen className="w-12 h-12 text-slate-300" />
