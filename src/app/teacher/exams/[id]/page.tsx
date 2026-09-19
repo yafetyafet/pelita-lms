@@ -23,6 +23,7 @@ import {
   saveEssayScore,
   recomputeExamScores,
 } from "@/app/actions/teacher"
+import { EditorSoal } from "@/components/EditorSoal"
 
 /** Ubah Date/ISO ke nilai yang diterima <input type="datetime-local">. */
 function toLocalInput(value: string | Date | null | undefined): string {
@@ -426,6 +427,15 @@ export default function ExamDetailPage({
           </button>
         </div>
       </form>
+
+      {/* Sunting soal — sebelumnya soal hanya bisa dibuat sekali dan
+          kesalahan ketik atau kunci jawaban keliru tidak bisa diperbaiki. */}
+      <EditorSoal
+        examId={id}
+        soal={data.questions}
+        adaPengerjaan={selesai.length}
+        onBerubah={load}
+      />
 
       {/* Peserta & koreksi */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">

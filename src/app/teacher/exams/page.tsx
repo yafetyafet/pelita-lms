@@ -527,8 +527,12 @@ export default function TeacherExamsPage() {
         question: q.question,
         imageUrl: q.imageUrl || undefined,
         type: q.type,
-        options: q.type === "PG" ? JSON.stringify(q.options) : undefined,
-        correctAnswer: q.type === "PG" ? q.correctAnswer : undefined,
+        // Perbandingan sebelumnya `q.type === "PG"` membuat soal PG KOMPLEKS
+        // tersimpan tanpa opsi dan tanpa kunci jawaban sama sekali — tampil ke
+        // siswa sebagai soal tanpa pilihan, dan mustahil dinilai benar.
+        // Yang membedakan adalah punya-opsi atau tidak, yaitu bukan ESAI.
+        options: q.type !== "ESAI" ? JSON.stringify(q.options) : undefined,
+        correctAnswer: q.type !== "ESAI" ? q.correctAnswer : undefined,
         points: q.points
       }))
     })
