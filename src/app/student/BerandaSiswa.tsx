@@ -1,0 +1,480 @@
+"use client"
+
+import React, { useState } from "react"
+import { jamLabelWIB, tanggalPanjangWIB } from "@/lib/logic/waktu"
+import Link from "next/link"
+import { LayananGrid } from "@/components/LayananGrid"
+import { submitAttendance, submitCheckOut } from "@/app/actions/student"
+import type { DataBerandaSiswa } from "@/lib/types/beranda"
+import { logout } from "@/app/actions/auth"
+import { markAllBroadcastsRead } from "@/app/actions/broadcast"
+import { PwaInstaller } from "@/components/PwaInstaller"
+import { 
+  User, 
+  Bell, 
+  MapPin, 
+  CheckCircle2, 
+  Calendar, 
+  Video, 
+  FileText, 
+  Timer, 
+  MessageSquareText, 
+  Sparkles, 
+  Sprout,
+  BookMarked, 
+  AlertTriangle,
+  ChevronRight,
+  Clock,
+  Sparkle,
+  Radio,
+  LogOut,
+  Building2
+} from "lucide-react"
+
+export function BerandaSiswa({ awal }: { awal: DataBerandaSiswa | null }) {
+  // Semua nilai awal datang dari server lewat prop `awal`, jadi halaman tidak
+  // perlu mengambil apa pun lagi setelah dihidrasi.
+  const presensiAwal = awal?.presensiHariIni ?? null
+  // Zona waktu ditetapkan eksplisit: komponen ini kini dirender di server
+  // (UTC) sebelum sampai ke ponsel siswa (WIB).
+  const jam = (t: Date | string) => jamLabelWIB(t)
+
+  const [currentUser, setCurrentUser] = useState<any>(
+    awal?.user
+      ? { ...awal.user, studentClasses: awal.kelas ? [{ classInfo: awal.kelas }] : [] }
+      : null
+  )
+  const [attended, setAttended] = useState(Boolean(presensiAwal))
+  const [attendanceTime, setAttendanceTime] = useState<string | null>(
+    presensiAwal ? jam(presensiAwal.createdAt) : null
+  )
+  const [checkedOut, setCheckedOut] = useState(Boolean(presensiAwal?.checkOutTime))
+  const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(
+    presensiAwal?.checkOutTime ? jam(presensiAwal.checkOutTime) : null
+  )
+  
+  const [activeTab, setActiveTab] = useState<"hari-ini" | "minggu-ini">("hari-ini")
+  const [showNotif, setShowNotif] = useState(false)
+  const [hasUnreadNotif, setHasUnreadNotif] = useState(
+    (awal?.broadcasts ?? []).some((b) => !b.sudahDibaca)
+  )
+  // Hanya menandai proses pengiriman presensi; pemuatan data sudah selesai
+  // sebelum komponen ini dirender.
+  const [isLoading, setIsLoading] = useState(false)
+
+  const [materials] = useState<any[]>(awal?.materials ?? [])
+  const [assignments] = useState<any[]>(awal?.assignments ?? [])
+  const [violations] = useState<any[]>(awal?.violations ?? [])
+  const [broadcasts, setBroadcasts] = useState<any[]>(awal?.broadcasts ?? [])
+
+  /** Ambil koordinat sesungguhnya dari perangkat. */
+  const ambilKoordinat = () =>
+    new Promise<{ lat: number; lng: number }>((resolve) => {
+      if (!navigator.geolocation) {
+        resolve({ lat: NaN, lng: NaN })
+        return
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        // Izin ditolak / gagal: kirim NaN supaya server mencatatnya sebagai
+        // presensi "tanpa lokasi" untuk ditinjau guru piket.
+        () => resolve({ lat: NaN, lng: NaN }),
+        { enableHighAccuracy: true, timeout: 10000 }
+      )
+    })
+
+  const handleAttendance = async () => {
+    if (isLoading || (attended && checkedOut)) return
+    setIsLoading(true)
+
+    // Sebelumnya koordinat di-hardcode (-7.34, 109.34) dengan komentar
+    // "Simulate GPS fetch", sehingga geofence sekolah tidak pernah benar-benar
+    // menguji posisi siswa.
+    const { lat, lng } = await ambilKoordinat()
+
+    if (!attended) {
+      const res = await submitAttendance(lat, lng)
+      if (res.success) {
+        const now = new Date()
+        const timeStr = jamLabelWIB(now)
+        setAttended(true)
+        setAttendanceTime(timeStr)
+      } else {
+        alert(res.error || "Gagal melakukan presensi")
+      }
+    } else if (!checkedOut) {
+      const res = await submitCheckOut(lat, lng)
+      if (res.success) {
+        const now = new Date()
+        const timeStr = jamLabelWIB(now)
+        setCheckedOut(true)
+        setCheckOutTimeStr(timeStr)
+      } else {
+        alert(res.error || "Gagal melakukan presensi pulang")
+      }
+    }
+    setIsLoading(false)
+  }
+
+  const appMenus = [
+    { 
+      id: "jadwal", 
+      title: "Jadwal", 
+      subtitle: "Mapel & Ruang", 
+      icon: Calendar, 
+      color: "from-amber-500 to-orange-500", 
+      badge: null,
+      href: "/student/schedule"
+    },
+    { 
+      id: "materi", 
+      title: "Materi Belajar", 
+      subtitle: "Embed & Modul", 
+      icon: Video, 
+      color: "from-sky-500 to-blue-600", 
+      badge: null,
+      href: "/student/materials"
+    },
+    { 
+      id: "tugas", 
+      title: "Tugas & Kuis", 
+      subtitle: "Latihan Harian", 
+      icon: FileText, 
+      color: "from-emerald-500 to-teal-600", 
+      badge: null,
+      href: "/student/assignments"
+    },
+    { 
+      id: "ujian", 
+      title: "Ujian", 
+      subtitle: "PTS & PAS", 
+      icon: Timer, 
+      color: "from-rose-500 to-red-600", 
+      badge: null,
+      href: "/student/exams"
+    },
+    { 
+      id: "forum", 
+      title: "Forum Diskusi", 
+      subtitle: "Tanya Guru", 
+      icon: MessageSquareText, 
+      color: "from-violet-500 to-purple-600", 
+      badge: null,
+      href: "/student/forum"
+    },
+    {
+      id: "pkl",
+      title: "PKL / Prakerin",
+      subtitle: "Jurnal & Presensi",
+      icon: Building2,
+      color: "from-purple-600 to-indigo-700",
+      badge: null,
+      href: "/student/pkl"
+    },
+    { 
+      id: "pembiasaan", 
+      title: "Pembiasaan", 
+      subtitle: "Ibadah, Literasi, Sosial", 
+      icon: Sprout, 
+      color: "from-teal-500 to-emerald-600", 
+      badge: null,
+      href: "/student/pembiasaan"
+    },
+    { 
+      id: "perpus", 
+      title: "Perpustakaan", 
+      subtitle: "E-Book & Jurnal", 
+      icon: BookMarked, 
+      color: "from-indigo-500 to-blue-600", 
+      badge: null,
+      href: "/student/library"
+    },
+    { 
+      id: "disiplin", 
+      title: "Buku Disiplin", 
+      subtitle: `${violations.reduce((n, v) => n + (v.points || 0), 0)} Poin Pelanggaran`, 
+      icon: AlertTriangle, 
+      color: "from-slate-700 to-slate-800", 
+      badge: null,
+      href: "/student/discipline"
+    },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      {/* Header Profile & Notifikasi */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-blue-500/20 ring-2 ring-white">
+              {currentUser?.name
+                ? currentUser.name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((n: string) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()
+                : "S"}
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-base font-bold text-slate-900 leading-tight">
+                {currentUser?.name || "Profil Siswa"}
+              </h2>
+              <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-md">
+                {currentUser?.studentClasses?.[0]?.classInfo?.name || "Belum Ada Rombel"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              {currentUser?.username ? `@${currentUser.username} • Siswa` : "SMKN 1 Kemangkon • TA 2026/2027"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              setShowNotif(true)
+              setHasUnreadNotif(false)
+            }}
+            className="relative p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
+            title="Notifikasi"
+          >
+            <Bell className="w-4 h-4" />
+            {hasUnreadNotif && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            )}
+          </button>
+          <button
+            onClick={() => logout()}
+            className="p-2.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition shadow-sm flex items-center gap-1 text-xs font-bold"
+            title="Keluar / Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Geotagging Attendance Live Card */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4 text-white shadow-lg shadow-blue-600/20">
+        <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
+        
+        <div className="flex items-start justify-between mb-3 relative z-10">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-white/15 backdrop-blur-md">
+              <MapPin className="w-4 h-4 text-blue-200" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-xs font-semibold text-blue-100 uppercase tracking-wider">
+                  Presensi Geotagging GPS
+                </h3>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white">{tanggalPanjangWIB()}</p>
+            </div>
+          </div>
+
+          <Link 
+            href="/student/attendance"
+            className="text-[11px] font-semibold bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 hover:bg-emerald-500/35 transition"
+          >
+            <Radio className="w-3 h-3 text-emerald-300 animate-pulse" />
+            Detail GPS
+          </Link>
+        </div>
+
+        {/* Location Verification Status */}
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10 mb-3 text-xs">
+          <div className="flex items-center justify-between text-blue-100 mb-1">
+            <span>Zona Sekolah:</span>
+            <span className="font-semibold text-white">Area Kampus SMKN 1 Kemangkon</span>
+          </div>
+          <div className="flex items-center justify-between text-blue-200 text-[11px]">
+            <span>Radius Validasi:</span>
+            <span className="font-mono text-emerald-300 font-bold">Harap buka Detail GPS untuk memverifikasi lokasi</span>
+          </div>
+        </div>
+
+        {/* Action Button & Link to Dedicated Page */}
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            {!attended ? (
+              <button
+                onClick={handleAttendance}
+                disabled={isLoading}
+                className="flex-1 py-3 px-4 rounded-2xl bg-white text-blue-700 font-bold text-xs shadow-md hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 className="w-4 h-4 text-blue-600 transition-transform group-hover:scale-110" />
+                <span>{isLoading ? "Memproses..." : "Presensi Masuk"}</span>
+              </button>
+            ) : (
+              <div className="flex-1 py-2.5 px-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 font-semibold text-xs flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <span>Masuk: {attendanceTime}</span>
+              </div>
+            )}
+
+            <Link
+              href="/student/attendance"
+              className="px-3 py-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs flex items-center justify-center transition"
+              title="Buka Peta & Radar Presensi"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Checkout Button */}
+          {attended && !checkedOut && (
+            <button
+              onClick={handleAttendance}
+              disabled={isLoading}
+              className="w-full py-3 px-4 rounded-2xl bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-500/20 hover:bg-rose-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              <LogOut className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+              <span>{isLoading ? "Memproses..." : "Presensi Pulang"}</span>
+            </button>
+          )}
+
+          {checkedOut && (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-slate-300 font-semibold text-xs flex items-center justify-center gap-2">
+              <LogOut className="w-4 h-4" />
+              <span>Pulang: {checkOutTimeStr}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Ringkasan Indikator / Quick Stats */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <Link href="/student/attendance" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
+          <span className="text-[11px] font-semibold text-slate-500">Kehadiran</span>
+          <span className="text-lg font-bold text-slate-900 mt-0.5">{attended ? "✓" : "-"}</span>
+          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">{attended ? "Hadir" : "Belum"}</span>
+        </Link>
+
+        <Link href="/student/discipline" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
+          <span className="text-[11px] font-semibold text-slate-500">Poin Pelanggaran</span>
+          <span className="text-lg font-bold text-blue-600 mt-0.5">{violations.length * 5}</span>
+          <span className="text-[10px] font-medium text-slate-500 mt-0.5">{violations.length} Kasus</span>
+        </Link>
+
+        <Link href="/student/assignments" className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm flex flex-col items-center text-center hover:border-blue-300 transition">
+          <span className="text-[11px] font-semibold text-slate-500">Tugas & Kuis</span>
+          <span className="text-lg font-bold text-amber-600 mt-0.5">{assignments.length}</span>
+          <span className="text-[10px] font-medium text-amber-600 mt-0.5">Tugas Tersedia</span>
+        </Link>
+      </div>
+
+      {/* Menu Aplikasi Smartphone (Grid 4x2) */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <Sparkle className="w-4 h-4 text-blue-600 fill-blue-600" />
+            Layanan Akademik
+          </h3>
+          <span className="text-[11px] font-semibold text-blue-600 hover:underline">
+            {materials.length} Modul Siap
+          </span>
+        </div>
+
+        <LayananGrid accent="blue" items={appMenus} />
+      </div>
+
+      {/* Jadwal Pelajaran Hari Ini */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-sm font-bold text-slate-900">Jadwal Kelas</h3>
+          <Link href="/student/schedule" className="text-[11px] font-semibold text-blue-600 hover:underline">
+            Lihat Sepekan →
+          </Link>
+        </div>
+
+        <Link 
+          href="/student/schedule"
+          className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:border-blue-300 transition flex items-center gap-3"
+        >
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-bold text-slate-900">Lihat Jadwal Pembelajaran</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">Jadwal pelajaran berdasarkan hari</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </Link>
+      </div>
+
+      {/* Banner Ujian */}
+      <Link 
+        href="/student/exams"
+        className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200/80 rounded-2xl p-3.5 flex items-center justify-between hover:shadow-md transition active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-rose-500/20">
+            <Timer className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold bg-rose-600 text-white px-1.5 py-0.2 rounded">
+                UJIAN
+              </span>
+              <span className="text-xs font-bold text-slate-900">Ujian Online</span>
+            </div>
+            <p className="text-[11px] text-slate-600 mt-0.5">Akses ruang ujian digital Anda</p>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-rose-400 shrink-0" />
+      </Link>
+
+      {/* MODAL NOTIFIKASI */}
+      {showNotif && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full max-w-md bg-white rounded-t-[32px] sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-3 animate-in slide-in-from-bottom-5">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Notifikasi Terbaru</h3>
+              <button
+                onClick={async () => {
+                  setShowNotif(false)
+                  if (hasUnreadNotif) {
+                    await markAllBroadcastsRead()
+                    setHasUnreadNotif(false)
+                  }
+                }}
+                className="text-slate-400 font-bold text-xs"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+              {broadcasts.length === 0 ? (
+                <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center">
+                  <span className="text-xs font-bold text-slate-500 block">Tidak Ada Pengumuman</span>
+                </div>
+              ) : (
+                broadcasts.map(b => (
+                  <div key={b.id} className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <span className="text-[10px] font-bold text-blue-600 block mb-1">
+                      {tanggalPanjangWIB(new Date(b.createdAt), { day: 'numeric', month: 'numeric', year: 'numeric' })}
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 block">{b.title}</span>
+                    <span className="text-[11px] text-slate-600">{b.message}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PWA Installer Prompt */}
+      <PwaInstaller />
+    </div>
+  )
+}

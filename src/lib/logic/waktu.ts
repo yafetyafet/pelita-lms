@@ -55,6 +55,31 @@ export function jamWIB(d: Date = new Date()): string {
   return `${p.hour}:${p.minute}`
 }
 
+/**
+ * Tanggal panjang menurut WIB, mis. "Sabtu, 20 September 2026".
+ *
+ * Dipakai komponen yang dirender di server DAN di peramban. Tanpa zona waktu
+ * eksplisit, server Vercel (UTC) dan ponsel siswa (WIB) menghasilkan teks
+ * berbeda, sehingga React melaporkan ketidakcocokan hidrasi dan tanggal
+ * sempat tampil keliru.
+ */
+export function tanggalPanjangWIB(
+  d: Date = new Date(),
+  opsi: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }
+): string {
+  return new Intl.DateTimeFormat('id-ID', { ...opsi, timeZone: ZONA_SEKOLAH }).format(d)
+}
+
+/** "HH:MM WIB" - aman dipakai di server maupun peramban. */
+export function jamLabelWIB(d: Date | string | number): string {
+  return jamWIB(new Date(d)) + ' WIB'
+}
+
 /** Menit sejak tengah malam WIB (0–1439). */
 export function menitWIB(d: Date = new Date()): number {
   const p = bagian(d)
