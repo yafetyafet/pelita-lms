@@ -17,6 +17,7 @@ import {
   tanpaKunci,
   type TipeSoal,
 } from '@/lib/logic/exam'
+import { KATEGORI_PEMBIASAAN } from '@/lib/logic/pembiasaan'
 import {
   dateKeyWIB,
   hariWIB,
@@ -661,21 +662,6 @@ export async function getStudentViolations() {
     orderBy: { createdAt: 'desc' },
   })
 }
-
-/**
- * Kategori pembiasaan yang boleh dipilih siswa.
- *
- * Dulu jurnal ini khusus ibadah ("Jurnal Iman"). Di SMK negeri dengan siswa
- * lintas agama, cakupan itu menyisihkan sebagian siswa; kategori di bawah
- * membuat pembiasaan literasi, kebersihan, dan kegiatan sosial ikut tercatat
- * di jurnal yang sama.
- */
-export const KATEGORI_PEMBIASAAN = [
-  'Ibadah',
-  'Literasi',
-  'Kebersihan',
-  'Sosial',
-] as const
 
 export async function getSpiritualJournals() {
   const session = await optionalSession('STUDENT')
