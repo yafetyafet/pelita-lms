@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { ArrowLeft, Bell, Send, CheckCircle2, Megaphone, Users, Clock, Loader2 } from "lucide-react"
-import { getBroadcasts, createBroadcast } from "@/app/actions/admin"
+import { ArrowLeft, Bell, Send, CheckCircle2, Megaphone, Users, Clock, Loader2, Trash2, AlertTriangle } from "lucide-react"
+import { getBroadcasts, createBroadcast, deleteBroadcast } from "@/app/actions/admin"
 
 export default function AdminBroadcastPage() {
   const [target, setTarget] = useState("ALL")
@@ -14,6 +14,8 @@ export default function AdminBroadcastPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
   const [history, setHistory] = useState<any[]>([])
+  const [menghapus, setMenghapus] = useState<string | null>(null)
+  const [error, setError] = useState("")
 
   const loadData = async () => {
     setIsLoading(true)
@@ -25,6 +27,38 @@ export default function AdminBroadcastPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  /**
+   * Menghapus pengumuman ikut menghapus catatan "sudah dibaca" milik setiap
+   * penerima (relasi BroadcastRead ber-onDelete Cascade), jadi penegasannya
+   * menyebut jumlah pembaca supaya admin tahu apa yang hilang.
+   */
+  const handleDelete = async (item: any) => {
+    const dibaca = item._count?.reads ?? 0
+    const peringatan =
+      dibaca > 0
+        ? `
+
+Pengumuman ini sudah dibaca ${dibaca} orang. Catatan "sudah dibaca" itu ikut terhapus.`
+        : ""
+    if (!confirm(`Hapus pengumuman "${item.title}"?${peringatan}
+
+Pengumuman akan hilang dari akun seluruh penerima dan tidak bisa dikembalikan.`))
+      return
+
+    setError("")
+    setMenghapus(item.id)
+    const res = await deleteBroadcast(item.id)
+    setMenghapus(null)
+
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    setToast("Pengumuman dihapus.")
+    setTimeout(() => setToast(null), 3000)
+    await loadData()
+  }
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,6 +180,13 @@ export default function AdminBroadcastPage() {
           Riwayat Pengumuman
         </h3>
 
+        {error && (
+          <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3 flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </p>
+        )}
+
         {isLoading ? (
           <PemuatData pesan="Memuat riwayat..." />
         ) : history.length === 0 ? (
@@ -157,20 +198,42 @@ export default function AdminBroadcastPage() {
           <div className="flex flex-col gap-3">
             {history.map(item => (
               <div key={item.id} className="p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/50 transition-all group">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                <div className="flex justify-between items-start mb-2 gap-2">
+                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors min-w-0">
                     {item.title}
                   </h4>
-                  <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-full whitespace-nowrap">
-                    Ke: {item.target}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-full whitespace-nowrap">
+                      Ke: {item.target}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(item)}
+                      disabled={menghapus === item.id}
+                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                      title="Hapus pengumuman"
+                    >
+                      {menghapus === item.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed mb-3">
                   {item.message}
                 </p>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
-                  <Clock className="w-3 h-3" />
-                  {new Date(item.createdAt).toLocaleString("id-ID")}
+                <div className="flex items-center gap-3 text-[10px] text-slate-400 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    {new Date(item.createdAt).toLocaleString("id-ID")}
+                  </span>
+                  {/* Jumlah pembaca sudah tersedia dari getBroadcasts tetapi
+                      tidak pernah ditampilkan. */}
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-3 h-3" />
+                    {item._count?.reads ?? 0} dibaca
+                  </span>
                 </div>
               </div>
             ))}
