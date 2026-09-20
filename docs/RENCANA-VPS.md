@@ -1,67 +1,166 @@
 # Rencana Pindah ke VPS
 
-Dokumen perencanaan sebelum menyewa VPS. Ditulis 19 September 2026, berdasarkan
-pengukuran langsung terhadap sistem yang sedang berjalan — bukan perkiraan.
+Dokumen perencanaan sebelum menyewa VPS. Ditulis 19 September 2026, diperbarui
+20 September 2026 dengan hasil pengukuran ulang.
 
 ---
 
-## 1. Kenapa sekarang terasa lambat
+## 1. Koreksi penting atas versi pertama dokumen ini
 
-Pengukuran ke basis data produksi:
+Versi pertama menyimpulkan bahwa penyebab utama lambatnya aplikasi adalah
+**jarak ke basis data**: latensi ~143 ms ke Supabase Singapura.
 
-| | Nilai terukur |
+**Kesimpulan itu keliru.** Angka 143 ms diukur dari komputer sekolah di
+Purbalingga ke Singapura — bukan dari fungsi Vercel ke Supabase. Fungsi
+Vercel-nya sendiri berjalan di Singapura (`sin1`), satu wilayah dengan
+Supabase, sehingga jarak fungsi ke basis data sebenarnya sudah dekat.
+
+Setelah diukur ulang pada 20 September 2026, penyebab sebenarnya ada di tempat
+lain, dan sebagian besar sudah diperbaiki tanpa pindah ke mana pun:
+
+| Temuan | Keadaan |
 | --- | --- |
-| Latensi satu kueri ke Supabase | **~143 ms** (rata-rata 5× `SELECT 1`) |
-| Ukuran seluruh basis data | **12 MB** |
-| Baris terbanyak | 407 `User`, 387 `ClassStudent` |
-| Muat halaman siswa di produksi | 0,9 – 1,5 detik |
+| Pustaka Excel 420 KB ikut terunduh setiap kunjungan | Sudah diperbaiki (dimuat saat dibutuhkan saja) |
+| Daftar siswa 32,8 KB dikirim ke halaman yang tidak memakainya | Sudah diperbaiki (jadi ~1 KB) |
+| Beranda menunggu JavaScript selesai sebelum mengambil data | Sudah diperbaiki (dirender di server) |
+| Setiap halaman tetap mengunduh ~579 KB JavaScript React + Next.js | **Masih ada** — batas kerangka kerja |
+| Cold start fungsi Vercel 0,4–1,3 detik | **Masih ada** — hanya hilang di VPS |
 
-Penyebabnya **bukan jumlah data** — 12 MB itu sangat kecil, dan kodenya sudah
-dioptimalkan (beranda siswa kini 1 permintaan, bukan 6). Penyebab utamanya
-**jarak fisik**: setiap kueri harus pulang-pergi Indonesia ↔ Singapura, dan
-setiap halaman butuh beberapa kueri.
+Latensi jaringan ke Vercel sendiri sehat: TTFB terukur **123–192 ms** dari
+Purbalingga.
 
-Dengan Postgres di mesin yang sama, latensi itu turun ke **di bawah 1 ms**.
-
-### Perkiraan setelah pindah
-
-| | Sekarang | VPS Jakarta, DB lokal |
-| --- | --- | --- |
-| Latensi per kueri | ~143 ms | **< 1 ms** |
-| Cold start fungsi | 200 – 800 ms | tidak ada |
-| Muat halaman siswa | 0,9 – 1,5 s | **perkiraan 150 – 300 ms** |
-
-> Angka kolom kanan adalah perkiraan berdasarkan hilangnya latensi jaringan dan
-> cold start. Belum diukur karena VPS-nya belum ada.
+Jadi alasan pindah ke VPS **bergeser**: bukan karena basis data jauh, melainkan
+karena (a) cold start, (b) kapasitas hari ujian yang bisa dipastikan, dan
+(c) paket Vercel Hobby melarang penggunaan seperti ini — lihat bagian 7.
 
 ---
 
 ## 2. Spesifikasi yang dibutuhkan
 
 Untuk 387 siswa, dengan asumsi ujian dijalankan per sesi (1–2 rombel, sekitar
-**40–70 siswa serentak**):
+**40–70 siswa serentak**).
 
-| Komponen | Rekomendasi | Alasan |
+### Kebutuhan terukur (20 September 2026)
+
+| Yang diukur | Hasil |
+| --- | --- |
+| Memori proses Next.js (produksi, idle) | **94 MB** |
+| Ukuran basis data | **13 MB** |
+| `node_modules` | **781 MB** |
+| Hasil build `.next` | **100 MB** |
+| JavaScript per kunjungan pertama | **579 KB** (di-cache setelahnya) |
+| Muatan data beranda guru | **1,6 KB** |
+
+### Rekomendasi
+
+| Komponen | Nyaman | Minimum yang sanggup |
 | --- | --- | --- |
-| vCPU | **2** | Next.js SSR + Postgres pada beban ini ringan |
-| RAM | **4 GB** | 1 GB Node, 1 GB Postgres, sisanya cache sistem |
-| Disk | **40–60 GB SSD NVMe** | DB hanya 12 MB; ruang habis untuk OS, log, backup |
-| Lokasi | **Jakarta** | Ini yang paling menentukan kecepatan |
-| OS | Ubuntu 22.04 / 24.04 LTS | Dukungan panjang, dokumentasi melimpah |
+| vCPU | 2 | **1** |
+| RAM | 4 GB | **2 GB** (wajib + swap 2 GB) |
+| Disk | 40 GB | **20 GB** (wajib rotasi log) |
+| Lokasi | Jakarta | Jakarta |
+| OS | Ubuntu 22.04 / 24.04 LTS | sama |
 
 **Jangan pilih VPS di Singapura atau luar negeri** hanya karena lebih murah —
-itu mengembalikan masalah latensi yang justru ingin diselesaikan.
+itu menambah latensi yang justru ingin dihindari. Penyedia dalam negeri yang
+umum: Biznet Gio, IDCloudHost, Dewaweb, Rumahweb.
 
-Penyedia dalam negeri yang umum: Biznet Gio, IDCloudHost, Dewaweb, Rumahweb.
-Kalau memakai DigitalOcean/Vultr, tidak ada region Indonesia — Singapura adalah
-yang terdekat (~10–30 ms dari Jawa, masih jauh lebih baik daripada sekarang
-karena DB-nya ikut pindah ke mesin yang sama).
+---
 
-### Kalau ingin lebih hemat
+## 2a. Evaluasi spek 1 core / 2 GB / 20 GB
 
-2 vCPU / 2 GB RAM masih sanggup untuk beban ini, tetapi tanpa ruang gerak saat
-ujian serentak. Selisih harganya biasanya kecil; **4 GB lebih aman** untuk
-hari-H.
+Spek ini **sanggup**, tetapi tanpa cadangan. Semua syarat di bawah wajib
+dipenuhi, bukan pilihan.
+
+### Kenapa sanggup
+
+- Beban puncaknya kecil. Ujian dijalankan per sesi 40–70 siswa. Kalau semuanya
+  menekan "Mulai Ujian" dalam satu menit, itu sekitar **1 permintaan dinamis
+  per detik** — jauh di bawah kemampuan satu core.
+- Basis datanya 13 MB dan muat seluruhnya di RAM.
+- Berkas JavaScript bersifat statis dan `immutable`; setelah kunjungan
+  pertama, siswa tidak mengunduhnya lagi.
+- 400 siswa × 579 KB = **232 MB** pada hari pertama. Lewat port 1 Gbps lokal,
+  itu hitungan detik — yang membatasi justru wifi sekolah, bukan VPS-nya.
+
+### Syarat wajib
+
+1. **Swap 2 GB.** Tanpa ini, lonjakan memori saat ujian bisa memicu OOM killer
+   dan mematikan Postgres atau Node di tengah ujian.
+
+   ```bash
+   fallocate -l 2G /swapfile && chmod 600 /swapfile
+   mkswap /swapfile && swapon /swapfile
+   echo '/swapfile none swap sw 0 0' >> /etc/fstab
+   sysctl -w vm.swappiness=10
+   ```
+
+2. **JANGAN build di VPS.** `next build` butuh RAM jauh lebih besar daripada
+   menjalankannya, dan `node_modules` saja 781 MB. Di mesin 1 core / 2 GB,
+   build sangat mungkin gagal kehabisan memori — dan kalaupun berhasil, lama.
+
+   Build di komputer sekolah atau GitHub Actions, lalu kirim hasilnya. Untuk
+   itu `output: 'standalone'` di `next.config.ts` wajib: hasilnya berisi server
+   beserta dependensi yang benar-benar dipakai saja, bukan seluruh 781 MB.
+
+3. **Postgres dikecilkan.** Nilai bawaan mengasumsikan mesin besar.
+
+   ```
+   shared_buffers = 256MB
+   effective_cache_size = 768MB
+   work_mem = 4MB
+   maintenance_work_mem = 64MB
+   max_connections = 50
+   ```
+
+4. **Batas koneksi Prisma.** Satu core tidak butuh banyak koneksi, dan tiap
+   koneksi memakan memori Postgres:
+
+   ```
+   DATABASE_URL="postgresql://...?connection_limit=8&pool_timeout=20"
+   ```
+
+5. **Rotasi log.** Disk 20 GB terisi OS (~5 GB), aplikasi (~1 GB), dan sisanya
+   untuk log serta backup. Log yang dibiarkan menumpuk akan menghabiskannya dan
+   membuat aplikasi berhenti.
+
+   ```
+   # /etc/systemd/journald.conf
+   SystemMaxUse=500M
+   ```
+
+6. **Backup dikirim ke luar VPS.** Disk 20 GB tidak cukup untuk menyimpan
+   riwayat backup di mesin yang sama — dan backup di mesin yang sama tidak
+   menolong kalau mesinnya yang rusak.
+
+### Risiko yang tersisa pada spek ini
+
+| Risiko | Kapan terasa | Penanganan |
+| --- | --- | --- |
+| Satu core dipakai bersama Postgres, Node, dan Caddy | Kalau seluruh 400 siswa ujian serentak, bukan per sesi | Jadwalkan ujian per sesi seperti rencana semula |
+| 2 GB tanpa ruang gerak | Lonjakan tak terduga | Swap + pantau memori; naik ke 4 GB bisa dilakukan kapan saja |
+| **20 Mbps internasional** | `npm install`, `apt upgrade`, `git pull` | Bukan masalah untuk siswa — mereka mengakses lewat jalur domestik (IIX) di port 1 Gbps. Yang lambat hanya pemasangan dan pembaruan |
+| Satu mesin tanpa redundansi | Kalau VPS mati | Backup teruji + tahu cara memulihkan cepat |
+
+### Tentang "20 Mbps International"
+
+Angka ini **tidak memengaruhi kecepatan siswa**. Siswa di Indonesia mencapai
+VPS Indonesia lewat jalur domestik (IIX) yang memakai port 1 Gbps. Yang lewat
+jalur internasional hanya lalu lintas VPS ke luar negeri: mengunduh paket npm,
+pembaruan sistem, dan `git pull`. Itu membuat pemasangan terasa lambat, bukan
+aplikasinya.
+
+Satu hal yang perlu dipastikan: **gambar soal ujian** yang memakai tautan luar
+(Google Drive, dan sejenisnya) diunduh langsung oleh ponsel siswa, bukan lewat
+VPS — jadi tidak terkena batas 20 Mbps itu.
+
+### Kesimpulan spek ini
+
+Sanggup untuk pemakaian harian dan ujian per sesi. Yang dikorbankan adalah
+ruang gerak: tidak ada cadangan kalau ada yang tidak terduga di hari-H. Kalau
+selisih harga ke 2 core / 4 GB kecil, ambil yang itu. Kalau tidak, spek ini
+bisa dijalankan asalkan enam syarat di atas dipenuhi — dan VPS bisa dinaikkan
+spesifikasinya tanpa memasang ulang apa pun.
 
 ---
 
@@ -150,13 +249,56 @@ dikerjakan — silakan pertimbangkan sebelum ujian besar.
 
 ---
 
-## 7. Ringkasan keputusan
+## 7. Kenapa tidak bertahan di Vercel Hobby
 
-- **Sewa**: 2 vCPU / 4 GB RAM / 40–60 GB NVMe, **lokasi Jakarta**
-- **Postgres di mesin yang sama**, bukan basis data terkelola di luar
+Ini alasan pindah yang paling menentukan, dan baru jelas pada 20 September 2026.
+
+**Ketentuan layanan.** Vercel menulis: *"Hobby teams are restricted to
+non-commercial personal use only. All commercial usage requires either a Pro or
+Enterprise plan."* Definisi "commercial" mereka mencakup *"receiving payment to
+create, update, or host the site"* dan *"a paid employee or consultant writing
+the code"*. LMS sekolah yang dibangun dan dikelola pegawai sekolah masuk
+kategori itu — bukan soal apakah siswa membayar. Vercel berhak menonaktifkan
+proyek **tanpa pemberitahuan**.
+
+**Cara gagalnya.** Vercel menulis: *"if you exceed your usage limits on the
+Hobby plan, you will have to wait until 30 days have passed before you can use
+the feature again."* Bukan diperlambat, bukan ditagih — berhenti sampai 30
+hari. Kalau kuota habis di tengah masa ujian, aplikasi mati sampai bulan
+berikutnya.
+
+**Kuota yang paling sempit.** Bukan lalu lintas, melainkan **Active CPU: 4 jam
+per bulan**. Untuk 400 pengguna aktif, itu ketat — dan perubahan render sisi
+server yang membuat beranda terasa cepat justru memindahkan kerja CPU dari
+ponsel siswa ke fungsi Vercel, sehingga pos ini makin terpakai.
+
+| Sumber daya | Jatah Hobby/bulan | Perkiraan pemakaian |
+| --- | --- | --- |
+| Function Invocations | 1.000.000 | ~10.000 per hari ujian — lega |
+| Fast Data Transfer | 100 GB | ~5–15 GB — lega |
+| Edge Requests | 1.000.000 | cukup |
+| **Active CPU** | **4 jam** | **sempit** |
+
+Pilihannya: naik ke Vercel Pro (US$20/bulan, sesuai ketentuan, kelebihan
+pemakaian ditagih bukan dimatikan) atau pindah ke VPS. Keduanya sah; VPS lebih
+murah dan menghilangkan cold start, dengan konsekuensi backup dan keamanan
+menjadi tanggung jawab sendiri.
+
+Sumber: [Vercel Hobby Plan](https://vercel.com/docs/plans/hobby),
+[Fair Use Guidelines](https://vercel.com/docs/limits/fair-use-guidelines).
+
+---
+
+## 8. Ringkasan keputusan
+
+- **Jangan menjalankan ujian di Vercel Hobby** — bukan karena lambat, tetapi
+  karena bisa berhenti 30 hari atau ditutup tanpa pemberitahuan (bagian 7)
+- **Spek 1 core / 2 GB / 20 GB sanggup** untuk ujian per sesi, asalkan enam
+  syarat di bagian 2a dipenuhi — terutama swap dan tidak membangun di VPS
+- **Lokasi Jakarta**, Postgres di mesin yang sama
 - **Siapkan backup sejak hari pertama**, dan uji pemulihannya
 - **Migrasi jauh sebelum masa ujian**, bukan menjelang
 
-Setelah penyedia dipilih, berkas deployment (Docker Compose berisi Next.js +
-Postgres + Caddy, skrip backup, dan panduan migrasi data dari Supabase) akan
-disiapkan menyesuaikan lingkungan yang Anda dapat.
+Setelah penyedia dipilih, berkas deployment (Docker Compose atau systemd berisi
+Next.js + Postgres + Caddy, skrip backup, dan panduan migrasi data dari
+Supabase) akan disiapkan menyesuaikan lingkungan yang didapat.
