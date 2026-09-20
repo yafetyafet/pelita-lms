@@ -19,43 +19,18 @@ import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
+import {
+  bacaJenisPelanggaran,
+  bersihkanJenis,
+  JENIS_BAWAAN,
+  type JenisPelanggaran,
+} from '@/lib/logic/pelanggaran'
 
 const KUNCI = 'VIOLATION_CATEGORIES'
-
-export type JenisPelanggaran = {
-  nama: string
-  poin: number
-  /** Kategori pengelompokan, mis. "Kedisiplinan" atau "Akademik". */
-  kelompok?: string
-}
-
-/**
- * Nilai awal, disamakan dengan daftar yang dulu ditulis mati supaya perilaku
- * lama tidak berubah sebelum sekolah menyesuaikannya.
- */
-const BAWAAN: JenisPelanggaran[] = [
-  { nama: 'Keterlambatan Hadir', poin: 5, kelompok: 'Kedisiplinan' },
-  { nama: 'Ketidaklengkapan Seragam / Atribut', poin: 5, kelompok: 'Kedisiplinan' },
-  { nama: 'Meninggalkan Kelas Tanpa Izin', poin: 10, kelompok: 'Kedisiplinan' },
-  { nama: 'Kecurangan Akademik / Ujian', poin: 25, kelompok: 'Akademik' },
-]
 
 function gagal(err: unknown) {
   if (err instanceof ForbiddenError) return { error: err.message }
   return { error: err instanceof Error ? err.message : 'Terjadi kesalahan.' }
-}
-
-function bersihkan(raw: unknown): JenisPelanggaran[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((x) => ({
-      nama: String((x as JenisPelanggaran)?.nama ?? '').trim(),
-      poin: Number((x as JenisPelanggaran)?.poin),
-      kelompok: String((x as JenisPelanggaran)?.kelompok ?? '').trim() || undefined,
-    }))
-    .filter(
-      (x) => x.nama.length > 0 && Number.isFinite(x.poin) && x.poin >= 0 && x.poin <= 100
-    )
 }
 
 /**
@@ -67,15 +42,7 @@ export async function getViolationCategories(): Promise<JenisPelanggaran[]> {
   if (!session) return []
 
   const row = await prisma.appSetting.findUnique({ where: { key: KUNCI } })
-  if (!row?.value) return BAWAAN
-
-  try {
-    const hasil = bersihkan(JSON.parse(row.value))
-    return hasil.length > 0 ? hasil : BAWAAN
-  } catch {
-    // Nilai rusak jangan sampai mengosongkan dropdown guru.
-    return BAWAAN
-  }
+  return bacaJenisPelanggaran(row?.value ?? null)
 }
 
 export async function setViolationCategories(
@@ -84,7 +51,7 @@ export async function setViolationCategories(
   try {
     await requireSession('ADMIN')
 
-    const bersih = bersihkan(daftar)
+    const bersih = bersihkanJenis(daftar)
     if (bersih.length === 0) {
       return { error: 'Minimal satu jenis pelanggaran harus ada, dengan poin 0-100.' }
     }

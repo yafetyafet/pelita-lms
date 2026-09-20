@@ -22,7 +22,7 @@ import {
   AlertTriangle,
   KeyRound
 } from "lucide-react"
-import * as XLSX from "xlsx"
+import { muatXlsx } from "@/lib/xlsx"
 import {
   getUsers,
   createUser,
@@ -242,7 +242,9 @@ export default function AdminUsersPage() {
    * hanya berisi contoh "X RPL 1" dan nilainya tidak pernah dibaca saat impor,
    * sehingga siswa hasil impor selalu tanpa rombel.
    */
-  const handleDownloadTemplateSiswa = () => {
+  const handleDownloadTemplateSiswa = async () => {
+    const XLSX = await muatXlsx()
+
     if (classes.length === 0) {
       showToast(
         "error",
@@ -292,7 +294,9 @@ export default function AdminUsersPage() {
     XLSX.writeFile(workbook, "Template_Import_Siswa.xlsx")
   }
 
-  const handleDownloadTemplateGuru = () => {
+  const handleDownloadTemplateGuru = async () => {
+    const XLSX = await muatXlsx()
+
     const templateData = [
       { "Nama Lengkap": "Bpk. Kurniawan S, S.Kom", "Username (NIP/NUPTK)": "kurniawan_guru", "Password": "password123", "Role": "TEACHER" }
     ]
@@ -302,7 +306,9 @@ export default function AdminUsersPage() {
     XLSX.writeFile(workbook, "Template_Import_Guru.xlsx")
   }
 
-  const handleDownloadTemplateLainnya = () => {
+  const handleDownloadTemplateLainnya = async () => {
+    const XLSX = await muatXlsx()
+
     const templateData = [
       { "Nama Lengkap": "Admin Utama", "Username": "admin_utama", "Password": "password123", "Role": "ADMIN" },
       { "Nama Lengkap": "PT Telkom", "Username": "mitra_telkom", "Password": "password123", "Role": "DUDI" }
@@ -322,8 +328,9 @@ export default function AdminUsersPage() {
     setParseError(null)
 
     const reader = new FileReader()
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        const XLSX = await muatXlsx()
         const bstr = evt.target?.result
         const wb = XLSX.read(bstr, { type: "binary" })
         const wsname = wb.SheetNames[0]

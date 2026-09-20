@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { getDashboardStats, getSystemHealth } from "@/app/actions/admin"
+import { getAdminHome } from "@/app/actions/admin"
 import { logout } from "@/app/actions/auth"
 import { 
   Users, 
@@ -48,9 +48,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function loadStats() {
-      const [data, h] = await Promise.all([getDashboardStats(), getSystemHealth()])
-      setStats(data)
-      setHealth(h)
+      // Satu permintaan, bukan dua. Lihat getAdminHome().
+      const data = await getAdminHome()
+      setStats(data.stats)
+      setHealth(data.health)
       setIsLoading(false)
     }
     loadStats()

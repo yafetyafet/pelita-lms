@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { getTeacherClasses, getGradesByClass, createAssignment, saveGrade } from "@/app/actions/teacher"
+import { getPenugasanSaya, getGradesByClass, createAssignment, saveGrade } from "@/app/actions/teacher"
 import { 
   ArrowLeft, 
   Award, 
@@ -40,7 +40,7 @@ export default function TeacherGradesPage() {
 
   useEffect(() => {
     async function load() {
-      const cls = await getTeacherClasses()
+      const cls = await getPenugasanSaya()
       setTeacherClasses(cls)
       setIsLoading(false)
     }

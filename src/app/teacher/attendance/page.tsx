@@ -16,7 +16,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import {
-  getTeacherClasses,
+  getPenugasanSaya,
   getAttendanceSheet,
   saveManualAttendance,
   getAttendanceRecap,
@@ -66,7 +66,7 @@ export default function TeacherAttendancePage() {
 
   useEffect(() => {
     async function load() {
-      const cls = await getTeacherClasses()
+      const cls = await getPenugasanSaya()
       setTeacherClasses(cls)
       if (cls.length > 0) {
         setPilihan(`${cls[0].classId}|${cls[0].subjectId}`)

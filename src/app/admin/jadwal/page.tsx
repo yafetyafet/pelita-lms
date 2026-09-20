@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Plus, Trash2, ShieldCheck,  X, Flag } from "lucide-react"
-import { getSchedules, createScheduleAdmin, deleteScheduleAdmin, getClasses, getTeachers, getSubjects, getSessions, getAppSetting, setAppSetting } from "@/app/actions/admin"
+import { getJadwalAdminHome, getSchedules, createScheduleAdmin, deleteScheduleAdmin, setAppSetting } from "@/app/actions/admin"
 
 export default function AdminJadwalPage() {
   const [teacherSelfSchedule, setTeacherSelfSchedule] = useState(true)
@@ -32,23 +32,18 @@ export default function AdminJadwalPage() {
 
   useEffect(() => {
     async function load() {
-      const [sch, cls, tch, subj, sesi, kebijakan] = await Promise.all([
-        getSchedules(),
-        getClasses(),
-        getTeachers(),
-        getSubjects(),
-        getSessions(),
-        getAppSetting("TEACHER_SELF_SCHEDULE"),
-      ])
-      setSchedules(sch)
+      // Satu permintaan, bukan enam. Lihat getJadwalAdminHome().
+      const data = await getJadwalAdminHome()
+      const cls = data.classes
+      setSchedules(data.schedules)
       setClasses(cls)
-      setTeachers(tch)
-      setSubjects(subj)
-      setSessions(sesi)
+      setTeachers(data.teachers)
+      setSubjects(data.subjects)
+      setSessions(data.sessions)
       // Kebijakan ini sebelumnya hanya state lokal: nilainya hilang saat
       // halaman dimuat ulang dan tidak pernah membatasi apa pun. Sekarang
       // disimpan di AppSetting dan ditegakkan oleh createSchedule() guru.
-      setTeacherSelfSchedule(kebijakan !== "0")
+      setTeacherSelfSchedule(data.teacherSelfSchedule)
       if (cls.length > 0) setFormClassId(cls[0].id)
       setIsLoading(false)
     }

@@ -16,14 +16,12 @@ import {
   Users,
   RotateCcw,
 } from "lucide-react"
-import {
-  getViolationCategories,
+import {getViolationCategories,
   setViolationCategories,
   getViolationRecords,
   getViolationSummary,
-  deleteViolation,
-  type JenisPelanggaran,
-} from "@/app/actions/kesiswaan"
+  deleteViolation} from "@/app/actions/kesiswaan"
+import type { JenisPelanggaran } from "@/lib/logic/pelanggaran"
 import { updateViolationStatus } from "@/app/actions/teacher"
 
 const STATUS = [

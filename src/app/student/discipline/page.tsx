@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { getStudentViolations } from "@/app/actions/student"
-import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
+import {getViolationCategories} from "@/app/actions/kesiswaan"
+import type { JenisPelanggaran } from "@/lib/logic/pelanggaran"
 import { 
   ArrowLeft, 
   ShieldCheck, 
