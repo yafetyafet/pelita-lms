@@ -46,7 +46,7 @@ Untuk 387 siswa, dengan asumsi ujian dijalankan per sesi (1–2 rombel, sekitar
 | --- | --- |
 | Memori proses Next.js (produksi, idle) | **94 MB** |
 | Ukuran basis data | **13 MB** |
-| `node_modules` | **781 MB** |
+| `node_modules` | **781 MB** (≈920 MB terpakai di disk) |
 | Hasil build `.next` | **100 MB** |
 | JavaScript per kunjungan pertama | **579 KB** (di-cache setelahnya) |
 | Muatan data beranda guru | **1,6 KB** |
@@ -96,7 +96,7 @@ dipenuhi, bukan pilihan.
    ```
 
 2. **JANGAN build di VPS.** `next build` butuh RAM jauh lebih besar daripada
-   menjalankannya, dan `node_modules` saja 781 MB. Di mesin 1 core / 2 GB,
+   menjalankannya, dan `node_modules` saja menempati ~920 MB disk. Di mesin 1 core / 2 GB,
    build sangat mungkin gagal kehabisan memori — dan kalaupun berhasil, lama.
 
    Build di komputer sekolah atau GitHub Actions, lalu kirim hasilnya. Untuk
