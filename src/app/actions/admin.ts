@@ -1082,6 +1082,43 @@ export async function deleteScheduleAdmin(id: string): Promise<AksiHasil> {
 // JAM PELAJARAN (SESI)
 // ==========================================
 
+/**
+ * Semua data halaman Kelola Jadwal dalam satu perjalanan.
+ *
+ * Halaman ini membuka enam server action sekaligus (jadwal, kelas, guru,
+ * mapel, sesi, kebijakan). Di Vercel masing-masing adalah satu permintaan
+ * HTTP dan satu invokasi fungsi dengan verifikasi sesi sendiri-sendiri.
+ */
+export async function getJadwalAdminHome() {
+  await requireSession('ADMIN')
+
+  const [schedules, classes, teachers, subjects, sessions, kebijakan] =
+    await Promise.all([
+      getSchedules(),
+      getClasses(),
+      getTeachers(),
+      getSubjects(),
+      getSessions(),
+      prisma.appSetting.findUnique({ where: { key: 'TEACHER_SELF_SCHEDULE' } }),
+    ])
+
+  return {
+    schedules,
+    classes,
+    teachers,
+    subjects,
+    sessions,
+    teacherSelfSchedule: kebijakan?.value !== '0',
+  }
+}
+
+/** Beranda admin: statistik dan kesiapan data sekaligus. */
+export async function getAdminHome() {
+  await requireSession('ADMIN')
+  const [stats, health] = await Promise.all([getDashboardStats(), getSystemHealth()])
+  return { stats, health }
+}
+
 export async function getSessions() {
   const session = await optionalSession('ADMIN', 'TEACHER')
   if (!session) return []

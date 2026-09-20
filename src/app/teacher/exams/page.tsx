@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { getTeacherClasses, getTeacherExams, createExam, deleteExam, updateExamSettings } from "@/app/actions/teacher"
+import { getPenugasanSaya, getTeacherExams, createExam, deleteExam, updateExamSettings } from "@/app/actions/teacher"
 import { 
   ArrowLeft, 
   Plus, 
@@ -25,7 +25,7 @@ import {
   ListChecks,
   CheckSquare
 } from "lucide-react"
-import * as XLSX from "xlsx"
+import { muatXlsx } from "@/lib/xlsx"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -53,7 +53,7 @@ export default function TeacherExamsPage() {
 
   useEffect(() => {
     async function load() {
-      const [cls, exm] = await Promise.all([getTeacherClasses(), getTeacherExams()])
+      const [cls, exm] = await Promise.all([getPenugasanSaya(), getTeacherExams()])
       setTeacherClasses(cls)
       setExams(exm)
       if (cls.length > 0) {
@@ -144,7 +144,9 @@ export default function TeacherExamsPage() {
    * gambar ditampilkan langsung di atas soal, baik saat guru meninjau maupun
    * saat siswa mengerjakan.
    */
-  const handleDownloadTemplateSoal = () => {
+  const handleDownloadTemplateSoal = async () => {
+    const XLSX = await muatXlsx()
+
     const contoh = [
       {
         "Tipe": "PG",
@@ -204,8 +206,9 @@ export default function TeacherExamsPage() {
     setImportError("")
 
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
+        const XLSX = await muatXlsx()
         const wb = XLSX.read(ev.target?.result, { type: "binary" })
         // Ambil lembar "Soal" bila ada; kalau tidak, lembar pertama.
         const nama = wb.SheetNames.includes("Soal") ? "Soal" : wb.SheetNames[0]

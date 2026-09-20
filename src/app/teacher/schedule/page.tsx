@@ -5,9 +5,8 @@ import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { getCurrentUser } from "@/app/actions/auth"
 import {
-  getTeacherClasses,
+  getJadwalGuruHome,
   getTeacherSchedules,
-  getJamPelajaran,
   createScheduleFromSessions,
   deleteSchedule,
 } from "@/app/actions/teacher"
@@ -49,15 +48,13 @@ export default function TeacherScheduleInputPage() {
 
   useEffect(() => {
     async function load() {
-      const [user, cls, scheds, jam] = await Promise.all([
-        getCurrentUser(),
-        getTeacherClasses(),
-        getTeacherSchedules(),
-        getJamPelajaran(),
-      ])
-      setCurrentUser(user)
+      // Satu permintaan, bukan empat. Lihat getJadwalGuruHome().
+      const data = await getJadwalGuruHome()
+      const cls = data?.penugasan ?? []
+      const jam = data?.jam ?? []
+      setCurrentUser(data?.user ?? null)
       setTeacherClasses(cls)
-      setScheduleList(scheds)
+      setScheduleList(data?.jadwal ?? [])
       setSesi(jam)
       if (cls.length > 0) {
         setTargetClassId(cls[0].classId)

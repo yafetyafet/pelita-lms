@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react"
 import {
-  getTeacherClasses,
+  getPenugasanSaya,
   getTeacherAssignments,
   createAssignment,
   updateAssignment,
@@ -79,7 +79,7 @@ export default function TeacherAssignmentsPage() {
   useEffect(() => {
     async function load() {
       const [cls, list] = await Promise.all([
-        getTeacherClasses(),
+        getPenugasanSaya(),
         getTeacherAssignments(),
       ])
       setKelas(cls)

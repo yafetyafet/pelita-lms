@@ -5,9 +5,8 @@ import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
 import { getCurrentUser } from "@/app/actions/auth"
 import {
-  getTeacherClasses,
+  getKelasSayaHome,
   getClassAttendanceToday,
-  getTeachingOptions,
   claimTeaching,
   releaseTeaching
 } from "@/app/actions/teacher"
@@ -51,23 +50,22 @@ export default function TeacherClassesPage() {
 
   useEffect(() => {
     async function load() {
-      const [user, cls, opt] = await Promise.all([
-        getCurrentUser(),
-        getTeacherClasses(),
-        getTeachingOptions()
-      ])
-      setCurrentUser(user)
-      setTeacherClasses(cls)
-      setOpsi(opt)
+      // Satu permintaan, bukan tiga. Lihat getKelasSayaHome().
+      const data = await getKelasSayaHome()
+      setCurrentUser(data?.user ?? null)
+      setTeacherClasses(data?.kelas ?? [])
+      setOpsi(data?.opsi ?? { classes: [], subjects: [], mine: [] })
       setIsLoading(false)
     }
     load()
   }, [])
 
   const muatUlangAmpu = async () => {
-    const [cls, opt] = await Promise.all([getTeacherClasses(), getTeachingOptions()])
-    setTeacherClasses(cls)
-    setOpsi(opt)
+    // Memakai aksi gabungan yang sama dengan saat halaman dibuka, supaya
+    // setelah guru mengambil/melepas mapel hanya ada satu permintaan.
+    const data = await getKelasSayaHome()
+    setTeacherClasses(data?.kelas ?? [])
+    setOpsi(data?.opsi ?? { classes: [], subjects: [], mine: [] })
   }
 
   const beriToast = (m: string) => {

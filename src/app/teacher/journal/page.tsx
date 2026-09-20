@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
-import { getTeacherClasses, getTeacherJournals, createJournal } from "@/app/actions/teacher"
+import { getPenugasanSaya, getTeacherJournals, createJournal } from "@/app/actions/teacher"
 import { 
   ArrowLeft, 
   PenTool, 
@@ -28,7 +28,7 @@ export default function TeacherJournalPage() {
 
   useEffect(() => {
     async function load() {
-      const [cls, jrnls] = await Promise.all([getTeacherClasses(), getTeacherJournals()])
+      const [cls, jrnls] = await Promise.all([getPenugasanSaya(), getTeacherJournals()])
       setTeacherClasses(cls)
       setJournals(jrnls)
       if (cls.length > 0) {

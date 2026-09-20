@@ -82,6 +82,139 @@ export async function getTeacherClasses() {
 }
 
 /**
+ * Daftar kelas + mapel yang diampu, tanpa daftar siswanya.
+ *
+ * `getTeacherClasses` ikut menarik seluruh siswa di setiap kelas - terukur
+ * 130 baris dan 32,8 KB untuk guru dengan 4 penugasan. Hampir semua halaman
+ * guru hanya memakainya untuk mengisi dropdown "Kelas & Mapel", jadi seluruh
+ * daftar siswa itu diunduh lalu dibuang. Versi ini sekitar 1 KB.
+ *
+ * `getTeacherClasses` tetap ada untuk halaman Kelas Saya, satu-satunya yang
+ * benar-benar menampilkan daftar siswanya.
+ */
+/**
+ * Semua data halaman Jadwal Mengajar dalam satu perjalanan.
+ *
+ * Halaman ini memanggil empat server action sekaligus saat dibuka. Di Vercel
+ * tiap action adalah permintaan HTTP tersendiri; digabung menjadi satu,
+ * penantian di layar berkurang dari empat perjalanan menjadi satu.
+ */
+export async function getJadwalGuruHome() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return null
+
+  const [user, penugasan, jadwal, jam] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.uid },
+      select: { id: true, name: true, username: true, role: true },
+    }),
+    getPenugasanSaya(),
+    getTeacherSchedules(),
+    getJamPelajaran(),
+  ])
+
+  return { user, penugasan, jadwal, jam }
+}
+
+/** Semua data halaman Kelas Saya dalam satu perjalanan. */
+export async function getKelasSayaHome() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return null
+
+  const [user, kelas, opsi] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.uid },
+      select: { id: true, name: true, username: true, role: true },
+    }),
+    getTeacherClasses(),
+    getTeachingOptions(),
+  ])
+
+  return { user, kelas, opsi }
+}
+
+export async function getPenugasanSaya() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return []
+
+  return await prisma.classTeacher.findMany({
+    where: session.role === 'ADMIN' ? {} : { userId: session.uid },
+    select: {
+      classId: true,
+      subjectId: true,
+      classInfo: { select: { id: true, name: true } },
+      subject: { select: { id: true, name: true } },
+    },
+    orderBy: [{ classId: 'asc' }],
+  })
+}
+
+/**
+ * Seluruh data beranda guru dalam SATU perjalanan.
+ *
+ * Beranda sebelumnya memanggil empat server action terpisah (getCurrentUser,
+ * getTeacherClasses, getTeacherMaterials, getViolationCategories). Di Vercel
+ * tiap action adalah satu permintaan HTTP dan satu invokasi fungsi
+ * tersendiri, masing-masing memverifikasi sesi dan membuka koneksi basis data
+ * sendiri.
+ *
+ * Yang lebih memberatkan: `getTeacherClasses` ikut menarik SELURUH siswa di
+ * setiap kelas yang diampu - terukur 130 baris siswa dan 32,8 KB untuk guru
+ * dengan 4 penugasan - padahal beranda hanya memerlukan nama kelas dan nama
+ * mapelnya, sekitar 1 KB. Daftar siswa baru diambil belakangan lewat
+ * `getStudentsByClass` ketika guru memilih kelas di formulir pelanggaran.
+ */
+export async function getTeacherHome() {
+  const session = await optionalSession('TEACHER', 'ADMIN')
+  if (!session) return null
+
+  const milikSaya = session.role === 'ADMIN' ? {} : { userId: session.uid }
+
+  const [user, kelas, materi, pengaturanJenis] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.uid },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true,
+        avatarUrl: true,
+        mustChangePassword: true,
+      },
+    }),
+    prisma.classTeacher.findMany({
+      where: milikSaya,
+      select: {
+        classId: true,
+        subjectId: true,
+        classInfo: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true } },
+      },
+      orderBy: [{ classId: 'asc' }],
+    }),
+    prisma.material.findMany({
+      where: session.role === 'ADMIN' ? {} : { authorId: session.uid },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        url: true,
+        createdAt: true,
+        classInfo: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      // Beranda hanya menampilkan yang terbaru; daftar penuh ada di halaman
+      // Materi.
+      take: 10,
+    }),
+    prisma.appSetting.findUnique({ where: { key: 'VIOLATION_CATEGORIES' } }),
+  ])
+
+  return { user, kelas, materi, pengaturanJenis: pengaturanJenis?.value ?? null }
+}
+
+/**
  * Pilihan rombel dan mapel untuk guru menentukan sendiri apa yang diampunya.
  *
  * Per keputusan sekolah, guru mengambil sendiri kelas + mapel dan langsung

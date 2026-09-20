@@ -4,8 +4,8 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { LayananGrid } from "@/components/LayananGrid"
 import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getTeacherMaterials, createMaterial, getTeacherClasses, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
-import { getViolationCategories, type JenisPelanggaran } from "@/app/actions/kesiswaan"
+import { getTeacherHome, createMaterial, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
+import { bacaJenisPelanggaran, type JenisPelanggaran } from "@/lib/logic/pelanggaran"
 import { 
   Bell, 
   BookOpen, 
@@ -41,15 +41,14 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     async function loadUser() {
-      const [user, cls, mats, jenis] = await Promise.all([
-        getCurrentUser(),
-        getTeacherClasses(),
-        getTeacherMaterials(),
-        getViolationCategories()
-      ])
-      if (user) setCurrentUser(user)
+      // Satu permintaan, bukan empat. Lihat getTeacherHome().
+      const data = await getTeacherHome()
+      const cls = data?.kelas ?? []
+      const jenis = bacaJenisPelanggaran(data?.pengaturanJenis ?? null)
+
+      if (data?.user) setCurrentUser(data.user)
       setTeacherClasses(cls)
-      setMaterials(mats)
+      setMaterials(data?.materi ?? [])
       setJenisPelanggaran(jenis)
       if (jenis.length > 0) {
         setViolationType(jenis[0].nama)
@@ -183,9 +182,10 @@ export default function TeacherDashboard() {
       alert(res.error)
     } else {
       setMateriAdded(true)
-      // Reload materials
-      const mats = await getTeacherMaterials()
-      setMaterials(mats)
+      // Muat ulang daftar materi lewat aksi beranda yang sama, supaya tidak
+      // ada aksi kedua hanya untuk keperluan ini.
+      const segar = await getTeacherHome()
+      setMaterials(segar?.materi ?? [])
       setTimeout(() => {
         setMateriAdded(false)
         setMateriTitle("")

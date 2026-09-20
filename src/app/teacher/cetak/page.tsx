@@ -13,7 +13,7 @@ import {
   ClipboardCheck,
 } from "lucide-react"
 import {
-  getTeacherClasses,
+  getPenugasanSaya,
   getLaporanJurnal,
   getLaporanNilai,
   getLaporanKehadiran,
@@ -64,7 +64,7 @@ export default function TeacherCetakPage() {
 
   useEffect(() => {
     async function load() {
-      const [p, cls] = await Promise.all([getSchoolProfile(), getTeacherClasses()])
+      const [p, cls] = await Promise.all([getSchoolProfile(), getPenugasanSaya()])
       setProfil(p)
       setKelasSaya(cls)
       if (cls.length > 0) setPilihan(`${cls[0].classId}|${cls[0].subjectId}`)
