@@ -79,22 +79,89 @@ sudo systemctl daemon-reload
 
 ---
 
-## 3. Split-DNS — jangan dilewati
+## 3. Bandwidth: seluruh siswa lewat sambungan 10 Mbps
 
-Kalau siswa di sekolah mengakses lewat nama domain publik, sebagian router
-mengirim lalu lintasnya **keluar ke internet lalu masuk lagi**. Sambungan
-10 Mbps sekolah jadi terpakai dua kali untuk data yang sebenarnya tidak perlu
-keluar gedung.
+Keputusan sekolah (21 September 2026): **tidak ada akses lokal**. Semua
+siswa, termasuk yang duduk di ruang kelas, mengakses lewat internet dan
+sambungan dedicated 10 Mbps. Dengan begitu bandwidth menjadi pembatas utama,
+dan angkanya perlu dihitung jujur.
 
-Buat catatan DNS internal supaya nama domain yang sama menunjuk ke **IP lokal**
-server bagi perangkat di jaringan sekolah. Setelah itu seluruh lalu lintas
-ujian berjalan pada kecepatan LAN dan tidak menyentuh sambungan internet.
+### Terukur, tanpa CDN
 
-Periksa dari laptop yang tersambung wifi sekolah:
+| Skenario | Data | Waktu di 10 Mbps |
+| --- | --- | --- |
+| 128 siswa mulai ujian, JS sudah tersimpan di HP | 1,9 MB | 2 detik |
+| 400 siswa presensi pagi, JS sudah tersimpan | 3,9 MB | 3 detik |
+| 128 siswa mulai ujian, JS **belum** tersimpan | 19,4 MB | 16 detik |
+| 400 siswa presensi pagi, kunjungan **pertama** | 58,6 MB | **49 detik** |
+| 400 siswa, 5 halaman sehari, kunjungan pertama | 74,2 MB | **62 detik** |
 
-```bash
-nslookup lms.sekolah.sch.id     # harus menjawab IP lokal, bukan IP publik
-```
+Dua baris terakhir berbahaya. Saat sambungan jenuh selama puluhan detik,
+permintaan tidak sekadar lambat - sebagian **gagal** karena peramban
+menyerah menunggu, dan siswa mengira aplikasinya rusak.
+
+### Jalan keluarnya: berkas statis dilayani CDN, bukan sekolah
+
+Dari 150 KB yang diunduh tiap siswa pada kunjungan pertama, **140 KB adalah
+berkas statis** - JavaScript, ikon, logo - yang isinya sama untuk semua orang.
+Tidak ada alasan berkas itu harus keluar dari sambungan sekolah 400 kali.
+
+Cloudflare (paket gratis) diletakkan di depan server: berkas statis
+disimpannya di jaringan edge (ada titiknya di Jakarta), dan yang lewat
+sambungan sekolah tinggal HTML dinamis serta data - sekitar 10 KB per halaman.
+
+| Skenario | Tanpa CDN | **Dengan CDN** |
+| --- | --- | --- |
+| 400 siswa presensi pagi, kunjungan pertama | 49 detik | **3 detik** |
+| 128 siswa mulai ujian, JS belum tersimpan | 16 detik | **2 detik** |
+| 400 siswa, 5 halaman sehari, kunjungan pertama | 62 detik | **16 detik** |
+
+Dengan CDN, skenario terburuk turun **15 kali lipat**. Ini bukan pilihan
+tambahan untuk rencana "semua lewat 10 Mbps" - ini prasyaratnya.
+
+Header `Cache-Control: immutable` untuk `/_next/static/*` di Caddyfile
+sudah disiapkan untuk ini; Cloudflare akan menyimpannya tanpa pengaturan
+tambahan.
+
+### Cara memasang Cloudflare
+
+Cloudflare gratis mensyaratkan **seluruh zona domain** dikelola DNS-nya.
+Ada dua jalan:
+
+**Jalan A - pindahkan DNS `smkn1kemangkon.sch.id` ke Cloudflare.**
+Gratis. Cloudflare mengimpor semua catatan DNS yang ada secara otomatis,
+lalu nameserver di IDCloudHost diganti ke milik Cloudflare. Website sekolah
+tetap di tempatnya - hanya pengelolaan DNS yang pindah. Perlu koordinasi
+dengan pemegang akun IDCloudHost, dan ada jeda propagasi beberapa jam.
+
+**Jalan B - domain terpisah khusus LMS.**
+Beli satu domain (mis. di Hostinger, ~Rp 150-250 rb/tahun) dan langsung
+kelola di Cloudflare. Domain sekolah tidak disentuh sama sekali. Ini alasan
+yang sah untuk membeli domain terpisah - bukan demi hosting, melainkan supaya
+Cloudflare bisa dipasang tanpa mengusik domain utama sekolah.
+
+Setelah zona ada di Cloudflare:
+
+1. Catatan **A** `lms` (atau `@`) → IP publik server, **awan oranye menyala**
+   (proxied)
+2. SSL/TLS → **Full (strict)**
+3. **Jangan** nyalakan "Always Use HTTPS" di Cloudflare - Caddy sudah
+   mengalihkan sendiri, dan pengaturan itu mengganggu verifikasi sertifikat
+4. Caching → Caching Level: Standard (bawaan sudah cukup)
+
+Caddy tetap mengambil sertifikat Let's Encrypt seperti biasa; Cloudflare
+meneruskan verifikasinya.
+
+### Tetap lakukan meski sudah ada CDN
+
+- **Minta siswa membuka aplikasi sehari sebelum ujian.** Sesudah itu JS
+  tersimpan di HP dan bahkan CDN pun tidak lagi disentuh.
+- **Jadwalkan mulai ujian bertahap** per rombel, selang 2-3 menit, kalau
+  ada lebih dari satu rombel ujian bersamaan.
+- **Batasi pemakaian internet lain saat ujian.** Sambungan 10 Mbps itu
+  dipakai bersama seluruh sekolah. Satu guru memutar YouTube di jam ujian
+  memakan bandwidth yang sama. Kalau router sekolah mendukung QoS,
+  prioritaskan lalu lintas ke server LMS.
 
 ---
 
@@ -211,7 +278,7 @@ ditampilkan di akhir skrip.
 | Risiko | Penanganan |
 | --- | --- |
 | **Listrik sekolah padam saat ujian** | UPS. Minimal cukup untuk mematikan server dengan rapi; idealnya cukup menyelesaikan satu sesi ujian |
-| Internet sekolah putus | Siswa di sekolah tetap bisa mengakses lewat LAN kalau split-DNS sudah dipasang. Yang dari luar terputus |
+| Internet sekolah putus | **Seluruh** akses terputus, termasuk siswa di dalam sekolah - tidak ada jalur lokal. Pastikan ada kontak darurat ke penyedia dedicated |
 | Disk VM penuh | Rotasi log sudah dipasang; pantau `df -h` |
 | Sertifikat HTTPS kedaluwarsa | Caddy memperbaruinya otomatis - pastikan port 80 tetap terbuka |
 | Server rusak | Snapshot Proxmox + backup di luar server |
