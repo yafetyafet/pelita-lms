@@ -1,6 +1,5 @@
-src/prisma/contract.json linguist-generated
-src/prisma/contract.d.ts linguist-generated
-src/prisma/ops.json linguist-generated
-src/prisma/migration.json linguist-generated
-migrations/snapshots/**/contract.json linguist-generated
-migrations/snapshots/**/contract.d.ts linguist-generated
+# Skrip dan berkas konfigurasi untuk server Linux harus tetap LF.
+# Git di Windows mengubahnya ke CRLF saat checkout, dan bash di server
+# menolak baris berakhiran  - itu yang menggagalkan proxmox-firewall.sh.
+deploy/** text eol=lf
+*.sh text eol=lf

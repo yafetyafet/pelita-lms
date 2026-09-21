@@ -1,0 +1,15 @@
+# Caddy di dalam kontainer. Aplikasi dijangkau lewat nama layanan compose.
+pelita.smkn1kemangkon.sch.id {
+	encode zstd gzip
+
+	@statis path /_next/static/* /icon-192.png /icon-512.png /logo-pelita*.png
+	header @statis Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

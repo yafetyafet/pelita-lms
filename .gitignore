@@ -50,3 +50,7 @@ dist/
 # Tanpa pengecualian ini, aturan `.env*` di atas ikut memblokirnya sehingga
 # variabel wajib (mis. SESSION_SECRET) tidak terdokumentasi di repo.
 !.env.example
+
+# rahasia server; dibuat di server, tidak pernah masuk repo
+deploy/docker/pelita.env
+.kirim/
