@@ -1,0 +1,59 @@
+# Caddy untuk UJI COBA tanpa domain (akses lewat IP).
+#
+# Pasang:
+#   sudo cp Caddyfile.ujicoba /etc/caddy/Caddyfile
+#   sudo nano /etc/caddy/Caddyfile      # ganti 192.168.1.50 dengan IP server
+#   sudo systemctl reload caddy
+#
+# ---------------------------------------------------------------------------
+# KENAPA TETAP HTTPS, PADAHAL BELUM PUNYA DOMAIN
+#
+# Uji coba lewat HTTP biasa TIDAK AKAN BISA LOGIN SAMA SEKALI. Cookie sesi
+# aplikasi ini memakai tanda `Secure` saat NODE_ENV=production (lihat
+# src/lib/auth/session.ts), dan peramban menolak mengirim cookie ber-tanda
+# Secure melalui HTTP. Akibatnya: login tampak berhasil, lalu halaman
+# berikutnya menendang kembali ke layar masuk - tanpa pesan galat apa pun.
+#
+# `tls internal` membuat Caddy menerbitkan sertifikatnya sendiri untuk IP ini.
+# Peramban akan menampilkan peringatan "koneksi tidak aman" sekali; setelah
+# ditekan "Lanjutkan", sambungannya menjadi HTTPS sungguhan. Dengan begitu:
+#
+#   * login berfungsi (cookie Secure terkirim)
+#   * presensi GPS ikut bisa diuji (peramban hanya mengizinkan akses lokasi
+#     pada sambungan aman)
+#
+# ---------------------------------------------------------------------------
+# TETAP HANYA UNTUK UJI COBA
+#
+# Sertifikat ini tidak dikenali peramban, jadi setiap siswa harus menekan
+# "Lanjutkan" lebih dulu - tidak layak dipakai 400 siswa. Begitu domain siap,
+# ganti ke Caddyfile biasa yang memakai sertifikat Let's Encrypt.
+# ---------------------------------------------------------------------------
+
+https://192.168.1.50 {
+	tls internal
+
+	encode zstd gzip
+
+	@statis path /_next/static/* /icon-192.png /icon-512.png /logo-pelita*.png
+	header @statis Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		X-Content-Type-Options nosniff
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:3000
+
+	log {
+		output file /var/log/caddy/pelita.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
+
+# Pengalihan dari HTTP supaya yang mengetik alamat tanpa https:// tetap sampai.
+http://192.168.1.50 {
+	redir https://192.168.1.50{uri} permanent
+}
