@@ -53,7 +53,22 @@ function parseOpsi(raw: string | null): string[] {
  * indeks barunya. Tanpa ini, opsi yang dibiarkan kosong ikut tersimpan dan
  * muncul sebagai pilihan kosong di perangkat siswa.
  */
-function rapikan(options: string[], kunci: string) {
+function rapikan(options: string[], kunci: string, tipe?: string) {
+  if (tipe === "BENAR_SALAH") {
+    // Kunci Benar/Salah posisional ("B,S,B"): pernyataan kosong dibuang
+    // BERSAMA nilai kunci di posisi yang sama, supaya tidak bergeser.
+    const nilai = String(kunci || "").split(",").map((x) => x.trim().toUpperCase())
+    const bersih: string[] = []
+    const kunciBaru: string[] = []
+    options.forEach((o, i) => {
+      if (o.trim()) {
+        bersih.push(o.trim())
+        kunciBaru.push(nilai[i] === "S" ? "S" : "B")
+      }
+    })
+    return { options: bersih, correctAnswer: kunciBaru.join(",") }
+  }
+
   const petaBaru = new Map<number, number>()
   const bersih: string[] = []
   options.forEach((o, i) => {
@@ -140,7 +155,7 @@ export function EditorSoal({
     setPesan("")
     setBusy(q.id)
 
-    const bersih = d.type === "ESAI" ? null : rapikan(d.options, d.correctAnswer)
+    const bersih = d.type === "ESAI" ? null : rapikan(d.options, d.correctAnswer, d.type)
     if (bersih && !bersih.correctAnswer) {
       setBusy(null)
       setError("Kunci jawaban belum dipilih (atau menunjuk opsi yang kosong).")
@@ -194,7 +209,7 @@ export function EditorSoal({
     setError("")
     setBusy("baru")
     const bersih =
-      baru.type === "ESAI" ? null : rapikan(baru.options, baru.correctAnswer)
+      baru.type === "ESAI" ? null : rapikan(baru.options, baru.correctAnswer, baru.type)
     if (bersih && !bersih.correctAnswer) {
       setBusy(null)
       setError("Kunci jawaban belum dipilih (atau menunjuk opsi yang kosong).")
@@ -351,9 +366,11 @@ export function EditorSoal({
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
                       {q.type === "PG_KOMPLEKS"
                         ? "PG KOMPLEKS"
-                        : q.type === "ESAI"
-                          ? "ESAI"
-                          : "PG"}
+                        : q.type === "BENAR_SALAH"
+                          ? "BENAR/SALAH"
+                          : q.type === "ESAI"
+                            ? "ESAI"
+                            : "PG"}
                     </span>
                     <span className="text-[9px] text-slate-500">{q.points} poin</span>
                     {bermasalah && (
@@ -431,6 +448,7 @@ function FormSoal({
 }) {
   const esai = nilai.type === "ESAI"
   const kompleks = nilai.type === "PG_KOMPLEKS"
+  const benarSalah = nilai.type === "BENAR_SALAH"
 
   const ubahOpsi = (i: number, v: string) => {
     const o = [...nilai.options]
@@ -438,14 +456,47 @@ function FormSoal({
     setNilai({ options: o })
   }
 
+  /** Kunci Benar/Salah sebagai daftar sepanjang jumlah pernyataan. */
+  const kunciBS = (): string[] => {
+    const n = String(nilai.correctAnswer || "").split(",").map((x: string) => x.trim().toUpperCase())
+    return (nilai.options as string[]).map((_: string, i: number) => (n[i] === "S" ? "S" : "B"))
+  }
+
+  const setKunciBS = (i: number, v: "B" | "S") => {
+    const k = kunciBS()
+    k[i] = v
+    setNilai({ correctAnswer: k.join(",") })
+  }
+
   const ubahJumlah = (delta: number) => {
     const o = [...nilai.options]
     if (delta > 0 && o.length < 8) o.push("")
     if (delta < 0 && o.length > 2) o.pop()
+
+    if (benarSalah) {
+      // Kunci posisional mengikuti panjang pernyataan.
+      const k = kunciBS().slice(0, o.length)
+      while (k.length < o.length) k.push("B")
+      setNilai({ options: o, correctAnswer: k.join(",") })
+      return
+    }
+
     const kunci = String(nilai.correctAnswer || "")
       .split(",").map((x: string) => x.trim()).filter(Boolean)
       .filter((k: string) => Number(k) < o.length)
     setNilai({ options: o, correctAnswer: kunci.join(",") || "0" })
+  }
+
+  const gantiTipe = (tipeBaru: string) => {
+    // Bentuk kunci tiap tipe berbeda: indeks untuk PG, posisional B/S untuk
+    // Benar/Salah. Saat tipe berganti, kunci lama tidak lagi bermakna.
+    if (tipeBaru === "BENAR_SALAH") {
+      setNilai({ type: tipeBaru, correctAnswer: (nilai.options as string[]).map(() => "B").join(",") })
+    } else if (nilai.type === "BENAR_SALAH") {
+      setNilai({ type: tipeBaru, correctAnswer: "0" })
+    } else {
+      setNilai({ type: tipeBaru })
+    }
   }
 
   return (
@@ -453,11 +504,12 @@ function FormSoal({
       <div className="flex items-center gap-2">
         <select
           value={nilai.type}
-          onChange={(e) => setNilai({ type: e.target.value })}
+          onChange={(e) => gantiTipe(e.target.value)}
           className="text-[11px] px-2 py-1.5 rounded-lg border border-slate-200 bg-white"
         >
           <option value="PG">PG (1 jawaban)</option>
           <option value="PG_KOMPLEKS">PG Kompleks (&gt;1 jawaban)</option>
+          <option value="BENAR_SALAH">Benar/Salah (tiap pernyataan)</option>
           <option value="ESAI">Esai</option>
         </select>
         <label className="flex items-center gap-1 text-[10px] text-slate-500">
@@ -494,7 +546,12 @@ function FormSoal({
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-              {kompleks ? (
+              {benarSalah ? (
+                <>
+                  <CheckSquare className="w-3 h-3 text-emerald-600" /> Tulis
+                  pernyataan, tandai kunci tiap baris
+                </>
+              ) : kompleks ? (
                 <>
                   <CheckSquare className="w-3 h-3 text-emerald-600" /> Centang SEMUA
                   jawaban benar
@@ -514,8 +571,8 @@ function FormSoal({
               >
                 −
               </button>
-              <span className="text-[10px] text-slate-500 w-10 text-center">
-                {nilai.options.length} opsi
+              <span className="text-[10px] text-slate-500 w-14 text-center">
+                {nilai.options.length} {benarSalah ? "pernyataan" : "opsi"}
               </span>
               <button
                 type="button"
@@ -529,23 +586,48 @@ function FormSoal({
 
           {nilai.options.map((o: string, i: number) => (
             <div key={i} className="flex items-center gap-1.5">
-              <input
-                type={kompleks ? "checkbox" : "radio"}
-                checked={
-                  kompleks
-                    ? kunciAktif(nilai.correctAnswer, i)
-                    : String(nilai.correctAnswer) === String(i)
-                }
-                onChange={() => toggleKunci(i, kompleks)}
-                className="accent-emerald-600"
-              />
+              {benarSalah ? (
+                <span className="flex gap-0.5 shrink-0">
+                  {(["B", "S"] as const).map((v) => {
+                    const aktif = kunciBS()[i] === v
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setKunciBS(i, v)}
+                        title={v === "B" ? "Kunci: Benar" : "Kunci: Salah"}
+                        className={`w-6 h-6 rounded-md text-[10px] font-bold border transition ${
+                          aktif
+                            ? v === "B"
+                              ? "bg-emerald-600 border-emerald-600 text-white"
+                              : "bg-rose-600 border-rose-600 text-white"
+                            : "bg-white border-slate-300 text-slate-400"
+                        }`}
+                      >
+                        {v}
+                      </button>
+                    )
+                  })}
+                </span>
+              ) : (
+                <input
+                  type={kompleks ? "checkbox" : "radio"}
+                  checked={
+                    kompleks
+                      ? kunciAktif(nilai.correctAnswer, i)
+                      : String(nilai.correctAnswer) === String(i)
+                  }
+                  onChange={() => toggleKunci(i, kompleks)}
+                  className="accent-emerald-600"
+                />
+              )}
               <span className="text-[10px] font-bold text-slate-500 w-4">
-                {String.fromCharCode(65 + i)}.
+                {benarSalah ? `${i + 1}.` : `${String.fromCharCode(65 + i)}.`}
               </span>
               <input
                 value={o}
                 onChange={(e) => ubahOpsi(i, e.target.value)}
-                placeholder={`Opsi ${String.fromCharCode(65 + i)}`}
+                placeholder={benarSalah ? `Pernyataan ${i + 1}` : `Opsi ${String.fromCharCode(65 + i)}`}
                 className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px]"
               />
             </div>

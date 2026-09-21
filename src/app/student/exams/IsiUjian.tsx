@@ -81,7 +81,7 @@ type Soal = {
   id: string
   question: string
   imageUrl: string | null
-  type: "PG" | "PG_KOMPLEKS" | "ESAI"
+  type: "PG" | "PG_KOMPLEKS" | "BENAR_SALAH" | "ESAI"
   points: number
   options: string[] | null
 }
@@ -339,7 +339,11 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   // ---------- Ruang ujian ----------
   if (paper) {
     const q = questions[currentIdx]
-    const terjawab = Object.keys(answers).filter((k) => answers[k] !== "").length
+    // Soal Benar/Salah menyimpan jawaban posisional ("B,,S"); nilai yang
+    // hanya berisi koma berarti semua pilihan sudah dibatalkan, bukan
+    // terjawab. Karena itu yang dihitung adalah adanya isi selain koma.
+    const adaIsi = (v: string) => v.replace(/,/g, "").trim() !== ""
+    const terjawab = Object.keys(answers).filter((k) => adaIsi(answers[k] || "")).length
 
     return (
       <div className="flex flex-col gap-3 p-4 pb-24">
@@ -393,7 +397,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
           </div>
           <div className="grid grid-cols-8 gap-1.5">
             {questions.map((s, i) => {
-              const sudah = Boolean(String(answers[s.id] || "").trim())
+              const sudah = adaIsi(String(answers[s.id] || ""))
               const ragu = doubtful[s.id]
               return (
                 <button
@@ -426,7 +430,9 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                   ? "Esai"
                   : q.type === "PG_KOMPLEKS"
                     ? "Pilihan Ganda Kompleks"
-                    : "Pilihan Ganda"}{" "}
+                    : q.type === "BENAR_SALAH"
+                      ? "Benar / Salah"
+                      : "Pilihan Ganda"}{" "}
                 • {q.points} poin
               </span>
               <button
@@ -457,7 +463,77 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
               />
             )}
 
-            {q.type === "ESAI" ? (
+            {q.type === "BENAR_SALAH" ? (
+              /* Bentuk "Pilihan Ganda Kompleks Kategori" ala TKA: setiap
+                 pernyataan dinilai sendiri-sendiri. Jawaban disimpan posisional
+                 ("B,S,,B") - posisi ke-i milik pernyataan ke-i, kosong berarti
+                 belum dijawab - agar cocok dengan kunci di koreksiOtomatis(). */
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  Tentukan <strong>Benar</strong> atau <strong>Salah</strong> untuk
+                  setiap pernyataan. Dinilai utuh: semua pernyataan harus tepat.
+                </p>
+
+                {(q.options || []).map((pernyataan, i) => {
+                  const jawab = String(answers[q.id] || "").split(",")
+                  const nilaiIni = (jawab[i] || "").trim().toUpperCase()
+
+                  const pilih = (v: "B" | "S") => {
+                    const baru = [...jawab]
+                    while (baru.length < (q.options || []).length) baru.push("")
+                    baru[i] = baru[i]?.trim().toUpperCase() === v ? "" : v
+                    setAnswers((p) => ({ ...p, [q.id]: baru.join(",") }))
+                  }
+
+                  return (
+                    <div
+                      key={i}
+                      className={`rounded-2xl border px-3 py-2.5 flex flex-col gap-2 transition ${
+                        nilaiIni
+                          ? "bg-blue-50/60 border-blue-300"
+                          : "bg-white border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-6 h-6 shrink-0 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[11px]">
+                          {i + 1}
+                        </span>
+                        <span className="text-xs text-slate-800 leading-relaxed pt-0.5">
+                          {pernyataan}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pl-8">
+                        {(["B", "S"] as const).map((v) => {
+                          const aktif = nilaiIni === v
+                          return (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() => pilih(v)}
+                              aria-pressed={aktif}
+                              className={`py-2 rounded-xl text-xs font-bold border transition ${
+                                aktif
+                                  ? v === "B"
+                                    ? "bg-emerald-600 border-emerald-600 text-white"
+                                    : "bg-rose-600 border-rose-600 text-white"
+                                  : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {v === "B" ? "Benar" : "Salah"}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+                {(!q.options || q.options.length === 0) && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    Pernyataan soal ini belum diisi guru. Laporkan ke pengawas.
+                  </p>
+                )}
+              </div>
+            ) : q.type === "ESAI" ? (
               <textarea
                 value={answers[q.id] || ""}
                 onChange={(e) =>

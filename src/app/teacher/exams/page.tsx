@@ -99,6 +99,51 @@ export default function TeacherExamsPage() {
     }))
   }
 
+  /**
+   * Buang pernyataan Benar/Salah yang kosong BERSAMA nilai kunci di posisinya.
+   * Tanpa ini baris kosong ikut tersimpan sebagai pernyataan hampa, dan
+   * kuncinya bergeser satu posisi dari yang dimaksud guru.
+   */
+  const rapikanBS = (q: any) => {
+    const k = kunciBS(q)
+    const options: string[] = []
+    const kunci: string[] = []
+    ;(q.options as string[]).forEach((o, i) => {
+      if (String(o).trim()) { options.push(String(o).trim()); kunci.push(k[i]) }
+    })
+    return { options, correctAnswer: kunci.join(",") }
+  }
+
+  /** Kunci Benar/Salah sebagai daftar sepanjang jumlah pernyataan. */
+  const kunciBS = (q: any): string[] => {
+    const n = String(q.correctAnswer || "").split(",").map((x: string) => x.trim().toUpperCase())
+    return (q.options as string[]).map((_: string, i: number) => (n[i] === "S" ? "S" : "B"))
+  }
+
+  const setKunciBS = (idx: number, oIdx: number, v: "B" | "S") => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== idx) return q
+      const k = kunciBS(q)
+      k[oIdx] = v
+      return { ...q, correctAnswer: k.join(",") }
+    }))
+  }
+
+  /**
+   * Bentuk kunci tiap tipe berbeda - indeks untuk PG, posisional B/S untuk
+   * Benar/Salah - jadi saat tipe berganti kunci lama tidak lagi bermakna.
+   */
+  const gantiTipe = (idx: number, tipeBaru: string) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i !== idx) return q
+      if (tipeBaru === "BENAR_SALAH") {
+        return { ...q, type: tipeBaru, correctAnswer: (q.options as string[]).map(() => "B").join(",") }
+      }
+      if (q.type === "BENAR_SALAH") return { ...q, type: tipeBaru, correctAnswer: "0" }
+      return { ...q, type: tipeBaru }
+    }))
+  }
+
   const kunciAktif = (q: any, oIdx: number) =>
     String(q.correctAnswer || "")
       .split(",")
@@ -112,6 +157,11 @@ export default function TeacherExamsPage() {
       const opts = [...q.options]
       if (delta > 0 && opts.length < 8) opts.push("")
       if (delta < 0 && opts.length > 2) opts.pop()
+      if (q.type === "BENAR_SALAH") {
+        const k = kunciBS(q).slice(0, opts.length)
+        while (k.length < opts.length) k.push("B")
+        return { ...q, options: opts, correctAnswer: k.join(",") }
+      }
       // Buang kunci yang menunjuk opsi yang sudah tidak ada.
       const kunci = String(q.correctAnswer || "")
         .split(",").map((x: string) => x.trim()).filter(Boolean)
@@ -144,6 +194,14 @@ export default function TeacherExamsPage() {
    * gambar ditampilkan langsung di atas soal, baik saat guru meninjau maupun
    * saat siswa mengerjakan.
    */
+  /** "b, Salah ,true" -> ["B","S","B"]; nilai tak dikenal dibiarkan apa adanya. */
+  const normalisasiBS = (raw: string): string[] =>
+    raw
+      .split(/[,;/ ]+/)
+      .map(x => x.trim().toUpperCase())
+      .filter(Boolean)
+      .map(x => (x === "BENAR" || x === "TRUE" || x === "T" || x === "1" ? "B" : x === "SALAH" || x === "FALSE" || x === "F" || x === "0" ? "S" : x))
+
   const handleDownloadTemplateSoal = async () => {
     const XLSX = await muatXlsx()
 
@@ -173,6 +231,18 @@ export default function TeacherExamsPage() {
         "Poin": 15
       },
       {
+        "Tipe": "BENAR_SALAH",
+        "Pertanyaan": "Perhatikan pernyataan tentang jaringan komputer berikut. Tentukan Benar atau Salah untuk setiap pernyataan.",
+        "URL Gambar": "",
+        "Opsi A": "Switch bekerja pada lapisan data link",
+        "Opsi B": "Alamat IPv4 terdiri dari 128 bit",
+        "Opsi C": "Router menghubungkan dua jaringan berbeda",
+        "Opsi D": "HTTP berjalan di atas UDP",
+        "Opsi E": "",
+        "Jawaban Benar": "B,S,B,S",
+        "Poin": 15
+      },
+      {
         "Tipe": "ESAI",
         "Pertanyaan": "Jelaskan perbedaan HUB dan SWITCH beserta contoh penggunaannya.",
         "URL Gambar": "",
@@ -183,11 +253,11 @@ export default function TeacherExamsPage() {
     ]
 
     const petunjuk = [
-      { Kolom: "Tipe", Keterangan: "PG = satu jawaban benar; PG_KOMPLEKS = boleh lebih dari satu; ESAI = dinilai guru" },
+      { Kolom: "Tipe", Keterangan: "PG = satu jawaban benar; PG_KOMPLEKS = boleh lebih dari satu; BENAR_SALAH = tiap pernyataan dinilai B/S (bentuk TKA); ESAI = dinilai guru" },
       { Kolom: "Pertanyaan", Keterangan: "Wajib diisi" },
       { Kolom: "URL Gambar", Keterangan: "Opsional. Tautan gambar (jpg/png) atau tautan embed; ditampilkan di atas soal" },
-      { Kolom: "Opsi A–E", Keterangan: "Isi minimal 2 opsi untuk PG dan PG_KOMPLEKS. Kosongkan untuk ESAI" },
-      { Kolom: "Jawaban Benar", Keterangan: "Huruf opsi. PG: satu huruf (mis. A). PG_KOMPLEKS: dipisah koma (mis. A,B,D). ESAI: kosongkan" },
+      { Kolom: "Opsi A–E", Keterangan: "PG/PG_KOMPLEKS: minimal 2 opsi. BENAR_SALAH: isi dengan PERNYATAAN, satu per kolom (minimal 2). ESAI: kosongkan" },
+      { Kolom: "Jawaban Benar", Keterangan: "PG: satu huruf (mis. A). PG_KOMPLEKS: huruf dipisah koma (mis. A,B,D). BENAR_SALAH: B atau S per pernyataan, urut (mis. B,S,B,S). ESAI: kosongkan" },
       { Kolom: "Poin", Keterangan: "Bobot nilai soal. Kosong berarti 10" },
       { Kolom: "", Keterangan: "" },
       { Kolom: "Catatan", Keterangan: "PG kompleks dinilai utuh: semua jawaban benar harus dipilih dan tidak boleh ada yang salah" }
@@ -241,6 +311,7 @@ export default function TeacherExamsPage() {
 
           let tipe = ambil(row, "tipe", "type").toUpperCase().replace(/[\s-]/g, "_")
           if (tipe.includes("KOMPLEK")) tipe = "PG_KOMPLEKS"
+          else if (tipe.includes("BENAR") || tipe === "BS" || tipe === "B/S") tipe = "BENAR_SALAH"
           else if (tipe.startsWith("ESAI") || tipe.startsWith("URAIAN")) tipe = "ESAI"
           else tipe = "PG"
 
@@ -259,7 +330,21 @@ export default function TeacherExamsPage() {
             .filter(n => Number.isInteger(n) && n >= 0 && n < Math.max(opsi.length, 1))
             .sort((a, b) => a - b)
 
-          if (tipe !== "ESAI") {
+          // Benar/Salah: kunci posisional, satu B/S per pernyataan.
+          let kunciBS = ""
+          if (tipe === "BENAR_SALAH") {
+            const pernyataan = opsi.filter(Boolean)
+            const nilai = normalisasiBS(jawabanMentah)
+            if (pernyataan.length < 2) {
+              dilewati.push(`baris ${i + 2} (pernyataan kurang dari 2)`)
+              return
+            }
+            if (nilai.length !== pernyataan.length || nilai.some(x => x !== "B" && x !== "S")) {
+              dilewati.push(`baris ${i + 2} (kunci Benar/Salah harus ${pernyataan.length} nilai B/S, urut)`)
+              return
+            }
+            kunciBS = nilai.join(",")
+          } else if (tipe !== "ESAI") {
             if (opsi.filter(Boolean).length < 2) {
               dilewati.push(`baris ${i + 2} (opsi kurang dari 2)`)
               return
@@ -277,8 +362,13 @@ export default function TeacherExamsPage() {
             question: pertanyaan,
             imageUrl: ambil(row, "url gambar", "gambar", "image"),
             type: tipe,
-            options: tipe === "ESAI" ? OPSI_KOSONG() : (opsi.length >= 5 ? opsi : [...opsi, ...Array(5 - opsi.length).fill("")]),
-            correctAnswer: tipe === "ESAI" ? "" : indeks.join(","),
+            options:
+              tipe === "ESAI"
+                ? OPSI_KOSONG()
+                : tipe === "BENAR_SALAH"
+                  ? opsi.filter(Boolean)
+                  : (opsi.length >= 5 ? opsi : [...opsi, ...Array(5 - opsi.length).fill("")]),
+            correctAnswer: tipe === "ESAI" ? "" : tipe === "BENAR_SALAH" ? kunciBS : indeks.join(","),
             points: Number.isFinite(poin) && poin > 0 ? poin : 10
           })
         })
@@ -315,6 +405,9 @@ export default function TeacherExamsPage() {
    *   Jawaban: A,B,D    -> kunci PG kompleks (otomatis jadi PG_KOMPLEKS)
    *   Poin: 15          -> bobot soal
    *   Esai / Uraian     -> menandai soal uraian
+   *   Benar/Salah       -> menandai soal Benar/Salah (bentuk TKA); baris
+   *                        berikutnya yang diawali "-", "•", atau huruf A-H
+   *                        adalah PERNYATAAN, dan "Jawaban: B,S,B" kuncinya
    *
    * Dua bug versi lama: opsi di luar A-D diabaikan, dan "Jawaban: A,B" membuat
    * "ABCD".indexOf() mengembalikan -1 lalu DIAM-DIAM menyimpan kunci "A",
@@ -337,6 +430,19 @@ export default function TeacherExamsPage() {
     const tutup = () => {
       if (!current) return
       const terisi = current.options.filter((o: string) => String(o).trim())
+
+      if (current.type === "BENAR_SALAH") {
+        const kunci = String(current.correctAnswer || "").split(",").filter(Boolean)
+        if (terisi.length < 2) {
+          catatan.push(`Soal ${imported.length + 1}: Benar/Salah butuh minimal 2 pernyataan`)
+        } else if (kunci.length !== terisi.length) {
+          catatan.push(`Soal ${imported.length + 1}: kunci Benar/Salah ${kunci.length} nilai, pernyataan ${terisi.length}`)
+        }
+        current.options = terisi
+        imported.push(current)
+        current = null
+        return
+      }
 
       if (current.type !== "ESAI") {
         if (terisi.length < 2) {
@@ -416,6 +522,22 @@ export default function TeacherExamsPage() {
         continue
       }
 
+      // --- penanda Benar/Salah ---
+      if (/^(benar\s*[\/-]\s*salah|b\s*\/\s*s|bs|true\s*[\/-]\s*false)\s*$/i.test(t)) {
+        current.type = "BENAR_SALAH"
+        current.teksSelesai = true
+        continue
+      }
+
+      // --- pernyataan Benar/Salah berawalan "-" atau "•" ---
+      if (current.type === "BENAR_SALAH") {
+        const mPernyataan = t.match(/^[-•*]\s*(.+)$/)
+        if (mPernyataan) {
+          current.options.push(mPernyataan[1].trim())
+          continue
+        }
+      }
+
       // --- kunci jawaban ---
       const mJawab = t.match(/^(jawaban|kunci|answer)\s*[:=]\s*(.+)$/i)
       if (mJawab) {
@@ -424,6 +546,22 @@ export default function TeacherExamsPage() {
           .split(/[,;/ ]+/)
           .map(x => x.trim().replace(/[.)]$/, ""))
           .filter(Boolean)
+
+        // Kunci Benar/Salah. Dikenali dari penanda "Benar/Salah" sebelumnya,
+        // atau dari isinya: "S", "SALAH", "BENAR", "T", "F" bukan huruf opsi
+        // yang sah (opsi hanya A-H), jadi kehadirannya menandakan kunci B/S.
+        const tokenBS = bagian.map(x => (x === "BENAR" || x === "TRUE" || x === "T" ? "B" : x === "SALAH" || x === "FALSE" || x === "F" ? "S" : x))
+        const mengandungTandaBS = bagian.some(x => ["S", "SALAH", "BENAR", "TRUE", "FALSE", "T", "F"].includes(x))
+        if (current.type === "BENAR_SALAH" || (mengandungTandaBS && tokenBS.every(x => x === "B" || x === "S"))) {
+          current.type = "BENAR_SALAH"
+          if (tokenBS.every(x => x === "B" || x === "S")) {
+            current.correctAnswer = tokenBS.join(",")
+          } else {
+            catatan.push(`Kunci Benar/Salah "${mJawab[2].trim()}" hanya boleh B atau S`)
+          }
+          current.teksSelesai = true
+          continue
+        }
 
         const indeks = Array.from(
           new Set(
@@ -469,11 +607,13 @@ export default function TeacherExamsPage() {
 
     const berGambar = imported.filter(q => q.imageUrl).length
     const kompleks = imported.filter(q => q.type === "PG_KOMPLEKS").length
+    const benarSalah = imported.filter(q => q.type === "BENAR_SALAH").length
     const esai = imported.filter(q => q.type === "ESAI").length
 
     const ringkas = [`${imported.length} soal masuk`]
     if (berGambar) ringkas.push(`${berGambar} bergambar`)
     if (kompleks) ringkas.push(`${kompleks} PG kompleks`)
+    if (benarSalah) ringkas.push(`${benarSalah} Benar/Salah`)
     if (esai) ringkas.push(`${esai} esai`)
 
     setImportError(
@@ -516,7 +656,7 @@ export default function TeacherExamsPage() {
 
     setCreating(true)
     const adaEsai = questions.some(q => q.type === "ESAI")
-    const adaKompleks = questions.some(q => q.type === "PG_KOMPLEKS")
+    const adaKompleks = questions.some(q => q.type === "PG_KOMPLEKS" || q.type === "BENAR_SALAH")
 
     const res = await createExam({
       title: examTitle,
@@ -535,8 +675,14 @@ export default function TeacherExamsPage() {
         // tersimpan tanpa opsi dan tanpa kunci jawaban sama sekali — tampil ke
         // siswa sebagai soal tanpa pilihan, dan mustahil dinilai benar.
         // Yang membedakan adalah punya-opsi atau tidak, yaitu bukan ESAI.
-        options: q.type !== "ESAI" ? JSON.stringify(q.options) : undefined,
-        correctAnswer: q.type !== "ESAI" ? q.correctAnswer : undefined,
+        options:
+          q.type === "ESAI"
+            ? undefined
+            : JSON.stringify(q.type === "BENAR_SALAH" ? rapikanBS(q).options : q.options),
+        correctAnswer:
+          q.type === "ESAI"
+            ? undefined
+            : q.type === "BENAR_SALAH" ? rapikanBS(q).correctAnswer : q.correctAnswer,
         points: q.points
       }))
     })
@@ -849,8 +995,10 @@ export default function TeacherExamsPage() {
                 <div className="flex flex-col gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl">
                   <p className="text-[10px] text-emerald-900 leading-relaxed">
                     Templat berisi kolom <strong>URL Gambar</strong> (soal bergambar),
-                    <strong> Opsi A–E</strong>, dan tipe <strong>PG_KOMPLEKS</strong>
-                    untuk soal berjawaban lebih dari satu. Ada lembar
+                    <strong> Opsi A–E</strong>, tipe <strong>PG_KOMPLEKS</strong>
+                    untuk soal berjawaban lebih dari satu, dan tipe{" "}
+                    <strong>BENAR_SALAH</strong> untuk soal bentuk TKA (tiap
+                    pernyataan dinilai Benar/Salah). Ada lembar
                     <strong> Petunjuk</strong> di dalamnya.
                   </p>
 
@@ -905,7 +1053,7 @@ export default function TeacherExamsPage() {
                     rows={6}
                     value={pasteText}
                     onChange={e => setPasteText(e.target.value)}
-                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\nJawaban: A\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star\nB. Bus\nC. HTTP\nD. Ring\nE. SMTP\nJawaban: A,B,D\n\n4. Jelaskan perbedaan HUB dan SWITCH.\nEsai\nPoin: 20"}
+                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\nJawaban: A\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star\nB. Bus\nC. HTTP\nD. Ring\nE. SMTP\nJawaban: A,B,D\n\n4. Perhatikan pernyataan tentang jaringan berikut.\nBenar/Salah\n- Switch bekerja pada lapisan data link\n- Alamat IPv4 terdiri dari 128 bit\n- Router menghubungkan dua jaringan berbeda\nJawaban: B,S,B\nPoin: 15\n\n5. Jelaskan perbedaan HUB dan SWITCH.\nEsai\nPoin: 20"}
                     className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-[11px] text-slate-800 resize-none focus:outline-none font-mono"
                   />
                   {importError && (
@@ -927,9 +1075,10 @@ export default function TeacherExamsPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-slate-500">Soal #{idx + 1}</span>
                       <div className="flex items-center gap-2">
-                        <select value={q.type} onChange={e => updateQuestion(idx, "type", e.target.value)} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 bg-white">
+                        <select value={q.type} onChange={e => gantiTipe(idx, e.target.value)} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 bg-white">
                           <option value="PG">PG (1 jawaban)</option>
                           <option value="PG_KOMPLEKS">PG Kompleks (&gt;1 jawaban)</option>
+                          <option value="BENAR_SALAH">Benar/Salah (tiap pernyataan)</option>
                           <option value="ESAI">Esai</option>
                         </select>
                         <button type="button" onClick={() => removeQuestion(idx)} className="text-red-400 hover:text-red-600">
@@ -962,7 +1111,9 @@ export default function TeacherExamsPage() {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                            {q.type === "PG_KOMPLEKS" ? (
+                            {q.type === "BENAR_SALAH" ? (
+                              <><CheckSquare className="w-3 h-3 text-emerald-600" /> Tulis pernyataan, tandai kunci tiap baris</>
+                            ) : q.type === "PG_KOMPLEKS" ? (
                               <><CheckSquare className="w-3 h-3 text-emerald-600" /> Centang SEMUA jawaban benar</>
                             ) : (
                               <><ListChecks className="w-3 h-3 text-emerald-600" /> Pilih satu jawaban benar</>
@@ -979,7 +1130,28 @@ export default function TeacherExamsPage() {
 
                         {q.options.map((opt: string, oIdx: number) => (
                           <div key={oIdx} className="flex items-center gap-1.5">
-                            {q.type === "PG_KOMPLEKS" ? (
+                            {q.type === "BENAR_SALAH" ? (
+                              <span className="flex gap-0.5 shrink-0">
+                                {(["B", "S"] as const).map(v => {
+                                  const aktif = kunciBS(q)[oIdx] === v
+                                  return (
+                                    <button
+                                      key={v}
+                                      type="button"
+                                      onClick={() => setKunciBS(idx, oIdx, v)}
+                                      title={v === "B" ? "Kunci: Benar" : "Kunci: Salah"}
+                                      className={`w-6 h-6 rounded-md text-[10px] font-bold border transition ${
+                                        aktif
+                                          ? v === "B" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-rose-600 border-rose-600 text-white"
+                                          : "bg-white border-slate-300 text-slate-400"
+                                      }`}
+                                    >
+                                      {v}
+                                    </button>
+                                  )
+                                })}
+                              </span>
+                            ) : q.type === "PG_KOMPLEKS" ? (
                               <input
                                 type="checkbox"
                                 checked={kunciAktif(q, oIdx)}
@@ -995,12 +1167,14 @@ export default function TeacherExamsPage() {
                                 className="accent-emerald-600"
                               />
                             )}
-                            <span className="text-[10px] font-bold text-slate-500 w-4">{String.fromCharCode(65 + oIdx)}.</span>
+                            <span className="text-[10px] font-bold text-slate-500 w-4">
+                              {q.type === "BENAR_SALAH" ? `${oIdx + 1}.` : `${String.fromCharCode(65 + oIdx)}.`}
+                            </span>
                             <input
                               type="text"
                               value={opt}
                               onChange={e => updateOption(idx, oIdx, e.target.value)}
-                              placeholder={`Opsi ${String.fromCharCode(65 + oIdx)}`}
+                              placeholder={q.type === "BENAR_SALAH" ? `Pernyataan ${oIdx + 1}` : `Opsi ${String.fromCharCode(65 + oIdx)}`}
                               className="flex-1 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] focus:outline-none"
                             />
                           </div>
