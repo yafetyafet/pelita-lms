@@ -1,0 +1,26 @@
+# Uji coba SEBELUM DNS pelita.smkn1kemangkon.sch.id benar.
+#
+# Memakai nama host sslip.io yang otomatis menunjuk ke IP publik sekolah.
+# Karena ini nama host sungguhan, peramban mengirim SNI dan Let's Encrypt
+# menerbitkan sertifikat ASLI - tidak ada peringatan, login dan presensi GPS
+# berjalan persis seperti nanti di domain resmi.
+#
+# Pendekatan "tls internal" pada alamat IP telanjang ditinggalkan: peramban
+# tidak mengirim SNI untuk IP, dan kebijakan TLS Caddy untuk situs IP-saja
+# tidak bisa diatur lewat Caddyfile - jabat tangannya selalu gagal.
+#
+# Setelah DNS resmi siap, ganti ke deploy/docker/Caddyfile.
+
+36-93-120-47.sslip.io {
+	encode zstd gzip
+
+	@statis path /_next/static/* /icon-192.png /icon-512.png /logo-pelita*.png
+	header @statis Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		X-Content-Type-Options nosniff
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

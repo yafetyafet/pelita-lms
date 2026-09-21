@@ -1,5 +1,9 @@
 generator client {
   provider = "prisma-client-js"
+  // Aplikasi dibangun di Windows lalu dijalankan di kontainer Debian
+  // (node:22-slim). Tanpa target kedua ini, engine Prisma yang ikut
+  // terbawa hanya versi Windows dan server gagal saat kueri pertama.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

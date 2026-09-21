@@ -1,0 +1,87 @@
+# PELITA LMS di VM skansatech-server, tanpa sudo.
+#
+# Tiga kontainer, terisolasi dari sikap-postgres dan sikap-minio yang sudah
+# ada di VM yang sama:
+#
+#   caddy  -> HTTPS + kompresi, terikat ke 192.100.1.10 (bukan 0.0.0.0)
+#             karena port 443 di IP Tailscale sudah dipakai layanan lain
+#   app    -> Next.js standalone, dijalankan dari bind mount ./app
+#             sehingga rilis baru cukup rsync + restart, tanpa build image
+#   db     -> PostgreSQL 17, tidak diekspos ke host sama sekali
+#
+# Jalankan dari ~/pelita:  docker compose up -d
+
+name: pelita
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: pelita-caddy
+    restart: unless-stopped
+    ports:
+      - "192.100.1.10:80:80"
+      - "192.100.1.10:443:443"
+    volumes:
+      # Mount FOLDER, bukan satu berkas. Bind mount satu berkas menempel ke
+      # inode; `sed -i` atau editor yang menulis berkas baru membuat kontainer
+      # terus membaca versi lama, dan `caddy reload` melaporkan "unchanged".
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  app:
+    # Dibangun dari Dockerfile di folder ini: node:22-slim + OpenSSL.
+    build: .
+    image: pelita-app:latest
+    container_name: pelita-app
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "server.js"]
+    env_file: ./pelita.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    volumes:
+      - ./app:/app:ro
+      # Next.js menulis cache gambar di sini; sisanya cukup read-only.
+      - app-cache:/app/.next/cache
+    depends_on:
+      db:
+        condition: service_healthy
+    # Batas memori: VM ini dipakai bersama SIKAP.
+    mem_limit: 1g
+
+  db:
+    image: postgres:17-alpine
+    container_name: pelita-db
+    restart: unless-stopped
+    env_file: ./pelita.env
+    environment:
+      POSTGRES_DB: pelita
+      POSTGRES_USER: pelita
+      # POSTGRES_PASSWORD dari pelita.env
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./backup:/backup
+    # Setelan hemat: basis datanya belasan MB, muat seluruhnya di memori.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=4MB
+      -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pelita -d pelita"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 1g
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+  app-cache:
