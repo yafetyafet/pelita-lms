@@ -23,7 +23,7 @@ lain, dan sebagian besar sudah diperbaiki tanpa pindah ke mana pun:
 | Pustaka Excel 420 KB ikut terunduh setiap kunjungan | Sudah diperbaiki (dimuat saat dibutuhkan saja) |
 | Daftar siswa 32,8 KB dikirim ke halaman yang tidak memakainya | Sudah diperbaiki (jadi ~1 KB) |
 | Beranda menunggu JavaScript selesai sebelum mengambil data | Sudah diperbaiki (dirender di server) |
-| Setiap halaman tetap mengunduh ~579 KB JavaScript React + Next.js | **Masih ada** — batas kerangka kerja |
+| Setiap halaman mengunduh ~121 KB JavaScript terkompresi (sebagian besar React + Next.js) | **Masih ada** — batas kerangka kerja, dan ukurannya memang wajar |
 | Cold start fungsi Vercel 0,4–1,3 detik | **Masih ada** — hanya hilang di VPS |
 
 Latensi jaringan ke Vercel sendiri sehat: TTFB terukur **123–192 ms** dari
@@ -48,7 +48,7 @@ serentak** (lihat bagian 2a) dan masih lapang.
 | Ukuran basis data | **13 MB** |
 | `node_modules` | **781 MB** (≈920 MB terpakai di disk) |
 | Hasil build `.next` | **100 MB** |
-| JavaScript per kunjungan pertama | **579 KB** (di-cache setelahnya) |
+| JavaScript per kunjungan pertama | **121 KB** brotli / 140 KB gzip (di-cache setelahnya) |
 | Muatan data beranda guru | **1,6 KB** |
 
 ### Rekomendasi
@@ -80,7 +80,7 @@ dipenuhi, bukan pilihan.
 - Basis datanya 13 MB dan muat seluruhnya di RAM.
 - Berkas JavaScript bersifat statis dan `immutable`; setelah kunjungan
   pertama, siswa tidak mengunduhnya lagi.
-- 400 siswa × 579 KB = **232 MB** pada hari pertama. Lewat port 1 Gbps lokal,
+- 400 siswa × 121 KB = **48 MB** pada hari pertama. Lewat port 1 Gbps lokal,
   itu hitungan detik — yang membatasi justru wifi sekolah, bukan VPS-nya.
 
 ### Uji beban ujian 128 siswa serentak (21 September 2026)
@@ -117,24 +117,28 @@ Perkiraan pemakaian memori saat ujian berlangsung:
 | Ubuntu | ~250 MB |
 | **Total** | **~860 MB dari 2 GB** |
 
-### Yang justru menjadi hambatan: unduhan pertama
+### Unduhan pertama: jauh lebih ringan daripada perkiraan semula
 
-Bukan CPU, bukan memori, bukan basis data - melainkan **579 KB JavaScript**
-yang diunduh setiap peramban pada kunjungan pertama. Untuk 128 siswa itu
-**74 MB**, dan jalurnya melewati **koneksi internet sekolah**, bukan port
-1 Gbps VPS.
+> **Koreksi (21 September 2026).** Versi sebelumnya dokumen ini menyebut
+> "579 KB JavaScript" dan "74 MB untuk 128 siswa". Kedua angka itu **salah**,
+> karena diukur tanpa kompresi dan ikut menghitung berkas polyfill yang tidak
+> pernah diunduh peramban modern.
 
-Berkas itu bertanda `immutable`, jadi hanya diunduh sekali per perangkat.
-Karena itu, sebelum hari-H:
+Angka sebenarnya, diukur ulang pada berkas hasil build:
 
-> **Minta siswa membuka aplikasi sekali sehari sebelumnya**, cukup sampai
-> halaman beranda. Peramban akan menyimpan berkasnya, dan pada hari ujian
-> yang tersisa hanya naskah 5,1 KB.
+| Keadaan | Ukuran per siswa | 128 siswa |
+| --- | --- | --- |
+| Tanpa kompresi (bukan yang terjadi) | 469 KB | 59 MB |
+| **gzip** (bawaan Caddy dan nginx) | **140 KB** | **17 MB** |
+| **brotli** (dipakai Vercel) | **121 KB** | **15 MB** |
 
-Tanpa langkah itu, 74 MB harus melewati sambungan sekolah serentak pada menit
-pertama ujian. Pada sambungan 100 Mbps, itu sekitar 6 detik - masih wajar,
-tetapi terasa seperti "semua serentak lambat" dan mudah disalahartikan sebagai
-masalah server.
+Dari 121 KB itu, hanya sekitar **32 KB adalah kode aplikasi ini**; sisanya
+React dan runtime Next.js yang tidak bisa dibuang.
+
+Berkasnya bertanda `immutable`, jadi hanya diunduh sekali per perangkat.
+Meminta siswa membuka aplikasi sehari sebelum ujian tetap membantu, tetapi
+bukan lagi keharusan: 15 MB untuk 128 siswa lewat sambungan 100 Mbps selesai
+dalam hitungan detik.
 
 ### Catatan kejujuran atas pengukuran ini
 
@@ -167,7 +171,30 @@ masalah server.
    itu `output: 'standalone'` di `next.config.ts` wajib: hasilnya berisi server
    beserta dependensi yang benar-benar dipakai saja, bukan seluruh 781 MB.
 
-3. **Postgres dikecilkan.** Nilai bawaan mengasumsikan mesin besar.
+3. **Kompresi HTTP wajib dinyalakan.** Vercel melakukannya otomatis; VPS
+   **tidak**. Tanpa ini siswa mengunduh 469 KB, bukan 140 KB - empat kali
+   lebih berat, semata karena pindah tempat.
+
+   Di Caddy cukup satu baris:
+
+   ```
+   sekolah.sch.id {
+     encode zstd gzip
+     reverse_proxy localhost:3000
+   }
+   ```
+
+   Periksa hasilnya setelah pasang:
+
+   ```bash
+   curl -sI -H "Accept-Encoding: gzip" https://sekolah.sch.id/_next/static/... \
+     | grep -i content-encoding
+   ```
+
+   Harus muncul `content-encoding: gzip`. Kalau kosong, kompresinya belum
+   jalan.
+
+4. **Postgres dikecilkan.** Nilai bawaan mengasumsikan mesin besar.
 
    ```
    shared_buffers = 256MB
@@ -177,14 +204,14 @@ masalah server.
    max_connections = 50
    ```
 
-4. **Batas koneksi Prisma.** Satu core tidak butuh banyak koneksi, dan tiap
+5. **Batas koneksi Prisma.** Satu core tidak butuh banyak koneksi, dan tiap
    koneksi memakan memori Postgres:
 
    ```
    DATABASE_URL="postgresql://...?connection_limit=8&pool_timeout=20"
    ```
 
-5. **Rotasi log.** Disk 20 GB terisi OS (~5 GB), aplikasi (~1 GB), dan sisanya
+6. **Rotasi log.** Disk 20 GB terisi OS (~5 GB), aplikasi (~1 GB), dan sisanya
    untuk log serta backup. Log yang dibiarkan menumpuk akan menghabiskannya dan
    membuat aplikasi berhenti.
 
@@ -193,7 +220,7 @@ masalah server.
    SystemMaxUse=500M
    ```
 
-6. **Backup dikirim ke luar VPS.** Disk 20 GB tidak cukup untuk menyimpan
+7. **Backup dikirim ke luar VPS.** Disk 20 GB tidak cukup untuk menyimpan
    riwayat backup di mesin yang sama — dan backup di mesin yang sama tidak
    menolong kalau mesinnya yang rusak.
 
@@ -223,7 +250,7 @@ VPS — jadi tidak terkena batas 20 Mbps itu.
 Sanggup untuk pemakaian harian dan ujian per sesi. Yang dikorbankan adalah
 ruang gerak: tidak ada cadangan kalau ada yang tidak terduga di hari-H. Kalau
 selisih harga ke 2 core / 4 GB kecil, ambil yang itu. Kalau tidak, spek ini
-bisa dijalankan asalkan enam syarat di atas dipenuhi — dan VPS bisa dinaikkan
+bisa dijalankan asalkan tujuh syarat di atas dipenuhi — dan VPS bisa dinaikkan
 spesifikasinya tanpa memasang ulang apa pun.
 
 ---
@@ -267,9 +294,13 @@ justru terjangkau lebih cepat daripada beberapa host Jakarta yang diuji.
 
 ### Yang sama sekali tidak berubah
 
-**579 KB JavaScript pada kunjungan pertama.** Jumlah byte-nya sama persis di
-mana pun aplikasi diletakkan. Inilah yang paling menentukan lamanya muatan
-pertama, dan pindah ke VPS tidak menyentuhnya sedikit pun.
+**JavaScript kerangka kerja.** Dari ~121 KB (brotli) yang diunduh pada
+kunjungan pertama, sekitar 90 KB adalah React dan runtime Next.js. Jumlahnya
+sama persis di mana pun aplikasi diletakkan, dan tidak bisa dikurangi tanpa
+mengganti kerangka kerjanya.
+
+Kode aplikasi ini sendiri hanya ~32 KB - sudah kecil, tidak ada yang berarti
+untuk dipangkas.
 
 ### Yang berisiko jadi lebih lambat
 
@@ -288,13 +319,16 @@ menjadi lebih cepat.
 | Cold start 0,4 – 2,1 detik | **Hilang** |
 | Jarak jaringan | Belum tentu membaik - wajib diuji |
 | Kueri basis data | Membaik sedikit (fungsi Vercel dan Supabase sudah sama-sama di Singapura) |
-| **579 KB JavaScript** | **Tidak berubah** |
-| Penyajian berkas statis | Berpotensi sedikit menurun |
+| JavaScript (~121 KB brotli) | **Tidak berubah** |
+| Penyajian berkas statis | Berpotensi menurun - **wajib menyalakan kompresi** |
 
-Pindah ke VPS menghapus jeda pertama yang paling mengganggu, tetapi **bukan
-jalan pintas untuk membuat aplikasi terasa ringan**. Percepatan berikutnya
-harus datang dari mengurangi 579 KB JavaScript itu - pekerjaan di sisi kode,
-bukan di sisi server.
+Pindah ke VPS menghapus jeda pertama yang paling mengganggu. Yang **tidak**
+bisa diharapkan darinya adalah muatan JavaScript yang lebih ringan - ukurannya
+sudah wajar (~121 KB terkompresi) dan sebagian besar milik React serta Next.js.
+
+Yang justru perlu dijaga saat pindah: **jangan sampai kompresi lupa
+dinyalakan.** Itu satu-satunya cara migrasi ini bisa membuat muatan halaman
+menjadi lebih berat, bukan lebih ringan.
 
 ---
 
