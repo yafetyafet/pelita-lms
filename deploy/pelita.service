@@ -1,0 +1,53 @@
+# Layanan PELITA LMS
+#
+# Pasang di: /etc/systemd/system/pelita.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pelita
+#
+# Berjalan sebagai pengguna biasa `pelita`, bukan root. Kalau prosesnya
+# ditembus, penyerang tidak langsung memegang seluruh server.
+
+[Unit]
+Description=PELITA LMS (Next.js)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=pelita
+Group=pelita
+WorkingDirectory=/opt/pelita/current
+
+# server.js membaca kedua variabel ini. HOSTNAME sengaja 127.0.0.1:
+# aplikasi hanya boleh dihubungi lewat Caddy, tidak langsung dari jaringan.
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+
+# Rahasia dan alamat basis data dibaca dari berkas terpisah yang izinnya 600,
+# supaya tidak ikut terbaca lewat `systemctl show`.
+EnvironmentFile=/opt/pelita/pelita.env
+
+ExecStart=/usr/bin/node server.js
+
+Restart=always
+RestartSec=5
+
+# Batas memori: menjaga VM tidak kehabisan RAM kalau ada kebocoran.
+MemoryMax=1G
+MemoryHigh=768M
+
+# Pengetatan dasar
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pelita/current/.next/cache
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pelita
+
+[Install]
+WantedBy=multi-user.target
