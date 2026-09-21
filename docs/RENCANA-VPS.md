@@ -37,8 +37,8 @@ karena (a) cold start, (b) kapasitas hari ujian yang bisa dipastikan, dan
 
 ## 2. Spesifikasi yang dibutuhkan
 
-Untuk 387 siswa, dengan asumsi ujian dijalankan per sesi (1–2 rombel, sekitar
-**40–70 siswa serentak**).
+Untuk 387 siswa, dengan ujian dijalankan per sesi. Diuji sampai **128 siswa
+serentak** (lihat bagian 2a) dan masih lapang.
 
 ### Kebutuhan terukur (20 September 2026)
 
@@ -82,6 +82,70 @@ dipenuhi, bukan pilihan.
   pertama, siswa tidak mengunduhnya lagi.
 - 400 siswa × 579 KB = **232 MB** pada hari pertama. Lewat port 1 Gbps lokal,
   itu hitungan detik — yang membatasi justru wifi sekolah, bukan VPS-nya.
+
+### Uji beban ujian 128 siswa serentak (21 September 2026)
+
+Ujian ternyata adalah beban **paling ringan** di aplikasi ini, bukan paling
+berat. Penyebabnya satu keputusan yang diambil sebelumnya: jawaban disimpan
+sementara di perangkat siswa (localStorage), bukan dikirim berkala ke server.
+Akibatnya sepanjang 60 menit pengerjaan, **tidak ada lalu lintas ke server
+sama sekali**.
+
+Bebannya hanya dua lonjakan pendek: saat menekan "Mulai Ujian" dan saat
+mengumpulkan.
+
+| Yang diukur | Hasil | Untuk 128 siswa |
+| --- | --- | --- |
+| Ukuran naskah ujian 20 soal | 5,1 KB | **0,64 MB** total |
+| CPU: acak soal + buang kunci jawaban | 0,020 ms | — |
+| CPU: koreksi otomatis | 0,021 ms | — |
+| **Total CPU per siswa** | **0,041 ms** | **5,2 ms** total |
+| Kueri basis data saat "Mulai Ujian" | ~5 | ~640 kueri |
+| Kueri basis data saat mengumpulkan | ~3 | ~384 kueri |
+| Memori proses Next.js pada 128 sambungan serentak | 88 MB → **182 MB** | — |
+
+Seluruh pekerjaan mengoreksi 128 lembar jawaban memakan **5,2 milidetik** CPU.
+Satu core bukan hambatan di sini.
+
+Perkiraan pemakaian memori saat ujian berlangsung:
+
+| Proses | Perkiraan |
+| --- | --- |
+| Next.js pada beban puncak | ~182 MB |
+| Postgres (dengan setelan di bawah) | ~400 MB |
+| Caddy | ~30 MB |
+| Ubuntu | ~250 MB |
+| **Total** | **~860 MB dari 2 GB** |
+
+### Yang justru menjadi hambatan: unduhan pertama
+
+Bukan CPU, bukan memori, bukan basis data - melainkan **579 KB JavaScript**
+yang diunduh setiap peramban pada kunjungan pertama. Untuk 128 siswa itu
+**74 MB**, dan jalurnya melewati **koneksi internet sekolah**, bukan port
+1 Gbps VPS.
+
+Berkas itu bertanda `immutable`, jadi hanya diunduh sekali per perangkat.
+Karena itu, sebelum hari-H:
+
+> **Minta siswa membuka aplikasi sekali sehari sebelumnya**, cukup sampai
+> halaman beranda. Peramban akan menyimpan berkasnya, dan pada hari ujian
+> yang tersisa hanya naskah 5,1 KB.
+
+Tanpa langkah itu, 74 MB harus melewati sambungan sekolah serentak pada menit
+pertama ujian. Pada sambungan 100 Mbps, itu sekitar 6 detik - masih wajar,
+tetapi terasa seperti "semua serentak lambat" dan mudah disalahartikan sebagai
+masalah server.
+
+### Catatan kejujuran atas pengukuran ini
+
+- Uji 128 sambungan serentak dijalankan di komputer Windows dengan pembangkit
+  beban dan server pada mesin yang sama. Angka **memori** (182 MB) dapat
+  dijadikan pegangan; angka **throughput**-nya tidak mewakili VPS Linux.
+- Waktu basis data diukur dari Purbalingga ke Supabase Singapura, sehingga
+  memuat latensi ~140 ms yang **hilang** di VPS dengan Postgres lokal.
+- Naskah 5,1 KB berasal dari ujian 20 soal. Ujian 50 soal sekitar 13 KB -
+  tetap tidak berarti. Gambar soal memakai tautan luar dan diunduh langsung
+  oleh ponsel siswa, tidak lewat VPS.
 
 ### Syarat wajib
 
@@ -137,7 +201,7 @@ dipenuhi, bukan pilihan.
 
 | Risiko | Kapan terasa | Penanganan |
 | --- | --- | --- |
-| Satu core dipakai bersama Postgres, Node, dan Caddy | Kalau seluruh 400 siswa ujian serentak, bukan per sesi | Jadwalkan ujian per sesi seperti rencana semula |
+| Satu core dipakai bersama Postgres, Node, dan Caddy | Bukan saat ujian (terukur ringan), melainkan saat banyak guru membuka rekap dan cetak laporan bersamaan | Hindari menjadwalkan cetak rapor massal di jam ujian |
 | 2 GB tanpa ruang gerak | Lonjakan tak terduga | Swap + pantau memori; naik ke 4 GB bisa dilakukan kapan saja |
 | **20 Mbps internasional** | `npm install`, `apt upgrade`, `git pull` | Bukan masalah untuk siswa — mereka mengakses lewat jalur domestik (IIX) di port 1 Gbps. Yang lambat hanya pemasangan dan pembaruan |
 | Satu mesin tanpa redundansi | Kalau VPS mati | Backup teruji + tahu cara memulihkan cepat |
