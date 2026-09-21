@@ -40,6 +40,34 @@ di `/opt/pelita/pelita.env`.
 
 ---
 
+## 1b. Uji coba dulu tanpa domain
+
+Kalau domain belum siap dan Anda ingin mencoba lebih dulu, pakai
+`Caddyfile.ujicoba` — **bukan HTTP biasa**.
+
+Uji coba lewat HTTP polos **tidak akan bisa login sama sekali**. Cookie sesi
+memakai tanda `Secure` saat `NODE_ENV=production`, dan peramban menolak
+mengirim cookie ber-tanda Secure melalui HTTP. Gejalanya menyesatkan: login
+tampak berhasil, lalu halaman berikutnya menendang kembali ke layar masuk
+tanpa pesan galat apa pun.
+
+`Caddyfile.ujicoba` memakai `tls internal` — Caddy menerbitkan sertifikatnya
+sendiri untuk IP server. Peramban memperingatkan sekali, dan setelah ditekan
+"Lanjutkan" sambungannya menjadi HTTPS sungguhan: login berfungsi, dan
+presensi GPS ikut bisa diuji.
+
+```bash
+sudo cp Caddyfile.ujicoba /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile       # ganti 192.168.1.50 dengan IP server
+sudo systemctl reload caddy
+```
+
+Ini hanya untuk uji coba: setiap pengunjung harus menekan "Lanjutkan" lebih
+dulu, jadi tidak layak untuk 400 siswa. Begitu domain siap, ganti ke
+`Caddyfile` biasa.
+
+---
+
 ## 2. Layanan dan HTTPS
 
 ```bash
