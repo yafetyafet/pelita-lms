@@ -228,6 +228,76 @@ spesifikasinya tanpa memasang ulang apa pun.
 
 ---
 
+## 2b. Apakah muatan halaman jadi lebih cepat di VPS?
+
+Sebagian ya, sebagian tidak. Diukur dari Purbalingga, 21 September 2026.
+
+### Yang pasti lebih cepat: cold start
+
+| Keadaan | TTFB terukur |
+| --- | --- |
+| Permintaan pertama setelah fungsi menganggur | **0,42 – 2,14 detik** |
+| Permintaan berikutnya (hangat) | **0,14 – 0,22 detik** |
+
+Selisih itu **cold start** fungsi Vercel: mesin yang menjalankan aplikasi
+dimatikan saat tidak dipakai, lalu dinyalakan lagi pada permintaan berikutnya.
+Siswa pertama yang membuka aplikasi pagi hari selalu kena.
+
+Di VPS, prosesnya berjalan terus. Cold start **hilang sepenuhnya**. Inilah
+keuntungan terbesar dan paling nyata dari pindah.
+
+### Yang kemungkinan besar TIDAK lebih cepat: jarak jaringan
+
+Dugaan umum "VPS Jakarta pasti lebih dekat daripada Vercel Singapura" ternyata
+**belum tentu benar**:
+
+| Tujuan | Waktu sambung TCP dari Purbalingga |
+| --- | --- |
+| Vercel (edge Singapura, `sin1`) | **35 – 46 ms** |
+| Penyedia hosting Indonesia (Jakarta) | **72 – 226 ms** |
+
+Vercel memakai jaringan edge dengan peering luas, sehingga dari Jawa Tengah
+justru terjangkau lebih cepat daripada beberapa host Jakarta yang diuji.
+
+> **Batas keabsahan uji ini:** yang diukur adalah situs pemasaran penyedia
+> hosting, bukan VPS sungguhan milik kita - keduanya bisa berbeda rute dan
+> berbeda konfigurasi. Angka ini **bukan bukti** bahwa VPS Jakarta akan lebih
+> lambat, melainkan peringatan bahwa "lebih dekat" tidak otomatis berarti
+> "lebih cepat". **Ukur sendiri VPS-nya sebelum memindahkan domain utama.**
+
+### Yang sama sekali tidak berubah
+
+**579 KB JavaScript pada kunjungan pertama.** Jumlah byte-nya sama persis di
+mana pun aplikasi diletakkan. Inilah yang paling menentukan lamanya muatan
+pertama, dan pindah ke VPS tidak menyentuhnya sedikit pun.
+
+### Yang berisiko jadi lebih lambat
+
+| Hal | Sebabnya |
+| --- | --- |
+| Pengiriman berkas statis | Vercel menyajikannya dari jaringan CDN; VPS menyajikan semuanya dari satu mesin |
+| Waktu render per halaman | Satu core Xeon berbagi dengan Postgres dan Caddy, kemungkinan lebih lambat per render daripada perangkat keras fungsi Vercel |
+
+Keduanya bukan masalah pada beban sekolah ini, tetapi jangan diharapkan
+menjadi lebih cepat.
+
+### Ringkasnya
+
+| Bagian waktu muat | Sesudah pindah |
+| --- | --- |
+| Cold start 0,4 – 2,1 detik | **Hilang** |
+| Jarak jaringan | Belum tentu membaik - wajib diuji |
+| Kueri basis data | Membaik sedikit (fungsi Vercel dan Supabase sudah sama-sama di Singapura) |
+| **579 KB JavaScript** | **Tidak berubah** |
+| Penyajian berkas statis | Berpotensi sedikit menurun |
+
+Pindah ke VPS menghapus jeda pertama yang paling mengganggu, tetapi **bukan
+jalan pintas untuk membuat aplikasi terasa ringan**. Percepatan berikutnya
+harus datang dari mengurangi 579 KB JavaScript itu - pekerjaan di sisi kode,
+bukan di sisi server.
+
+---
+
 ## 3. Yang harus disiapkan di sisi kode
 
 Perubahan ini belum dikerjakan — dilakukan setelah penyedia VPS dipilih.
