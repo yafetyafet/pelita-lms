@@ -126,7 +126,7 @@ Langkah berikutnya, berurutan:
   1. Salin berkas layanan dan Caddy:
        sudo cp deploy/pelita.service /etc/systemd/system/
        sudo cp deploy/Caddyfile      /etc/caddy/Caddyfile
-     Sunting /etc/caddy/Caddyfile, ganti lms.sekolah.sch.id dengan domain asli.
+     Sunting /etc/caddy/Caddyfile, ganti pelita.smkn1kemangkon.sch.id dengan domain asli.
 
   2. Pindahkan data dari Supabase (lihat deploy/README.md bagian 4).
 

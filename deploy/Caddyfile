@@ -1,14 +1,14 @@
 # Caddy untuk PELITA LMS
 # Pasang di: /etc/caddy/Caddyfile  lalu  sudo systemctl reload caddy
 #
-# GANTI `lms.sekolah.sch.id` dengan domain sekolah yang sebenarnya.
+# GANTI `pelita.smkn1kemangkon.sch.id` dengan domain sekolah yang sebenarnya.
 # Let's Encrypt butuh NAMA DOMAIN - tidak bisa IP telanjang - dan port 80/443
 # harus terjangkau dari internet untuk verifikasinya.
 #
 # HTTPS bukan pilihan: peramban MEMBLOKIR akses lokasi di situs non-HTTPS,
 # sehingga presensi GPS siswa tidak akan berfungsi tanpa ini.
 
-lms.sekolah.sch.id {
+pelita.smkn1kemangkon.sch.id {
 	# WAJIB. Vercel mengompresi otomatis, server sendiri tidak.
 	# Tanpa baris ini siswa mengunduh 469 KB, bukan 140 KB.
 	encode zstd gzip
