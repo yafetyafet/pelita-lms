@@ -1,9 +1,33 @@
 /**
  * "PG"          = pilihan ganda, tepat satu jawaban benar.
  * "PG_KOMPLEKS" = pilihan ganda kompleks, jawaban benar bisa lebih dari satu.
+ * "BENAR_SALAH" = beberapa pernyataan, tiap pernyataan dinilai Benar/Salah.
+ *                 Ini bentuk "Pilihan Ganda Kompleks Kategori" pada TKA
+ *                 (Tes Kemampuan Akademik): `options` berisi pernyataannya,
+ *                 `correctAnswer` berisi kunci posisional "B,S,B,S".
  * "ESAI"        = uraian, dikoreksi manual oleh guru.
  */
-export type TipeSoal = "PG" | "PG_KOMPLEKS" | "ESAI";
+export type TipeSoal = "PG" | "PG_KOMPLEKS" | "BENAR_SALAH" | "ESAI";
+
+/** Nilai yang sah untuk tiap pernyataan Benar/Salah. */
+export const NILAI_BS = ["B", "S"] as const;
+
+/**
+ * Samakan bentuk jawaban Benar/Salah: "b, s ,B" -> "B,S,B".
+ *
+ * Berbeda dari normalJawaban(), urutan di sini BERMAKNA - posisi ke-i adalah
+ * penilaian untuk pernyataan ke-i - jadi tidak boleh diurutkan maupun
+ * dibuang duplikatnya. Pernyataan yang belum dijawab menjadi string kosong
+ * di posisinya, sehingga tetap tidak akan cocok dengan kunci.
+ */
+export function normalBS(nilai: string | null | undefined): string {
+  return String(nilai ?? "")
+    .split(",")
+    .map((x) => x.trim().toUpperCase())
+    .map((x) => (x === "BENAR" || x === "TRUE" || x === "1" ? "B" : x))
+    .map((x) => (x === "SALAH" || x === "FALSE" || x === "0" ? "S" : x))
+    .join(",");
+}
 
 export type Soal = {
   id: string;
@@ -136,10 +160,15 @@ export function koreksiOtomatis(
       continue;
     }
 
-    // PG kompleks dinilai utuh: seluruh jawaban benar harus dipilih dan tidak
-    // boleh ada yang salah. Tidak ada nilai sebagian, supaya hasilnya mudah
-    // dijelaskan ke siswa.
-    if (normalJawaban(j) === normalJawaban(s.correctAnswer)) {
+    // PG kompleks dan Benar/Salah dinilai utuh: seluruh bagian harus tepat.
+    // Tidak ada nilai sebagian, supaya hasilnya mudah dijelaskan ke siswa
+    // dan konsisten antar-tipe. Benar/Salah dibandingkan posisi demi posisi,
+    // bukan sebagai himpunan.
+    const cocok =
+      s.type === "BENAR_SALAH"
+        ? normalBS(j) === normalBS(s.correctAnswer)
+        : normalJawaban(j) === normalJawaban(s.correctAnswer);
+    if (cocok) {
       skorOtomatis += s.points;
       benar++;
     } else {

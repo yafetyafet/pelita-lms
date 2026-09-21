@@ -1495,7 +1495,14 @@ export async function updateExamQuestion(input: {
       return { error: 'Pertanyaan tidak boleh kosong.' }
     }
 
-    if (!esai) {
+    if (tipe === 'BENAR_SALAH') {
+      // Kunci posisional hanya bermakna bersama pernyataannya. Kalau salah
+      // satu tidak dikirim pada pembaruan ini, pakai yang sudah tersimpan.
+      const opsi = input.options ?? (await parseOpsiTersimpan(soal.id))
+      const kunci = input.correctAnswer ?? (await kunciTersimpan(soal.id))
+      const galat = periksaKunciBS(opsi, kunci)
+      if (galat) return { error: galat }
+    } else if (!esai) {
       const opsi = input.options
       if (opsi && opsi.filter((o) => o.trim()).length < 2) {
         return { error: 'Soal pilihan ganda butuh minimal 2 opsi terisi.' }
@@ -1557,6 +1564,36 @@ export async function updateExamQuestion(input: {
   }
 }
 
+/**
+ * Periksa kunci soal Benar/Salah terhadap daftar pernyataannya.
+ *
+ * Kunci bersifat posisional ("B,S,B"): jumlahnya harus sama persis dengan
+ * jumlah pernyataan, dan tiap posisi hanya boleh B atau S. Tanpa pemeriksaan
+ * ini, soal dengan kunci timpang tersimpan diam-diam dan tidak pernah bisa
+ * dijawab benar oleh siswa mana pun.
+ */
+async function parseOpsiTersimpan(id: string): Promise<string[]> {
+  const r = await prisma.examQuestion.findUnique({ where: { id }, select: { options: true } })
+  try { const p = JSON.parse(r?.options ?? '[]'); return Array.isArray(p) ? p.map(String) : [] } catch { return [] }
+}
+async function kunciTersimpan(id: string): Promise<string> {
+  const r = await prisma.examQuestion.findUnique({ where: { id }, select: { correctAnswer: true } })
+  return r?.correctAnswer ?? ''
+}
+
+function periksaKunciBS(opsi: string[] | undefined, kunci: string | undefined): string | null {
+  const pernyataan = (opsi ?? []).filter((o) => o.trim())
+  if (pernyataan.length < 2) return 'Soal Benar/Salah butuh minimal 2 pernyataan.'
+  const nilai = String(kunci ?? '').split(',').map((x) => x.trim().toUpperCase())
+  if (nilai.length !== pernyataan.length) {
+    return `Kunci Benar/Salah harus ${pernyataan.length} nilai (satu per pernyataan), sekarang ${nilai.filter(Boolean).length}.`
+  }
+  if (nilai.some((x) => x !== 'B' && x !== 'S')) {
+    return 'Kunci Benar/Salah hanya boleh berisi B atau S.'
+  }
+  return null
+}
+
 /** Tambah satu soal ke ujian yang sudah ada. */
 export async function addExamQuestion(input: {
   examId: string
@@ -1574,7 +1611,10 @@ export async function addExamQuestion(input: {
     if (!input.question.trim()) return { error: 'Pertanyaan tidak boleh kosong.' }
 
     const esai = input.type === 'ESAI'
-    if (!esai) {
+    if (input.type === 'BENAR_SALAH') {
+      const galat = periksaKunciBS(input.options, input.correctAnswer)
+      if (galat) return { error: galat }
+    } else if (!esai) {
       if (!input.options || input.options.filter((o) => o.trim()).length < 2) {
         return { error: 'Soal pilihan ganda butuh minimal 2 opsi terisi.' }
       }

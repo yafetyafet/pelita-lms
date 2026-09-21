@@ -8,7 +8,11 @@ export default function StudentLayout({
 }) {
   return (
     <MobileShell currentRole="student">
-      <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative">
+      {/* `min-h-0` wajib. Anak flex secara bawaan tidak boleh lebih pendek
+          dari isinya (min-height: auto), sehingga `overflow-y-auto` tidak
+          pernah aktif: kolom ini memanjang melewati cangkang 100dvh, seluruh
+          halaman ikut bergulir, dan navigasi bawah ikut terbawa ke atas. */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar relative">
         {children}
       </div>
       <div className="flex-none">
