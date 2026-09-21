@@ -73,7 +73,7 @@ dulu, jadi tidak layak untuk 400 siswa. Begitu domain siap, ganti ke
 ```bash
 sudo cp pelita.service /etc/systemd/system/
 sudo cp Caddyfile      /etc/caddy/Caddyfile
-sudo nano /etc/caddy/Caddyfile     # ganti lms.sekolah.sch.id
+sudo nano /etc/caddy/Caddyfile     # ganti pelita.smkn1kemangkon.sch.id
 sudo systemctl daemon-reload
 ```
 
