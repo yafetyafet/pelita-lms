@@ -48,6 +48,6 @@ rm -rf .kirim
 
 biru "4/4  Memuat ulang kontainer aplikasi"
 ssh "$TUJUAN" "cd ~/$DIR_SERVER && docker compose restart app && sleep 4 && docker compose ps app && \
-  docker compose exec -T app sh -c 'wget -qO- http://127.0.0.1:3000/login >/dev/null && echo \"HTTP OK dari dalam kontainer\"'"
+  docker compose exec -T app sh -c 'curl -sf -o /dev/null http://127.0.0.1:3000/login && echo \"HTTP OK dari dalam kontainer\"'"
 
 echo; echo "Selesai."
