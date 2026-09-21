@@ -1037,6 +1037,14 @@ export async function getMyExamResults() {
 // ==========================================
 
 export async function getLibraryBooks() {
+  // Satu-satunya aksi siswa yang dulu tidak memeriksa sesi sama sekali.
+  // Akibatnya dua hal: isinya bisa dibaca tanpa login, dan - sejak halaman
+  // ini dirender di server - Next.js menganggapnya tidak bergantung pada
+  // permintaan, lalu membekukan daftar bukunya pada saat build. Buku yang
+  // ditambahkan admin sesudah itu tidak akan pernah muncul.
+  const session = await optionalSession()
+  if (!session) return []
+
   return await prisma.libraryBook.findMany({ orderBy: { createdAt: 'desc' } })
 }
 
