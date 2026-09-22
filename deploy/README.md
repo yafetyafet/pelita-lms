@@ -273,6 +273,41 @@ ditampilkan di akhir skrip.
 
 ---
 
+## 8b. Nyala otomatis setelah listrik padam
+
+Rantai yang harus hidup sendiri, dari bawah ke atas - semuanya sudah
+diatur pada 22 September 2026:
+
+| Lapisan | Pengaturan | Keadaan |
+| --- | --- | --- |
+| Server fisik | BIOS: *Restore on AC Power Loss* = **Power On** | **periksa sendiri** - lihat di bawah |
+| Proxmox host | boot normal | otomatis |
+| VM 100 `server-skansatech` | `onboot=1`, `startup order=1,up=30` | diatur |
+| VM 101 `windows` | `onboot=1`, `startup order=2` | diatur |
+| Docker (snap) di VM | `snap.docker.dockerd.service` enabled | sudah |
+| Kontainer PELITA & SIKAP | `restart: unless-stopped` | sudah |
+| Tailscale | `tailscaled` enabled | sudah |
+
+VM Ubuntu sengaja dinyalakan lebih dulu dan Windows menunggu 30 detik
+sesudahnya, supaya keduanya tidak berebut disk pada detik-detik pertama boot.
+
+### Yang tidak bisa diatur dari jarak jauh: BIOS
+
+Kalau listrik padam lalu menyala lagi, **server fisiknya sendiri** hanya akan
+hidup kembali bila BIOS-nya disetel *Power On* pada pilihan "AC Power Loss" /
+"Restore on AC Power Loss" / "After Power Failure" (nama menunya beragam per
+merek). Bawaan kebanyakan server adalah *Last State* atau *Stay Off*.
+
+Cara memeriksanya tanpa membuka BIOS: cabut kabel listrik server saat tidak
+ada yang memakai (misalnya sore hari), tunggu 10 detik, colok lagi. Kalau
+server menyala sendiri, sudah benar. Kalau tidak, masuk BIOS saat boot dan
+ubah pilihan itu.
+
+Pengaturan Proxmox di atas hanya berlaku SETELAH host hidup; tanpa BIOS yang
+benar, semuanya tetap menunggu seseorang menekan tombol power.
+
+---
+
 ## 9. Risiko baru yang tidak ada di cloud
 
 | Risiko | Penanganan |
