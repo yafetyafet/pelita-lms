@@ -18,15 +18,8 @@ BUILD=1
 biru() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
 if [[ $BUILD -eq 1 ]]; then
-  biru "1/4  Prisma generate (engine Linux) + binari sharp Linux + next build"
+  biru "1/4  Prisma generate (engine Linux) + next build"
   npx prisma generate >/dev/null
-  # Build di Windows hanya membawa sharp untuk win32. Tanpa binari Linux,
-  # server jatuh ke wasm - jalan, tetapi memperkecil gambar jauh lebih lambat.
-  # `--no-save --force` menambahkannya tanpa menggusur binari platform lain.
-  if [[ ! -d node_modules/@img/sharp-linux-x64 ]]; then
-    VER=$(node -p "JSON.parse(require('fs').readFileSync('node_modules/sharp/package.json')).version")
-    npm install --no-save --force "@img/sharp-linux-x64@$VER" "@img/sharp-libvips-linux-x64" >/dev/null 2>&1 || true
-  fi
   npx next build
 fi
 

@@ -11,6 +11,7 @@ import {
   CheckCircle2, 
   Trash2, 
   FileText, 
+  Image, 
   Clock, 
   Users, 
   X,
@@ -26,8 +27,6 @@ import {
 } from "lucide-react"
 import { muatXlsx } from "@/lib/xlsx"
 import { parseSoalTempel } from "@/lib/logic/parser-soal"
-import { KolomGambar } from "@/components/KolomGambar"
-import { unggahGambar, gambarDariTempel } from "@/lib/unggah-gambar"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -399,36 +398,6 @@ export default function TeacherExamsPage() {
    * (modul murni yang diuji terpisah): tanda * pada jawaban benar, tanda
    * (B)/(S) pada pernyataan, dan deteksi tipe otomatis.
    */
-  const [mengunggahTempel, setMengunggahTempel] = useState(false)
-
-  /**
-   * Gambar yang ditempel langsung ke kotak teks diunggah, lalu tautannya
-   * disisipkan sebagai baris "Gambar: ..." di posisi kursor - format yang
-   * sudah dikenali parser. Tempel teks biasa tidak disentuh.
-   */
-  const handlePasteGambarDiTeks = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const f = gambarDariTempel(e)
-    if (!f) return
-    e.preventDefault()
-    const area = e.currentTarget
-    const posisi = area.selectionStart ?? pasteText.length
-    setMengunggahTempel(true)
-    setImportError("")
-    try {
-      const url = await unggahGambar(f)
-      setPasteText(prev => {
-        const sebelum = prev.slice(0, posisi)
-        const sesudah = prev.slice(posisi)
-        const perluBarisBaru = sebelum.length > 0 && !sebelum.endsWith("\n")
-        return `${sebelum}${perluBarisBaru ? "\n" : ""}Gambar: ${url}\n${sesudah}`
-      })
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : "Unggah gambar gagal.")
-    } finally {
-      setMengunggahTempel(false)
-    }
-  }
-
   const handlePasteImport = () => {
     if (!pasteText.trim()) return
 
@@ -879,26 +848,19 @@ export default function TeacherExamsPage() {
                       </tbody>
                     </table>
                     <p className="mt-1.5">
-                      <strong>Gambar bisa ditempel langsung</strong> (Ctrl+V) ke kotak
-                      ini — tautannya otomatis disisipkan sebagai baris{" "}
-                      <code>Gambar:</code> di posisi kursor. Tautan dari internet juga
-                      tetap bisa dipakai.
+                      Gambar harus berupa <strong>tautan</strong>. Menempel gambar
+                      langsung dari papan klip belum didukung — unggah dulu ke Drive
+                      atau layanan gambar, lalu tempel tautannya. Pastikan tautannya
+                      bisa dibuka publik.
                     </p>
                   </div>
                   <textarea
                     rows={6}
                     value={pasteText}
                     onChange={e => setPasteText(e.target.value)}
-                    onPaste={handlePasteGambarDiTeks}
-                    disabled={mengunggahTempel}
                     placeholder={"1. Apa itu HTML?\nA. Bahasa markup *\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star *\nB. Bus *\nC. HTTP\nD. Ring *\nE. SMTP\n\n4. Tentukan benar atau salah pernyataan berikut.\n- Switch bekerja pada lapisan data link *\n- Alamat IPv4 terdiri dari 128 bit\n- Router menghubungkan dua jaringan berbeda *\nPoin: 15\n\n5. Jelaskan perbedaan HUB dan SWITCH.\nPoin: 20"}
                     className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-[11px] text-slate-800 resize-none focus:outline-none font-mono"
                   />
-                  {mengunggahTempel && (
-                    <p className="text-[10px] font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-xl px-2.5 py-2">
-                      Mengunggah gambar dari papan klip...
-                    </p>
-                  )}
                   {importError && (
                     <p className="text-[10px] font-semibold text-slate-800 bg-white border border-amber-300 rounded-xl px-2.5 py-2">
                       {importError}
@@ -939,11 +901,16 @@ export default function TeacherExamsPage() {
                     />
 
                     {/* Image URL */}
-                    <KolomGambar
-                      kecil
-                      nilai={q.imageUrl}
-                      onUbah={url => updateQuestion(idx, "imageUrl", url)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <Image className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <input
+                        type="url"
+                        value={q.imageUrl}
+                        onChange={e => updateQuestion(idx, "imageUrl", e.target.value)}
+                        placeholder="URL Gambar (opsional)"
+                        className="flex-1 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] focus:outline-none"
+                      />
+                    </div>
 
                     {q.type !== "ESAI" && (
                       <div className="flex flex-col gap-1">
