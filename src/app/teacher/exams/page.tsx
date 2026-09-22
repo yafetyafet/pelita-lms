@@ -26,6 +26,7 @@ import {
   CheckSquare
 } from "lucide-react"
 import { muatXlsx } from "@/lib/xlsx"
+import { parseSoalTempel } from "@/lib/logic/parser-soal"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -393,212 +394,14 @@ export default function TeacherExamsPage() {
   }
 
   /**
-   * Parser soal tempel/copas.
-   *
-   * Yang dikenali per baris:
-   *   1. / 1)          -> soal baru
-   *   A. / A)  s.d. H.  -> opsi jawaban (dulu hanya A-D)
-   *   Gambar: <url>     -> gambar soal (dulu tidak ada sama sekali)
-   *   ![](url)          -> gambar bergaya Markdown
-   *   <url gambar>      -> baris yang isinya hanya tautan gambar
-   *   Jawaban: A        -> kunci PG
-   *   Jawaban: A,B,D    -> kunci PG kompleks (otomatis jadi PG_KOMPLEKS)
-   *   Poin: 15          -> bobot soal
-   *   Esai / Uraian     -> menandai soal uraian
-   *   Benar/Salah       -> menandai soal Benar/Salah (bentuk TKA); baris
-   *                        berikutnya yang diawali "-", "•", atau huruf A-H
-   *                        adalah PERNYATAAN, dan "Jawaban: B,S,B" kuncinya
-   *
-   * Dua bug versi lama: opsi di luar A-D diabaikan, dan "Jawaban: A,B" membuat
-   * "ABCD".indexOf() mengembalikan -1 lalu DIAM-DIAM menyimpan kunci "A",
-   * sehingga soal tampak wajar tetapi kuncinya salah.
+   * Impor soal dari teks tempel. Aturannya ada di src/lib/logic/parser-soal.ts
+   * (modul murni yang diuji terpisah): tanda * pada jawaban benar, tanda
+   * (B)/(S) pada pernyataan, dan deteksi tipe otomatis.
    */
   const handlePasteImport = () => {
     if (!pasteText.trim()) return
 
-    const lines = pasteText.split("\n")
-    const imported: any[] = []
-    const catatan: string[] = []
-
-    const HURUF = "ABCDEFGH"
-    const isTautanGambar = (t: string) =>
-      /^https?:\/\/\S+$/i.test(t) &&
-      (/\.(png|jpe?g|gif|webp|svg|bmp)(\?\S*)?$/i.test(t) ||
-        /(drive\.google|googleusercontent|imgur|ibb\.co|cloudinary|blogspot|wp\.com)/i.test(t))
-
-    let current: any = null
-    const tutup = () => {
-      if (!current) return
-      const terisi = current.options.filter((o: string) => String(o).trim())
-
-      if (current.type === "BENAR_SALAH") {
-        const kunci = String(current.correctAnswer || "").split(",").filter(Boolean)
-        if (terisi.length < 2) {
-          catatan.push(`Soal ${imported.length + 1}: Benar/Salah butuh minimal 2 pernyataan`)
-        } else if (kunci.length !== terisi.length) {
-          catatan.push(`Soal ${imported.length + 1}: kunci Benar/Salah ${kunci.length} nilai, pernyataan ${terisi.length}`)
-        }
-        current.options = terisi
-        imported.push(current)
-        current = null
-        return
-      }
-
-      if (current.type !== "ESAI") {
-        if (terisi.length < 2) {
-          // Soal tanpa opsi wajar diperlakukan sebagai uraian daripada dibuang.
-          current.type = "ESAI"
-          current.correctAnswer = ""
-          current.options = ["", "", "", "", ""]
-          catatan.push(`Soal "${String(current.question).slice(0, 24)}..." tanpa opsi → jadi Esai`)
-        } else if (!String(current.correctAnswer).trim()) {
-          catatan.push(`Soal "${String(current.question).slice(0, 24)}..." belum ada baris "Jawaban:"`)
-        }
-      }
-
-      // Selalu sediakan lima kolom opsi (A–E).
-      while (current.options.length < 5) current.options.push("")
-      current.question = String(current.question).trim()
-      imported.push(current)
-      current = null
-    }
-
-    for (const raw of lines) {
-      const t = raw.trim()
-      if (!t) continue
-
-      // --- soal baru ---
-      if (/^\d+[.)]/.test(t)) {
-        tutup()
-        current = {
-          question: t.replace(/^\d+[.)]\s*/, ""),
-          imageUrl: "",
-          type: "PG",
-          options: [],
-          correctAnswer: "",
-          points: 10,
-          // Menjadi true begitu penanda akhir soal ditemui (Esai/Jawaban/Poin).
-          // Setelah itu baris tak dikenal TIDAK lagi disambung ke pertanyaan.
-          teksSelesai: false
-        }
-        continue
-      }
-
-      if (!current) continue
-
-      // --- gambar: "Gambar: url" / "Img: url" ---
-      const mGambar = t.match(/^(gambar|image|img|foto)\s*[:=]\s*(\S+)/i)
-      if (mGambar) {
-        current.imageUrl = mGambar[2]
-        continue
-      }
-
-      // --- gambar bergaya Markdown: ![apa saja](url) ---
-      const mMd = t.match(/^!\[[^\]]*\]\((\S+?)\)/)
-      if (mMd) {
-        current.imageUrl = mMd[1]
-        continue
-      }
-
-      // --- baris yang isinya hanya tautan gambar ---
-      if (!current.imageUrl && isTautanGambar(t)) {
-        current.imageUrl = t
-        continue
-      }
-
-      // --- bobot ---
-      const mPoin = t.match(/^(poin|point|bobot|skor)\s*[:=]\s*(\d+)/i)
-      if (mPoin) {
-        const n = parseInt(mPoin[2], 10)
-        if (n > 0) current.points = n
-        current.teksSelesai = true
-        continue
-      }
-
-      // --- penanda esai ---
-      if (/^(esai|essay|uraian)\s*$/i.test(t)) {
-        current.type = "ESAI"
-        current.teksSelesai = true
-        continue
-      }
-
-      // --- penanda Benar/Salah ---
-      if (/^(benar\s*[\/-]\s*salah|b\s*\/\s*s|bs|true\s*[\/-]\s*false)\s*$/i.test(t)) {
-        current.type = "BENAR_SALAH"
-        current.teksSelesai = true
-        continue
-      }
-
-      // --- pernyataan Benar/Salah berawalan "-" atau "•" ---
-      if (current.type === "BENAR_SALAH") {
-        const mPernyataan = t.match(/^[-•*]\s*(.+)$/)
-        if (mPernyataan) {
-          current.options.push(mPernyataan[1].trim())
-          continue
-        }
-      }
-
-      // --- kunci jawaban ---
-      const mJawab = t.match(/^(jawaban|kunci|answer)\s*[:=]\s*(.+)$/i)
-      if (mJawab) {
-        const bagian = mJawab[2]
-          .toUpperCase()
-          .split(/[,;/ ]+/)
-          .map(x => x.trim().replace(/[.)]$/, ""))
-          .filter(Boolean)
-
-        // Kunci Benar/Salah. Dikenali dari penanda "Benar/Salah" sebelumnya,
-        // atau dari isinya: "S", "SALAH", "BENAR", "T", "F" bukan huruf opsi
-        // yang sah (opsi hanya A-H), jadi kehadirannya menandakan kunci B/S.
-        const tokenBS = bagian.map(x => (x === "BENAR" || x === "TRUE" || x === "T" ? "B" : x === "SALAH" || x === "FALSE" || x === "F" ? "S" : x))
-        const mengandungTandaBS = bagian.some(x => ["S", "SALAH", "BENAR", "TRUE", "FALSE", "T", "F"].includes(x))
-        if (current.type === "BENAR_SALAH" || (mengandungTandaBS && tokenBS.every(x => x === "B" || x === "S"))) {
-          current.type = "BENAR_SALAH"
-          if (tokenBS.every(x => x === "B" || x === "S")) {
-            current.correctAnswer = tokenBS.join(",")
-          } else {
-            catatan.push(`Kunci Benar/Salah "${mJawab[2].trim()}" hanya boleh B atau S`)
-          }
-          current.teksSelesai = true
-          continue
-        }
-
-        const indeks = Array.from(
-          new Set(
-            bagian
-              .map(x => (/^[A-H]$/.test(x) ? HURUF.indexOf(x) : Number(x) - 1))
-              .filter(n => Number.isInteger(n) && n >= 0)
-          )
-        ).sort((a, b) => a - b)
-
-        if (indeks.length === 0) {
-          catatan.push(`Jawaban "${mJawab[2].trim()}" tidak dikenali`)
-        } else {
-          current.correctAnswer = indeks.join(",")
-          // Lebih dari satu jawaban benar berarti PG kompleks.
-          if (indeks.length > 1) current.type = "PG_KOMPLEKS"
-        }
-        current.teksSelesai = true
-        continue
-      }
-
-      // --- opsi jawaban A–H ---
-      const mOpsi = t.match(/^([A-H])[.)]\s*(.*)$/i)
-      if (mOpsi) {
-        current.options.push(mOpsi[2].trim())
-        continue
-      }
-
-      // --- lanjutan teks soal ---
-      // Hanya disambung selama pertanyaan belum "ditutup" oleh penanda akhir
-      // dan belum ada opsi. Tanpa syarat teksSelesai, soal esai akan menelan
-      // segala baris sesudahnya — label bagian, rambu-rambu jawaban, bahkan
-      // judul soal berikutnya — karena esai memang tidak punya opsi.
-      if (!current.teksSelesai && current.options.length === 0) {
-        current.question += " " + t
-      }
-    }
-    tutup()
+    const { soal: imported, catatan } = parseSoalTempel(pasteText)
 
     if (imported.length === 0) {
       setImportError("Tidak ada soal terdeteksi. Pastikan setiap soal diawali nomor, misalnya \"1.\"")
@@ -1036,10 +839,12 @@ export default function TeacherExamsPage() {
                       <tbody>
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">1.</td><td>soal baru</td></tr>
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">A. s.d. H.</td><td>opsi jawaban</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">*</td><td><strong>tanda jawaban benar</strong> — tulis di akhir atau awal opsi: <code>A. Semarang *</code> atau <code>*A. Semarang</code>. Satu bintang = PG, dua atau lebih = PG Kompleks. Tidak perlu baris Jawaban lagi</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">- pernyataan</td><td>soal <strong>Benar/Salah</strong>: kalau soalnya berbunyi "tentukan benar atau salah", tiap baris <code>-</code> adalah pernyataan; beri <code>*</code> pada yang <em>benar</em>, atau tulis <code>(B)</code>/<code>(S)</code> di akhir</td></tr>
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Gambar:</td><td>tautan gambar soal — boleh juga ditempel sebagai <code>![](url)</code> atau tautannya sendirian di satu baris</td></tr>
-                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Jawaban:</td><td><code>A</code> untuk satu kunci, atau <code>A,B,D</code> untuk beberapa kunci — otomatis jadi PG Kompleks</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Jawaban:</td><td>cara lama, tetap bisa: <code>A</code>, <code>A,B,D</code>, atau <code>B,S,B</code> untuk Benar/Salah</td></tr>
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Poin:</td><td>bobot soal (bawaan 10)</td></tr>
-                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Esai</td><td>tulis sendirian untuk soal uraian</td></tr>
+                        <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Esai</td><td>tidak perlu ditulis — soal <strong>tanpa opsi</strong> otomatis jadi uraian. Tulis kalau ingin memaksa</td></tr>
                       </tbody>
                     </table>
                     <p className="mt-1.5">
@@ -1053,7 +858,7 @@ export default function TeacherExamsPage() {
                     rows={6}
                     value={pasteText}
                     onChange={e => setPasteText(e.target.value)}
-                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\nJawaban: A\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star\nB. Bus\nC. HTTP\nD. Ring\nE. SMTP\nJawaban: A,B,D\n\n4. Perhatikan pernyataan tentang jaringan berikut.\nBenar/Salah\n- Switch bekerja pada lapisan data link\n- Alamat IPv4 terdiri dari 128 bit\n- Router menghubungkan dua jaringan berbeda\nJawaban: B,S,B\nPoin: 15\n\n5. Jelaskan perbedaan HUB dan SWITCH.\nEsai\nPoin: 20"}
+                    placeholder={"1. Apa itu HTML?\nA. Bahasa markup *\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star *\nB. Bus *\nC. HTTP\nD. Ring *\nE. SMTP\n\n4. Tentukan benar atau salah pernyataan berikut.\n- Switch bekerja pada lapisan data link *\n- Alamat IPv4 terdiri dari 128 bit\n- Router menghubungkan dua jaringan berbeda *\nPoin: 15\n\n5. Jelaskan perbedaan HUB dan SWITCH.\nPoin: 20"}
                     className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-[11px] text-slate-800 resize-none focus:outline-none font-mono"
                   />
                   {importError && (
