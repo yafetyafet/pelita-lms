@@ -6,7 +6,6 @@ import {
   Save,
   Trash2,
   Plus,
-  Image as ImageIcon,
   AlertTriangle,
   ListChecks,
   CheckSquare,
@@ -18,6 +17,7 @@ import {
   addExamQuestion,
   deleteExamQuestion,
 } from "@/app/actions/teacher"
+import { KolomGambar } from "@/components/KolomGambar"
 
 /**
  * Penyunting soal untuk ujian yang sudah dibuat.
@@ -532,15 +532,7 @@ function FormSoal({
         className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] resize-y"
       />
 
-      <div className="flex items-center gap-2">
-        <ImageIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <input
-          value={nilai.imageUrl}
-          onChange={(e) => setNilai({ imageUrl: e.target.value })}
-          placeholder="URL gambar (opsional)"
-          className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px]"
-        />
-      </div>
+      <KolomGambar kecil nilai={nilai.imageUrl} onUbah={(url) => setNilai({ imageUrl: url })} />
 
       {!esai && (
         <div className="flex flex-col gap-1">

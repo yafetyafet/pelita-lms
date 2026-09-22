@@ -333,6 +333,26 @@ model SpiritualJournal {
   @@index([createdAt])
 }
 
+/// Gambar yang ditempel guru dari papan klip ke soal ujian.
+///
+/// Disimpan di basis data, bukan di disk, dengan sengaja: aplikasi berjalan
+/// di kontainer dengan folder read-only, backup harian (pg_dump) otomatis
+/// ikut menyalinnya, dan perilakunya sama persis di Vercel maupun di server
+/// sekolah. Ukurannya kecil - gambar diperkecil ke lebar maks 1600 px dan
+/// dikonversi ke WebP sebelum disimpan.
+model GambarSoal {
+  id         String   @id @default(uuid())
+  data       Bytes
+  mime       String
+  ukuran     Int
+  lebar      Int?
+  tinggi     Int?
+  uploaderId String?
+  createdAt  DateTime @default(now())
+
+  @@index([uploaderId, createdAt])
+}
+
 // =====================================================
 // UJIAN / CBT
 // =====================================================
