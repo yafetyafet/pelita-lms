@@ -688,7 +688,13 @@ export default function TeacherExamsPage() {
       {/* Create Exam Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+          <div
+            className={`w-full bg-white rounded-t-[32px] sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-y-auto transition-[max-width] ${
+              // Mode tempel butuh ruang: petunjuk di kiri, teks soal di kanan.
+              // Modal 512 px yang lama memaksa keduanya bertumpuk sempit.
+              importMode === "paste" ? "max-w-lg md:max-w-5xl" : "max-w-lg md:max-w-2xl"
+            }`}
+          >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="text-sm font-bold text-slate-900">Buat Ujian Baru</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-700">
@@ -832,9 +838,11 @@ export default function TeacherExamsPage() {
               )}
 
               {importMode === "paste" && (
-                <div className="flex flex-col gap-2 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
-                  <div className="text-[10px] text-amber-900 leading-relaxed">
-                    <strong className="block mb-1">Format per baris:</strong>
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                  {/* Petunjuk: kolom kiri di laptop. Di HP diletakkan di BAWAH
+                      kotak tempel (order-2) supaya kotaknya langsung terlihat. */}
+                  <div className="order-2 md:order-none text-[11px] text-amber-900 leading-relaxed md:pr-3 md:border-r md:border-amber-200">
+                    <strong className="block mb-1.5 text-xs">Format per baris</strong>
                     <table className="w-full">
                       <tbody>
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">1.</td><td>soal baru</td></tr>
@@ -847,29 +855,31 @@ export default function TeacherExamsPage() {
                         <tr><td className="pr-2 font-mono font-bold align-top whitespace-nowrap">Esai</td><td>tidak perlu ditulis — soal <strong>tanpa opsi</strong> otomatis jadi uraian. Tulis kalau ingin memaksa</td></tr>
                       </tbody>
                     </table>
-                    <p className="mt-1.5">
-                      Gambar harus berupa <strong>tautan</strong>. Menempel gambar
-                      langsung dari papan klip belum didukung — unggah dulu ke Drive
-                      atau layanan gambar, lalu tempel tautannya. Pastikan tautannya
-                      bisa dibuka publik.
+                    <p className="mt-2">
+                      Gambar berupa <strong>tautan</strong> yang bisa dibuka publik
+                      (unggah dulu ke Drive atau layanan gambar).
                     </p>
                   </div>
+
+                  <div className="order-1 md:order-none flex flex-col gap-2 min-w-0">
                   <textarea
-                    rows={6}
+                    rows={18}
+                    spellCheck={false}
                     value={pasteText}
                     onChange={e => setPasteText(e.target.value)}
                     placeholder={"1. Apa itu HTML?\nA. Bahasa markup *\nB. Bahasa pemrograman\nC. Database\nD. Sistem operasi\nE. Protokol jaringan\n\n2. Perangkat pada gambar berikut berfungsi untuk?\nGambar: https://contoh.com/router.jpg\nA. Menghubungkan antar jaringan\nB. Menyimpan data\nC. Mencetak dokumen\nD. Mendinginkan prosesor\nE. Menguatkan listrik\nJawaban: A\nPoin: 15\n\n3. Manakah yang termasuk topologi jaringan?\nA. Star *\nB. Bus *\nC. HTTP\nD. Ring *\nE. SMTP\n\n4. Tentukan benar atau salah pernyataan berikut.\n- Switch bekerja pada lapisan data link *\n- Alamat IPv4 terdiri dari 128 bit\n- Router menghubungkan dua jaringan berbeda *\nPoin: 15\n\n5. Jelaskan perbedaan HUB dan SWITCH.\nPoin: 20"}
-                    className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-[11px] text-slate-800 resize-none focus:outline-none font-mono"
+                    className="w-full min-h-[22rem] px-3.5 py-3 bg-white border border-amber-200 rounded-xl text-sm leading-relaxed text-slate-800 resize-y focus:outline-none focus:ring-2 focus:ring-amber-400/40 font-mono"
                   />
                   {importError && (
-                    <p className="text-[10px] font-semibold text-slate-800 bg-white border border-amber-300 rounded-xl px-2.5 py-2">
+                    <p className="text-[11px] font-semibold text-slate-800 bg-white border border-amber-300 rounded-xl px-3 py-2">
                       {importError}
                     </p>
                   )}
 
-                  <button type="button" onClick={handlePasteImport} className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition">
+                  <button type="button" onClick={handlePasteImport} className="py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition">
                     Import Soal ({pasteText.split("\n").filter(l => l.trim().match(/^\d+[\.\)]/)).length} soal terdeteksi)
                   </button>
+                  </div>
                 </div>
               )}
 
