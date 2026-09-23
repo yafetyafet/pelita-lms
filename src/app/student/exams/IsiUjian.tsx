@@ -455,12 +455,30 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
             </p>
 
             {q.imageUrl && (
+              // Kalau gambar gagal dimuat, tampilkan pesan yang bisa
+              // dilaporkan siswa - bukan teks alt telanjang yang terbaca
+              // seperti halaman rusak.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={q.imageUrl}
                 alt="Gambar soal"
                 className="rounded-2xl border border-slate-200 max-h-64 object-contain self-center"
+                onError={(e) => {
+                  const img = e.currentTarget
+                  img.style.display = "none"
+                  const pesan = img.nextElementSibling as HTMLElement | null
+                  if (pesan) pesan.style.display = "block"
+                }}
               />
+            )}
+            {q.imageUrl && (
+              <p
+                style={{ display: "none" }}
+                className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"
+              >
+                Gambar soal ini tidak bisa dimuat. Laporkan ke pengawas — kamu
+                tetap bisa mengerjakan soal lain lebih dulu.
+              </p>
             )}
 
             {q.type === "BENAR_SALAH" ? (

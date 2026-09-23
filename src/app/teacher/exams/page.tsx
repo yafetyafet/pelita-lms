@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { muatXlsx } from "@/lib/xlsx"
 import { parseSoalTempel } from "@/lib/logic/parser-soal"
+import { normalisasiUrlGambar, peringatanUrlGambar } from "@/lib/logic/gambar-url"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -856,8 +857,11 @@ export default function TeacherExamsPage() {
                       </tbody>
                     </table>
                     <p className="mt-2">
-                      Gambar berupa <strong>tautan</strong> yang bisa dibuka publik
-                      (unggah dulu ke Drive atau layanan gambar).
+                      <strong>Gambar dari Google Drive:</strong> salin tautan berkasnya
+                      apa adanya — aplikasi mengubahnya sendiri menjadi tautan gambar
+                      langsung. Yang wajib Anda lakukan: buka <em>Bagikan</em> di Drive
+                      dan setel ke <strong>&quot;Siapa saja yang memiliki link&quot;</strong>,
+                      kalau tidak gambarnya tetap tidak muncul di HP siswa.
                     </p>
                   </div>
 
@@ -917,10 +921,28 @@ export default function TeacherExamsPage() {
                         type="url"
                         value={q.imageUrl}
                         onChange={e => updateQuestion(idx, "imageUrl", e.target.value)}
-                        placeholder="URL Gambar (opsional)"
+                        placeholder="Tautan gambar (opsional) — tautan Drive otomatis disesuaikan"
                         className="flex-1 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-[10px] focus:outline-none"
                       />
                     </div>
+                    {peringatanUrlGambar(q.imageUrl) && (
+                      <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                        {peringatanUrlGambar(q.imageUrl)}
+                      </p>
+                    )}
+                    {q.imageUrl && !peringatanUrlGambar(q.imageUrl) && (
+                      /* Pratinjau memakai tautan yang SUDAH dinormalkan, jadi
+                         apa yang guru lihat di sini sama dengan yang dilihat
+                         siswa nanti. */
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={normalisasiUrlGambar(q.imageUrl)}
+                        alt=""
+                        className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                        onLoad={e => { (e.currentTarget as HTMLImageElement).style.display = "block" }}
+                      />
+                    )}
 
                     {q.type !== "ESAI" && (
                       <div className="flex flex-col gap-1">

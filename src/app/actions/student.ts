@@ -9,6 +9,7 @@ import {
   tentukanStatus,
   type LokasiSekolah,
 } from '@/lib/logic/attendance'
+import { normalisasiUrlGambar } from '@/lib/logic/gambar-url'
 import {
   acakPG,
   kelayakanUjian,
@@ -865,7 +866,10 @@ export async function getExamPaper(
     const soal = exam.questions.map((q) => ({
       id: q.id,
       question: q.question,
-      imageUrl: q.imageUrl,
+      // Dinormalkan di sini, bukan hanya saat menyimpan: soal yang sudah
+      // telanjur tersimpan dengan tautan penampil Drive ikut tampil benar
+      // tanpa guru perlu menyuntingnya satu per satu.
+      imageUrl: normalisasiUrlGambar(q.imageUrl),
       type: q.type as TipeSoal,
       points: q.points,
       options: parseOptions(q.options),

@@ -32,6 +32,8 @@
  *   - lebih dari satu jawaban benar               -> PG_KOMPLEKS
  */
 
+import { normalisasiUrlGambar } from './gambar-url'
+
 export type SoalTempel = {
   question: string
   imageUrl: string
@@ -141,7 +143,7 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
       }
       soal.push({
         question: c.question.trim(),
-        imageUrl: c.imageUrl,
+        imageUrl: normalisasiUrlGambar(c.imageUrl),
         type: "ESAI",
         options: ["", "", "", "", ""],
         correctAnswer: "",
@@ -171,7 +173,7 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
 
       soal.push({
         question: c.question.trim(),
-        imageUrl: c.imageUrl,
+        imageUrl: normalisasiUrlGambar(c.imageUrl),
         type: "BENAR_SALAH",
         options: isi,
         correctAnswer: kunci ? kunci.join(",") : "",
@@ -185,7 +187,7 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
       catatan.push(`Soal ${nomor} "${cuplik}": opsi kurang dari 2 → jadi Esai`)
       soal.push({
         question: c.question.trim(),
-        imageUrl: c.imageUrl,
+        imageUrl: normalisasiUrlGambar(c.imageUrl),
         type: "ESAI",
         options: ["", "", "", "", ""],
         correctAnswer: "",
@@ -223,7 +225,7 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
 
     soal.push({
       question: c.question.trim(),
-      imageUrl: c.imageUrl,
+      imageUrl: normalisasiUrlGambar(c.imageUrl),
       type: tipe as "PG" | "PG_KOMPLEKS",
       options: isi,
       correctAnswer: kunci ?? "",
