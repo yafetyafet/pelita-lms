@@ -30,6 +30,12 @@ model User {
   isActive           Boolean            @default(true)
   mustChangePassword Boolean            @default(false)
   lastLoginAt        DateTime?
+  // Satu akun = satu perangkat. `sesiId` adalah id sesi yang sedang sah;
+  // token lama yang membawa sid berbeda otomatis ditolak. Login baru selalu
+  // menang, jadi tidak ada pengguna yang bisa terkunci permanen.
+  sesiId             String?
+  sesiPerangkat      String? // label perangkat hasil baca User-Agent
+  sesiSejak          DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -278,6 +284,14 @@ model Attendance {
   lat          Float?
   lng          Float?
   distance     Float? // meter dari titik sekolah saat presensi
+  // Sinyal mentah dari perangkat, disimpan untuk menilai keaslian lokasi.
+  // GPS sungguhan pada ponsel selalu melaporkan akurasi dan hampir selalu
+  // ketinggian; banyak aplikasi GPS palsu mengosongkan keduanya.
+  accuracy     Float?
+  altitude     Float?
+  // Skor kecurigaan 0-100 dan alasannya (JSON), hasil periksaLokasiPalsu.
+  mockScore    Int?
+  mockReasons  String?
   checkOutTime DateTime?
   recordedById String? // guru/admin yang menginput manual; null = presensi mandiri siswa
   createdAt    DateTime  @default(now())
@@ -394,6 +408,12 @@ model ExamSubmission {
   submittedAt    DateTime?
   status         String    @default("ONGOING") // ONGOING | FINISHED | GRADED
   violationCount Int       @default(0) // jumlah perpindahan tab terdeteksi
+  // Rincian pelanggaran per jenis (JSON), mis.
+  // {"pindahTab":3,"layarTerbagi":1,"hilangFokus":5}.
+  // Dipisah dari violationCount supaya pengawas tahu BENTUK kecurangannya,
+  // bukan cuma jumlahnya - siswa yang notifikasinya muncul sekali berbeda
+  // jauh dari siswa yang membuka aplikasi lain di layar terbagi.
+  violationDetail String?
   gradedById     String?
   gradedAt       DateTime?
   exam           Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)

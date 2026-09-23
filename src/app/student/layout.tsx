@@ -1,11 +1,16 @@
+import { jagaPerangkat } from "@/lib/auth/session"
 import { MobileShell } from "@/components/layout/MobileShell"
 import { StudentBottomNav } from "@/components/layout/StudentBottomNav"
 
-export default function StudentLayout({
+export default async function StudentLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Satu akun = satu perangkat: begitu akun dipakai masuk di tempat lain,
+  // sesi ini dialihkan ke halaman masuk berikut alasannya.
+  await jagaPerangkat()
+
   return (
     <MobileShell currentRole="student">
       {/* `min-h-0` wajib. Anak flex secara bawaan tidak boleh lebih pendek

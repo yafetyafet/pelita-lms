@@ -19,6 +19,14 @@ import {
   Flag,
 } from "lucide-react"
 import { getStudentExams, getExamPaper, submitExam } from "@/app/actions/student"
+import {
+  bacaRincian,
+  nilaiLayar,
+  ringkasPelanggaran,
+  totalPelanggaran,
+  type JenisPelanggaran,
+  type RincianPelanggaran,
+} from "@/lib/logic/pengawas-ujian"
 
 /**
  * Simpanan jawaban sementara di perangkat siswa.
@@ -38,6 +46,7 @@ type Simpanan = {
   answers: Record<string, string>
   doubtful: Record<string, boolean>
   tabSwitch: number
+  rincian: RincianPelanggaran
   disimpan: number
 }
 
@@ -53,6 +62,9 @@ function bacaSimpanan(submissionId: string): Simpanan | null {
       answers: p.answers ?? {},
       doubtful: p.doubtful ?? {},
       tabSwitch: Number(p.tabSwitch) || 0,
+      rincian: bacaRincian(
+        typeof p.rincian === "string" ? p.rincian : JSON.stringify(p.rincian ?? {})
+      ),
       disimpan: Number(p.disimpan) || 0,
     }
   } catch {
@@ -111,6 +123,14 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tabSwitch, setTabSwitch] = useState(0)
+  // Rincian per jenis kecurangan. `tabSwitch` dipertahankan sebagai total
+  // supaya data lama tetap terbaca, sedangkan rincian inilah yang memberi
+  // tahu pengawas BENTUK pelanggarannya.
+  const [rincian, setRincian] = useState<RincianPelanggaran>({})
+  // Layar penghalang saat ujian tidak lagi menguasai layar penuh. Isi soal
+  // disembunyikan selama ini tampil - inilah yang membuat layar terbagi
+  // tidak berguna untuk menyontek, bukan sekadar mencatatnya.
+  const [terhalang, setTerhalang] = useState<string | null>(null)
   const [submissionId, setSubmissionId] = useState("")
   const [dipulihkan, setDipulihkan] = useState(false)
 
@@ -120,6 +140,18 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   answersRef.current = answers
   const tabSwitchRef = useRef(tabSwitch)
   tabSwitchRef.current = tabSwitch
+  const rincianRef = useRef(rincian)
+  rincianRef.current = rincian
+
+  // Satu pintu untuk mencatat semua jenis pelanggaran, supaya total dan
+  // rincian tidak pernah berbeda.
+  const catatLanggar = useCallback((jenis: JenisPelanggaran) => {
+    setRincian((r) => {
+      const baru = { ...r, [jenis]: (r[jenis] ?? 0) + 1 }
+      setTabSwitch(totalPelanggaran(baru))
+      return baru
+    })
+  }, [])
 
   const loadList = async () => {
     const data = await getStudentExams()
@@ -139,7 +171,8 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       const res = await submitExam(
         selected.id,
         JSON.stringify(answersRef.current),
-        tabSwitchRef.current
+        tabSwitchRef.current,
+        JSON.stringify(rincianRef.current)
       )
 
       setIsSubmitting(false)
@@ -172,9 +205,10 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       answers,
       doubtful,
       tabSwitch,
+      rincian,
       disimpan: Date.now(),
     })
-  }, [submissionId, paper, isFinished, answers, doubtful, tabSwitch])
+  }, [submissionId, paper, isFinished, answers, doubtful, tabSwitch, rincian])
 
   // Cegah siswa menutup tab tanpa sadar saat ujian berlangsung.
   useEffect(() => {
@@ -192,11 +226,77 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   useEffect(() => {
     if (!inExamRoom) return
     const onVisibility = () => {
-      if (document.hidden) setTabSwitch((n) => n + 1)
+      if (document.hidden) catatLanggar("pindahTab")
     }
     document.addEventListener("visibilitychange", onVisibility)
     return () => document.removeEventListener("visibilitychange", onVisibility)
-  }, [inExamRoom])
+  }, [inExamRoom, catatLanggar])
+
+  // Jendela kehilangan fokus tanpa ikut tersembunyi. Inilah yang terjadi
+  // pada layar terbagi: ujian tetap terlihat, `document.hidden` tetap false,
+  // sehingga deteksi perpindahan tab di atas TIDAK menangkapnya.
+  useEffect(() => {
+    if (!inExamRoom) return
+    const onBlur = () => {
+      if (!document.hidden) catatLanggar("hilangFokus")
+    }
+    window.addEventListener("blur", onBlur)
+    return () => window.removeEventListener("blur", onBlur)
+  }, [inExamRoom, catatLanggar])
+
+  // Pengawasan layar terbagi.
+  //
+  // Peramban tidak punya API "apakah saya sedang di mode layar terbagi", jadi
+  // yang diukur adalah luas jendela dibanding luas layar. Penyusutan karena
+  // papan ketik virtual sengaja diampuni di `nilaiLayar` - tanpa itu setiap
+  // siswa yang mengetik jawaban esai akan tercatat melanggar.
+  useEffect(() => {
+    if (!inExamRoom) return
+
+    let terakhirTerbagi = false
+
+    const periksa = () => {
+      const aktif = document.activeElement
+      const adaIsianAktif =
+        !!aktif &&
+        (aktif.tagName === "INPUT" ||
+          aktif.tagName === "TEXTAREA" ||
+          (aktif as HTMLElement).isContentEditable)
+
+      const putusan = nilaiLayar({
+        u: {
+          lebarJendela: window.innerWidth,
+          tinggiJendela: window.innerHeight,
+          lebarLayar: window.screen.width,
+          tinggiLayar: window.screen.height,
+        },
+        adaIsianAktif,
+      })
+
+      if (putusan.terbagi) {
+        // Hitung sekali per kejadian, bukan sekali per event resize -
+        // menggeser pemisah layar bisa memicu puluhan event beruntun.
+        if (!terakhirTerbagi) catatLanggar("layarTerbagi")
+        terakhirTerbagi = true
+        setTerhalang(
+          `Ujian harus dikerjakan pada satu layar penuh. Saat ini ${putusan.alasan}. Tutup aplikasi lain atau keluar dari mode layar terbagi untuk melanjutkan.`
+        )
+      } else {
+        terakhirTerbagi = false
+        setTerhalang(null)
+      }
+    }
+
+    periksa()
+    window.addEventListener("resize", periksa)
+    window.addEventListener("orientationchange", periksa)
+    const jaga = setInterval(periksa, 2000)
+    return () => {
+      window.removeEventListener("resize", periksa)
+      window.removeEventListener("orientationchange", periksa)
+      clearInterval(jaga)
+    }
+  }, [inExamRoom, catatLanggar])
 
   // Hitung mundur. Nilai awalnya berasal dari server (`sisaDetik`), jadi
   // menyegarkan halaman tidak mengembalikan waktu.
@@ -253,11 +353,13 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       setAnswers(simpan.answers)
       setDoubtful(simpan.doubtful)
       setTabSwitch(simpan.tabSwitch)
+      setRincian(simpan.rincian)
       setDipulihkan(true)
     } else {
       setAnswers({})
       setDoubtful({})
       setTabSwitch(0)
+      setRincian({})
       setDipulihkan(false)
     }
 
@@ -347,6 +449,32 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
 
     return (
       <div className="flex flex-col gap-3 p-4 pb-24">
+        {/* Penghalang layar terbagi.
+            Ditaruh sebagai lapisan tetap yang menutupi seluruh layar dan
+            diletakkan SEBELUM isi soal: selama ini tampil, soal benar-benar
+            tidak terbaca. Mencatat pelanggaran saja tidak cukup - siswa yang
+            sudah sempat membaca soal di layar terbagi tetap diuntungkan.
+            Hitung mundur sengaja TIDAK dihentikan supaya menahan layar
+            terbagi tidak menjadi cara memperpanjang waktu. */}
+        {terhalang && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <div className="max-w-sm text-center flex flex-col items-center gap-3">
+              <AlertTriangle className="w-10 h-10 text-amber-400" />
+              <h3 className="text-base font-bold text-white">
+                Ujian dijeda sementara
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">{terhalang}</p>
+              <p className="text-[11px] text-amber-300 font-semibold">
+                Waktu ujian tetap berjalan. Kejadian ini tercatat untuk pengawas.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Bilah waktu */}
         <div className="sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between">
           <div className="min-w-0">
@@ -381,8 +509,8 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
           <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
             <span>
-              Terdeteksi {tabSwitch}x meninggalkan halaman ujian. Catatan ini
-              dilaporkan ke pengawas bersama jawabanmu.
+              Terdeteksi {ringkasPelanggaran(rincian) || `${tabSwitch}x meninggalkan halaman ujian`}.
+              Catatan ini dilaporkan ke pengawas bersama jawabanmu.
             </span>
           </div>
         )}

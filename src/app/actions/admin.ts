@@ -255,6 +255,10 @@ export async function getUsers() {
       nomorInduk: true,
       isActive: true,
       lastLoginAt: true,
+      // Perangkat yang sedang memegang sesi akun ini, supaya admin bisa
+      // menjawab pertanyaan "kenapa saya keluar sendiri?" tanpa menebak.
+      sesiPerangkat: true,
+      sesiSejak: true,
       studentClasses: { select: { classInfo: { select: { id: true, name: true } } } },
     },
   })

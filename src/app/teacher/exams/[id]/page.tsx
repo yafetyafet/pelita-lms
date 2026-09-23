@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   Users,
 } from "lucide-react"
+import { bacaRincian, ringkasPelanggaran } from "@/lib/logic/pengawas-ujian"
 import {
   getExamSubmissions,
   updateExamSettings,
@@ -483,7 +484,9 @@ export default function ExamDetailPage({
                         {s.violationCount > 0 && (
                           <span className="text-red-600 font-bold">
                             {" "}
-                            • {s.violationCount}x pindah tab
+                            •{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x pindah tab`}
                           </span>
                         )}
                       </p>
@@ -504,7 +507,15 @@ export default function ExamDetailPage({
                         <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-start gap-1.5">
                           <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>
-                            Siswa meninggalkan halaman ujian {s.violationCount} kali.
+                            {/* Bentuk pelanggaran ditulis apa adanya, tanpa
+                                menyimpulkan siswa menyontek: notifikasi masuk
+                                dan panggilan telepon juga memicu catatan ini.
+                                Penilaiannya tetap pada guru. */}
+                            Terdeteksi{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x meninggalkan halaman ujian`}
+                            . Perlu ditanyakan kepada siswa — catatan ini belum
+                            tentu berarti menyontek.
                           </span>
                         </p>
                       )}
