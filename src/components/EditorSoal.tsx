@@ -18,6 +18,7 @@ import {
   addExamQuestion,
   deleteExamQuestion,
 } from "@/app/actions/teacher"
+import { normalisasiUrlGambar, peringatanUrlGambar } from "@/lib/logic/gambar-url"
 
 /**
  * Penyunting soal untuk ujian yang sudah dibuat.
@@ -537,10 +538,24 @@ function FormSoal({
         <input
           value={nilai.imageUrl}
           onChange={(e) => setNilai({ imageUrl: e.target.value })}
-          placeholder="URL gambar (opsional)"
+          placeholder="Tautan gambar (opsional) — tautan Drive otomatis disesuaikan"
           className="flex-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px]"
         />
       </div>
+      {peringatanUrlGambar(nilai.imageUrl) && (
+        <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+          {peringatanUrlGambar(nilai.imageUrl)}
+        </p>
+      )}
+      {nilai.imageUrl && !peringatanUrlGambar(nilai.imageUrl) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={normalisasiUrlGambar(nilai.imageUrl)}
+          alt=""
+          className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+        />
+      )}
 
       {!esai && (
         <div className="flex flex-col gap-1">

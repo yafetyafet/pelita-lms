@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
+import { normalisasiUrlGambar } from '@/lib/logic/gambar-url'
 import { ForbiddenError } from '@/lib/logic/rbac'
 import { keNilaiAkhir, koreksiOtomatis,
   type TipeSoal,
@@ -1339,7 +1340,7 @@ export async function createExam(data: {
         questions: {
           create: data.questions.map((q, i) => ({
             question: q.question,
-            imageUrl: q.imageUrl || null,
+            imageUrl: normalisasiUrlGambar(q.imageUrl) || null,
             type: q.type,
             options: q.options || null,
             correctAnswer: q.correctAnswer || null,
@@ -1535,7 +1536,7 @@ export async function updateExamQuestion(input: {
       data: {
         ...(input.question !== undefined ? { question: input.question.trim() } : {}),
         ...(input.imageUrl !== undefined
-          ? { imageUrl: input.imageUrl?.trim() || null }
+          ? { imageUrl: normalisasiUrlGambar(input.imageUrl) || null }
           : {}),
         ...(input.type !== undefined ? { type: tipe } : {}),
         // Soal esai tidak menyimpan opsi maupun kunci.
@@ -1633,7 +1634,7 @@ export async function addExamQuestion(input: {
       data: {
         examId: input.examId,
         question: input.question.trim(),
-        imageUrl: input.imageUrl?.trim() || null,
+        imageUrl: normalisasiUrlGambar(input.imageUrl) || null,
         type: input.type,
         options: esai ? null : JSON.stringify(input.options),
         correctAnswer: esai ? null : input.correctAnswer,
