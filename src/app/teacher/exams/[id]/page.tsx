@@ -223,7 +223,11 @@ export default function ExamDetailPage({
             {data.exam.title}
           </h2>
           <p className="text-[11px] text-slate-500 font-medium">
-            {data.exam.classInfo?.name} • {data.exam.subject?.name} •{" "}
+            {(data.exam.kelas ?? [])
+              .map((k: any) => k?.name)
+              .filter(Boolean)
+              .join(", ") || "Tanpa rombel"}{" "}
+            • {data.exam.subject?.name} •{" "}
             {data.questions.length} soal
           </p>
         </div>
@@ -475,7 +479,14 @@ export default function ExamDetailPage({
                         {s.user.name}
                       </p>
                       <p className="text-[10px] text-slate-500">
-                        @{s.user.username} •{" "}
+                        @{s.user.username}
+                        {s.rombel && (
+                          <span className="font-semibold text-slate-600">
+                            {" "}
+                            • {s.rombel}
+                          </span>
+                        )}{" "}
+                        •{" "}
                         {s.status === "ONGOING"
                           ? "sedang mengerjakan"
                           : s.status === "GRADED"

@@ -872,10 +872,15 @@ export async function getStudentExams() {
   const exams = await prisma.exam.findMany({
     // Hanya ujian yang sudah diterbitkan gurunya. Sebelumnya setiap ujian
     // langsung tampil dan bisa dikerjakan begitu dibuat.
-    where: { classId, isPublished: true },
+    // Satu ujian kini bisa dipakai beberapa rombel, jadi penyaringnya lewat
+    // tabel peserta - bukan lagi kolom classId tunggal.
+    where: { isPublished: true, classes: { some: { classId } } },
     include: {
       subject: { select: { name: true } },
-      classInfo: { select: { name: true } },
+      classes: {
+        where: { classId },
+        include: { classInfo: { select: { name: true } } },
+      },
       _count: { select: { questions: true } },
       submissions: { where: { userId: session.uid } },
     },
@@ -913,7 +918,7 @@ export async function getStudentExams() {
       passingScore: exam.passingScore,
       showResult: exam.showResult,
       subject: exam.subject,
-      classInfo: exam.classInfo,
+      classInfo: exam.classes[0]?.classInfo ?? null,
       jumlahSoal: exam._count.questions,
       kelayakan,
       mySubmission: mySubmission
@@ -958,9 +963,12 @@ export async function getExamPaper(
     const classId = await kelasSaya(session.uid)
     const exam = await prisma.exam.findUnique({
       where: { id: examId },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: {
+        questions: { orderBy: { order: 'asc' } },
+        classes: { select: { classId: true } },
+      },
     })
-    if (!exam || !exam.isPublished || exam.classId !== classId) {
+    if (!exam || !exam.isPublished || !exam.classes.some((c) => c.classId === classId)) {
       return { error: 'Ujian tidak tersedia untuk kelasmu.' }
     }
     if (exam.questions.length === 0) {
@@ -1050,9 +1058,12 @@ export async function submitExam(
     const classId = await kelasSaya(session.uid)
     const exam = await prisma.exam.findUnique({
       where: { id: examId },
-      include: { questions: true },
+      include: {
+        questions: true,
+        classes: { select: { classId: true } },
+      },
     })
-    if (!exam || !exam.isPublished || exam.classId !== classId) {
+    if (!exam || !exam.isPublished || !exam.classes.some((c) => c.classId === classId)) {
       return { error: 'Ujian tidak tersedia untuk kelasmu.' }
     }
 

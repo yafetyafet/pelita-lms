@@ -97,7 +97,7 @@ model Class {
   journals        Journal[]
   materials       Material[]
   ForumDiscussion ForumDiscussion[]
-  Exam            Exam[]
+  exams           ExamClass[]
   schedules       Schedule[]
 
   @@index([level])
@@ -356,7 +356,6 @@ model Exam {
   title        String
   description  String?
   type         String           @default("PG")
-  classId      String
   subjectId    String
   authorId     String
   duration     Int              @default(60)
@@ -371,12 +370,27 @@ model Exam {
   createdAt    DateTime         @default(now())
   questions    ExamQuestion[]
   submissions  ExamSubmission[]
-  classInfo    Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  // Satu ujian bisa dipakai beberapa rombel sekaligus selama mapelnya sama.
+  // Sebelumnya `classId` tunggal memaksa guru membuat ulang seluruh soal
+  // untuk tiap rombel paralel - 4 rombel berarti 4 kali pekerjaan yang sama,
+  // dan setiap perbaikan salah ketik harus diulang empat kali juga.
+  classes      ExamClass[]
   subject      Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   author       User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  @@index([classId, isPublished])
   @@index([authorId])
+  @@index([subjectId])
+}
+
+// Rombel peserta sebuah ujian.
+model ExamClass {
+  examId    String
+  classId   String
+  exam      Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classInfo Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([examId, classId])
+  @@index([classId])
 }
 
 model ExamQuestion {
@@ -387,7 +401,9 @@ model ExamQuestion {
   type          String  @default("PG")
   options       String?
   correctAnswer String?
-  points        Int     @default(10)
+  // Float, bukan Int: guru perlu bobot seperti 2.5 untuk membagi total
+  // menjadi angka bulat (mis. 40 soal x 2.5 = 100).
+  points        Float   @default(10)
   order         Int     @default(0)
   exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
 

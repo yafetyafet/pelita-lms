@@ -37,7 +37,10 @@ export default function TeacherExamsPage() {
 
   // Form state
   const [examTitle, setExamTitle] = useState("")
-  const [examClassId, setExamClassId] = useState("")
+  // Satu ujian bisa dipakai beberapa rombel sekaligus asalkan mapelnya sama,
+  // jadi yang dipilih adalah SATU mapel dan BEBERAPA rombel - bukan lagi satu
+  // pasangan kelas+mapel.
+  const [examClassIds, setExamClassIds] = useState<string[]>([])
   const [examSubjectId, setExamSubjectId] = useState("")
   const [examDuration, setExamDuration] = useState(60)
   // Jendela pelaksanaan ujian. Sebelumnya hanya bisa diatur setelah ujian
@@ -59,13 +62,43 @@ export default function TeacherExamsPage() {
       setTeacherClasses(cls)
       setExams(exm)
       if (cls.length > 0) {
-        setExamClassId(cls[0].classId)
         setExamSubjectId(cls[0].subjectId)
+        setExamClassIds([cls[0].classId])
       }
       setIsLoading(false)
     }
     load()
   }, [])
+
+  // Mapel yang diampu guru ini, tanpa duplikat.
+  const mapelSaya = Array.from(
+    new Map(
+      teacherClasses.map((tc: any) => [tc.subjectId, { id: tc.subjectId, name: tc.subject.name }])
+    ).values()
+  )
+
+  // Rombel yang diampu guru ini UNTUK mapel yang sedang dipilih. Daftar ini
+  // yang membatasi pilihan, sehingga guru tidak bisa memilih rombel yang
+  // tidak diampunya lalu ditolak server saat menyimpan.
+  const rombelUntukMapel = teacherClasses.filter(
+    (tc: any) => tc.subjectId === examSubjectId
+  )
+
+  const toggleRombel = (classId: string) => {
+    setExamClassIds(prev =>
+      prev.includes(classId) ? prev.filter(c => c !== classId) : [...prev, classId]
+    )
+  }
+
+  // Total bobot seluruh soal. Guru perlu angka ini saat menyusun soal supaya
+  // totalnya pas (mis. 100) tanpa menjumlahkan sendiri di kertas.
+  const totalPoin = questions.reduce(
+    (t, q) => t + (Number.isFinite(Number(q.points)) ? Number(q.points) : 0),
+    0
+  )
+  // Penjumlahan pecahan biner meninggalkan ekor seperti 7.500000000000001;
+  // dibulatkan ke 2 desimal supaya yang terbaca guru adalah 7.5.
+  const totalPoinRapi = Math.round(totalPoin * 100) / 100
 
   /** Lima opsi A–E sesuai format ujian nasional. */
   const OPSI_KOSONG = () => ["", "", "", "", ""]
@@ -358,7 +391,7 @@ export default function TeacherExamsPage() {
             if (tipe === "PG" && indeks.length > 1) tipe = "PG_KOMPLEKS"
           }
 
-          const poin = parseInt(ambil(row, "poin", "bobot"), 10)
+          const poin = parseFloat(ambil(row, "poin", "bobot"))
 
           hasil.push({
             question: pertanyaan,
@@ -433,8 +466,8 @@ export default function TeacherExamsPage() {
 
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!examTitle || !examClassId || !examSubjectId || questions.length === 0) {
-      alert("Lengkapi judul, kelas, mapel, dan minimal 1 soal")
+    if (!examTitle || examClassIds.length === 0 || !examSubjectId || questions.length === 0) {
+      alert("Lengkapi judul, mapel, minimal 1 rombel, dan minimal 1 soal")
       return
     }
 
@@ -465,7 +498,7 @@ export default function TeacherExamsPage() {
     const res = await createExam({
       title: examTitle,
       type: adaEsai ? "CAMPURAN" : adaKompleks ? "PG_KOMPLEKS" : "PG",
-      classId: examClassId,
+      classIds: examClassIds,
       subjectId: examSubjectId,
       duration: examDuration,
       startAt: examStartAt ? new Date(examStartAt).toISOString() : undefined,
@@ -654,7 +687,13 @@ export default function TeacherExamsPage() {
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    {exam.classInfo?.name} • {exam.subject?.name}
+                    {/* Satu ujian bisa dipakai beberapa rombel; semuanya
+                        disebutkan agar guru tahu ujian ini menjangkau siapa. */}
+                    {(exam.classes ?? [])
+                      .map((c: any) => c.classInfo?.name)
+                      .filter(Boolean)
+                      .join(", ") || "Tanpa rombel"}{" "}
+                    • {exam.subject?.name}
                   </p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded">{exam.type}</span>
@@ -719,22 +758,19 @@ export default function TeacherExamsPage() {
                     guru bisa memilih kombinasi kelas+mapel yang tidak
                     diampunya — lalu ditolak server saat disimpan. */}
                 <select
-                  value={examClassId && examSubjectId ? `${examClassId}|${examSubjectId}` : ""}
+                  value={examSubjectId}
                   onChange={e => {
-                    const [c, sb] = e.target.value.split("|")
-                    setExamClassId(c || "")
-                    setExamSubjectId(sb || "")
+                    // Ganti mapel berarti daftar rombel ikut berganti, jadi
+                    // pilihan rombel lama dikosongkan agar tidak tersimpan
+                    // rombel yang tidak mengajarkan mapel ini.
+                    setExamSubjectId(e.target.value)
+                    setExamClassIds([])
                   }}
                   className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
                 >
-                  <option value="">Pilih Kelas &amp; Mapel</option>
-                  {teacherClasses.map((tc: any) => (
-                    <option
-                      key={`${tc.classId}|${tc.subjectId}`}
-                      value={`${tc.classId}|${tc.subjectId}`}
-                    >
-                      {tc.classInfo.name} — {tc.subject.name}
-                    </option>
+                  <option value="">Pilih Mata Pelajaran</option>
+                  {mapelSaya.map((m: any) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
                 <div className="flex items-center gap-1.5">
@@ -742,6 +778,71 @@ export default function TeacherExamsPage() {
                   <span className="text-[10px] text-slate-500 shrink-0">mnt</span>
                 </div>
               </div>
+
+              {/* Rombel peserta. Satu ujian dipakai beberapa rombel paralel
+                  sekaligus: soalnya ditulis sekali, dan perbaikan salah ketik
+                  cukup dilakukan di satu tempat. */}
+              {examSubjectId && (
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-slate-700">
+                      Rombel Peserta
+                    </span>
+                    {rombelUntukMapel.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExamClassIds(
+                            examClassIds.length === rombelUntukMapel.length
+                              ? []
+                              : rombelUntukMapel.map((tc: any) => tc.classId)
+                          )
+                        }
+                        className="text-[10px] font-bold text-blue-600 hover:underline"
+                      >
+                        {examClassIds.length === rombelUntukMapel.length
+                          ? "Kosongkan"
+                          : "Pilih semua"}
+                      </button>
+                    )}
+                  </div>
+
+                  {rombelUntukMapel.length === 0 ? (
+                    <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-2">
+                      Kamu belum diampukan rombel mana pun untuk mapel ini.
+                      Hubungi admin.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {rombelUntukMapel.map((tc: any) => {
+                        const aktif = examClassIds.includes(tc.classId)
+                        return (
+                          <button
+                            key={tc.classId}
+                            type="button"
+                            onClick={() => toggleRombel(tc.classId)}
+                            aria-pressed={aktif}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition ${
+                              aktif
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                            }`}
+                          >
+                            {tc.classInfo.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {examClassIds.length > 1 && (
+                    <p className="text-[10px] text-slate-500">
+                      Soal yang sama akan dipakai {examClassIds.length} rombel.
+                      Token, jadwal, dan hasilnya tetap satu ujian.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Tanggal & jam pelaksanaan. Sebelumnya hanya bisa diatur
                   setelah ujian dibuat, lewat halaman Kelola. */}
@@ -887,6 +988,29 @@ export default function TeacherExamsPage() {
                 </div>
               )}
 
+              {/* Ringkasan bobot. Ditempel di atas daftar soal supaya guru
+                  melihat totalnya sambil mengetik, bukan setelah selesai.
+                  Tanpa ini satu-satunya cara mengetahui total adalah
+                  menjumlahkan sendiri semua kotak poin. */}
+              {questions.length > 0 && (
+                <div
+                  className={`sticky top-0 z-10 px-3 py-2 rounded-2xl border flex items-center justify-between gap-2 ${
+                    totalPoinRapi === 100
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-slate-50 border-slate-200 text-slate-700"
+                  }`}
+                >
+                  <span className="text-[11px] font-bold">
+                    {questions.length} soal &middot; total {totalPoinRapi} poin
+                  </span>
+                  <span className="text-[10px] opacity-80">
+                    {totalPoinRapi === 100
+                      ? "pas 100"
+                      : `${totalPoinRapi > 100 ? "lebih" : "kurang"} ${Math.round(Math.abs(100 - totalPoinRapi) * 100) / 100} dari 100`}
+                  </span>
+                </div>
+              )}
+
               {/* Questions list */}
               <div className="flex flex-col gap-3">
                 {questions.map((q, idx) => (
@@ -1021,11 +1145,21 @@ export default function TeacherExamsPage() {
 
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-slate-500">Poin:</span>
+                      {/* `step="any"` + parseFloat: bobot pecahan seperti 2.5
+                          diperlukan untuk membagi total menjadi angka bulat
+                          (40 soal x 2.5 = 100). parseInt sebelumnya memangkas
+                          2.5 menjadi 2 tanpa peringatan apa pun. */}
                       <input
                         type="number"
+                        step="any"
+                        min="0"
+                        inputMode="decimal"
                         value={q.points}
-                        onChange={e => updateQuestion(idx, "points", parseInt(e.target.value) || 10)}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center focus:outline-none"
+                        onChange={e => {
+                          const n = parseFloat(e.target.value)
+                          updateQuestion(idx, "points", Number.isFinite(n) && n >= 0 ? n : 0)
+                        }}
+                        className="w-20 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1045,7 +1179,13 @@ export default function TeacherExamsPage() {
                 className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>{creating ? "Membuat Ujian..." : `Buat Ujian (${questions.length} Soal)`}</span>
+                <span>
+                  {creating
+                    ? "Membuat Ujian..."
+                    : `Buat Ujian (${questions.length} Soal, ${totalPoinRapi} Poin${
+                        examClassIds.length > 1 ? `, ${examClassIds.length} Rombel` : ""
+                      })`}
+                </span>
               </button>
             </form>
           </div>
