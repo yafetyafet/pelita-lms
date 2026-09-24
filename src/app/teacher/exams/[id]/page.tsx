@@ -17,10 +17,13 @@ import {
   RefreshCw,
   ShieldAlert,
   Users,
+  ListChecks,
 } from "lucide-react"
 import { bacaRincian, ringkasPelanggaran } from "@/lib/logic/pengawas-ujian"
+import { RekapHasilUjian } from "@/components/RekapHasilUjian"
 import {
   getExamSubmissions,
+  getHasilUjianPerRombel,
   updateExamSettings,
   saveEssayScore,
   recomputeExamScores,
@@ -66,9 +69,17 @@ export default function ExamDetailPage({
   const [essayDraft, setEssayDraft] = useState<Record<string, string>>({})
   const [savingEssay, setSavingEssay] = useState<string | null>(null)
   const [openSub, setOpenSub] = useState<string | null>(null)
+  // Rekap per rombel diambil terpisah dari daftar koreksi: keduanya menyusun
+  // data yang berbeda dari ujian yang sama, dan rekap tetap harus utuh
+  // meski daftar koreksinya sedang difilter.
+  const [rekap, setRekap] = useState<any>(null)
 
   const load = async () => {
-    const res = await getExamSubmissions(id)
+    const [res, hasil] = await Promise.all([
+      getExamSubmissions(id),
+      getHasilUjianPerRombel(id),
+    ])
+    setRekap(hasil)
     if (!res) {
       setError("Ujian tidak ditemukan atau kamu tidak berhak membukanya.")
       setIsLoading(false)
@@ -439,6 +450,22 @@ export default function ExamDetailPage({
         adaPengerjaan={selesai.length}
         onBerubah={load}
       />
+
+      {/* Rekap hasil per rombel + ekspor Excel.
+          Ditaruh SEBELUM daftar koreksi karena inilah yang dicari guru
+          setelah ujian selesai; daftar koreksi baru dipakai saat menilai
+          esai satu per satu. */}
+      {rekap && (
+        <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <ListChecks className="w-4 h-4 text-emerald-600" />
+              Rekap Hasil per Rombel
+            </h3>
+          </div>
+          <RekapHasilUjian info={rekap.exam} rombel={rekap.rombel} />
+        </div>
+      )}
 
       {/* Peserta & koreksi */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">

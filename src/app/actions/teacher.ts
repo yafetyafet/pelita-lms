@@ -1852,6 +1852,157 @@ export async function getExamSubmissions(examId: string) {
   }
 }
 
+/**
+ * Rekap hasil ujian dikelompokkan per rombel.
+ *
+ * Dibuat terpisah dari `getExamSubmissions` karena kebutuhannya berbeda:
+ * yang itu untuk mengoreksi esai satu per satu, yang ini untuk melihat dan
+ * mengekspor hasil satu rombel secara utuh.
+ *
+ * Perbedaan penting: daftar di sini berangkat dari DAFTAR SISWA rombel,
+ * bukan dari daftar pengerjaan. Siswa yang tidak mengikuti ujian tetap
+ * muncul dengan status "belum mengerjakan" - kalau berangkat dari
+ * pengerjaan, siswa yang absen hilang dari rekap dan gurunya baru sadar
+ * saat mengisi rapor.
+ */
+export async function getHasilUjianPerRombel(examId: string) {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+    await examMilikSaya(session, examId)
+
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        duration: true,
+        startAt: true,
+        passingScore: true,
+        subject: { select: { name: true } },
+        author: { select: { name: true, nomorInduk: true } },
+        questions: { select: { type: true, points: true } },
+        classes: {
+          select: { classInfo: { select: { id: true, name: true } } },
+        },
+        submissions: {
+          select: {
+            userId: true,
+            status: true,
+            score: true,
+            scoreMax: true,
+            essayScore: true,
+            essayMax: true,
+            finalScore: true,
+            startedAt: true,
+            submittedAt: true,
+            violationCount: true,
+            violationDetail: true,
+          },
+        },
+      },
+    })
+    if (!exam) return null
+
+    const bobotPG = exam.questions
+      .filter((q) => q.type !== 'ESAI')
+      .reduce((n, q) => n + q.points, 0)
+    const bobotEsai = exam.questions
+      .filter((q) => q.type === 'ESAI')
+      .reduce((n, q) => n + q.points, 0)
+
+    const perUserId = new Map(exam.submissions.map((x) => [x.userId, x]))
+    const kelasIds = exam.classes.map((c) => c.classInfo.id)
+
+    const anggota = await prisma.classStudent.findMany({
+      where: { classId: { in: kelasIds } },
+      select: {
+        classId: true,
+        user: { select: { id: true, name: true, nomorInduk: true, username: true } },
+      },
+      orderBy: { user: { name: 'asc' } },
+    })
+
+    const rombel = exam.classes.map((c) => {
+      const siswa = anggota
+        .filter((a) => a.classId === c.classInfo.id)
+        .map((a) => {
+          const sub = perUserId.get(a.user.id)
+          return {
+            id: a.user.id,
+            nama: a.user.name,
+            nomorInduk: a.user.nomorInduk || a.user.username,
+            status: !sub
+              ? ('belum' as const)
+              : sub.status === 'ONGOING'
+                ? ('mengerjakan' as const)
+                : sub.finalScore === null
+                  ? ('menunggu' as const)
+                  : ('selesai' as const),
+            skorPG: sub?.score ?? null,
+            skorMaksPG: sub?.scoreMax ?? null,
+            skorEsai: sub?.essayScore ?? null,
+            nilaiAkhir: sub?.finalScore ?? null,
+            mulai: sub?.startedAt ?? null,
+            kumpul: sub?.submittedAt ?? null,
+            pelanggaran: sub?.violationCount ?? 0,
+            pelanggaranRinci: sub?.violationDetail ?? null,
+          }
+        })
+
+      // Ringkasan hanya dari nilai yang SUDAH ada. Siswa yang belum
+      // mengerjakan tidak dihitung nol - itu akan menyeret rata-rata rombel
+      // turun dan membuat angkanya tidak bisa dipakai.
+      const nilai = siswa
+        .map((x) => x.nilaiAkhir)
+        .filter((n): n is number => typeof n === 'number')
+      const lulus =
+        exam.passingScore !== null
+          ? nilai.filter((n) => n >= exam.passingScore!).length
+          : null
+
+      return {
+        id: c.classInfo.id,
+        nama: c.classInfo.name,
+        siswa,
+        ringkasan: {
+          jumlahSiswa: siswa.length,
+          sudahMenilai: nilai.length,
+          belumMengerjakan: siswa.filter((x) => x.status === 'belum').length,
+          menungguKoreksi: siswa.filter((x) => x.status === 'menunggu').length,
+          rata:
+            nilai.length > 0
+              ? Math.round((nilai.reduce((a, b) => a + b, 0) / nilai.length) * 100) / 100
+              : null,
+          tertinggi: nilai.length > 0 ? Math.max(...nilai) : null,
+          terendah: nilai.length > 0 ? Math.min(...nilai) : null,
+          tuntas: lulus,
+        },
+      }
+    })
+
+    return {
+      exam: {
+        id: exam.id,
+        title: exam.title,
+        type: exam.type,
+        duration: exam.duration,
+        startAt: exam.startAt,
+        passingScore: exam.passingScore,
+        mapel: exam.subject?.name ?? '',
+        guru: exam.author?.name ?? '',
+        nipGuru: exam.author?.nomorInduk ?? '',
+        jumlahSoal: exam.questions.length,
+        bobotPG: Math.round(bobotPG * 100) / 100,
+        bobotEsai: Math.round(bobotEsai * 100) / 100,
+      },
+      rombel,
+    }
+  } catch {
+    return null
+  }
+}
+
 function parseJawaban(raw: string | null): Record<string, string> {
   if (!raw) return {}
   try {
