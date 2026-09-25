@@ -30,6 +30,12 @@ model User {
   isActive           Boolean            @default(true)
   mustChangePassword Boolean            @default(false)
   lastLoginAt        DateTime?
+  // Satu akun = satu perangkat. `sesiId` adalah id sesi yang sedang sah;
+  // token lama yang membawa sid berbeda otomatis ditolak. Login baru selalu
+  // menang, jadi tidak ada pengguna yang bisa terkunci permanen.
+  sesiId             String?
+  sesiPerangkat      String? // label perangkat hasil baca User-Agent
+  sesiSejak          DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -91,7 +97,7 @@ model Class {
   journals        Journal[]
   materials       Material[]
   ForumDiscussion ForumDiscussion[]
-  Exam            Exam[]
+  exams           ExamClass[]
   schedules       Schedule[]
 
   @@index([level])
@@ -278,6 +284,14 @@ model Attendance {
   lat          Float?
   lng          Float?
   distance     Float? // meter dari titik sekolah saat presensi
+  // Sinyal mentah dari perangkat, disimpan untuk menilai keaslian lokasi.
+  // GPS sungguhan pada ponsel selalu melaporkan akurasi dan hampir selalu
+  // ketinggian; banyak aplikasi GPS palsu mengosongkan keduanya.
+  accuracy     Float?
+  altitude     Float?
+  // Skor kecurigaan 0-100 dan alasannya (JSON), hasil periksaLokasiPalsu.
+  mockScore    Int?
+  mockReasons  String?
   checkOutTime DateTime?
   recordedById String? // guru/admin yang menginput manual; null = presensi mandiri siswa
   createdAt    DateTime  @default(now())
@@ -342,7 +356,6 @@ model Exam {
   title        String
   description  String?
   type         String           @default("PG")
-  classId      String
   subjectId    String
   authorId     String
   duration     Int              @default(60)
@@ -357,12 +370,27 @@ model Exam {
   createdAt    DateTime         @default(now())
   questions    ExamQuestion[]
   submissions  ExamSubmission[]
-  classInfo    Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  // Satu ujian bisa dipakai beberapa rombel sekaligus selama mapelnya sama.
+  // Sebelumnya `classId` tunggal memaksa guru membuat ulang seluruh soal
+  // untuk tiap rombel paralel - 4 rombel berarti 4 kali pekerjaan yang sama,
+  // dan setiap perbaikan salah ketik harus diulang empat kali juga.
+  classes      ExamClass[]
   subject      Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   author       User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  @@index([classId, isPublished])
   @@index([authorId])
+  @@index([subjectId])
+}
+
+// Rombel peserta sebuah ujian.
+model ExamClass {
+  examId    String
+  classId   String
+  exam      Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classInfo Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([examId, classId])
+  @@index([classId])
 }
 
 model ExamQuestion {
@@ -373,7 +401,9 @@ model ExamQuestion {
   type          String  @default("PG")
   options       String?
   correctAnswer String?
-  points        Int     @default(10)
+  // Float, bukan Int: guru perlu bobot seperti 2.5 untuk membagi total
+  // menjadi angka bulat (mis. 40 soal x 2.5 = 100).
+  points        Float   @default(10)
   order         Int     @default(0)
   exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
 
@@ -394,6 +424,12 @@ model ExamSubmission {
   submittedAt    DateTime?
   status         String    @default("ONGOING") // ONGOING | FINISHED | GRADED
   violationCount Int       @default(0) // jumlah perpindahan tab terdeteksi
+  // Rincian pelanggaran per jenis (JSON), mis.
+  // {"pindahTab":3,"layarTerbagi":1,"hilangFokus":5}.
+  // Dipisah dari violationCount supaya pengawas tahu BENTUK kecurangannya,
+  // bukan cuma jumlahnya - siswa yang notifikasinya muncul sekali berbeda
+  // jauh dari siswa yang membuka aplikasi lain di layar terbagi.
+  violationDetail String?
   gradedById     String?
   gradedAt       DateTime?
   exam           Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)

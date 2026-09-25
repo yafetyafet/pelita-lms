@@ -17,9 +17,13 @@ import {
   RefreshCw,
   ShieldAlert,
   Users,
+  ListChecks,
 } from "lucide-react"
+import { bacaRincian, ringkasPelanggaran } from "@/lib/logic/pengawas-ujian"
+import { RekapHasilUjian } from "@/components/RekapHasilUjian"
 import {
   getExamSubmissions,
+  getHasilUjianPerRombel,
   updateExamSettings,
   saveEssayScore,
   recomputeExamScores,
@@ -65,9 +69,17 @@ export default function ExamDetailPage({
   const [essayDraft, setEssayDraft] = useState<Record<string, string>>({})
   const [savingEssay, setSavingEssay] = useState<string | null>(null)
   const [openSub, setOpenSub] = useState<string | null>(null)
+  // Rekap per rombel diambil terpisah dari daftar koreksi: keduanya menyusun
+  // data yang berbeda dari ujian yang sama, dan rekap tetap harus utuh
+  // meski daftar koreksinya sedang difilter.
+  const [rekap, setRekap] = useState<any>(null)
 
   const load = async () => {
-    const res = await getExamSubmissions(id)
+    const [res, hasil] = await Promise.all([
+      getExamSubmissions(id),
+      getHasilUjianPerRombel(id),
+    ])
+    setRekap(hasil)
     if (!res) {
       setError("Ujian tidak ditemukan atau kamu tidak berhak membukanya.")
       setIsLoading(false)
@@ -222,7 +234,11 @@ export default function ExamDetailPage({
             {data.exam.title}
           </h2>
           <p className="text-[11px] text-slate-500 font-medium">
-            {data.exam.classInfo?.name} • {data.exam.subject?.name} •{" "}
+            {(data.exam.kelas ?? [])
+              .map((k: any) => k?.name)
+              .filter(Boolean)
+              .join(", ") || "Tanpa rombel"}{" "}
+            • {data.exam.subject?.name} •{" "}
             {data.questions.length} soal
           </p>
         </div>
@@ -435,6 +451,22 @@ export default function ExamDetailPage({
         onBerubah={load}
       />
 
+      {/* Rekap hasil per rombel + ekspor Excel.
+          Ditaruh SEBELUM daftar koreksi karena inilah yang dicari guru
+          setelah ujian selesai; daftar koreksi baru dipakai saat menilai
+          esai satu per satu. */}
+      {rekap && (
+        <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <ListChecks className="w-4 h-4 text-emerald-600" />
+              Rekap Hasil per Rombel
+            </h3>
+          </div>
+          <RekapHasilUjian info={rekap.exam} rombel={rekap.rombel} />
+        </div>
+      )}
+
       {/* Peserta & koreksi */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -474,7 +506,14 @@ export default function ExamDetailPage({
                         {s.user.name}
                       </p>
                       <p className="text-[10px] text-slate-500">
-                        @{s.user.username} •{" "}
+                        @{s.user.username}
+                        {s.rombel && (
+                          <span className="font-semibold text-slate-600">
+                            {" "}
+                            • {s.rombel}
+                          </span>
+                        )}{" "}
+                        •{" "}
                         {s.status === "ONGOING"
                           ? "sedang mengerjakan"
                           : s.status === "GRADED"
@@ -483,7 +522,9 @@ export default function ExamDetailPage({
                         {s.violationCount > 0 && (
                           <span className="text-red-600 font-bold">
                             {" "}
-                            • {s.violationCount}x pindah tab
+                            •{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x pindah tab`}
                           </span>
                         )}
                       </p>
@@ -504,7 +545,15 @@ export default function ExamDetailPage({
                         <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-start gap-1.5">
                           <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>
-                            Siswa meninggalkan halaman ujian {s.violationCount} kali.
+                            {/* Bentuk pelanggaran ditulis apa adanya, tanpa
+                                menyimpulkan siswa menyontek: notifikasi masuk
+                                dan panggilan telepon juga memicu catatan ini.
+                                Penilaiannya tetap pada guru. */}
+                            Terdeteksi{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x meninggalkan halaman ujian`}
+                            . Perlu ditanyakan kepada siswa — catatan ini belum
+                            tentu berarti menyontek.
                           </span>
                         </p>
                       )}

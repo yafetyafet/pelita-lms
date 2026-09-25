@@ -22,6 +22,10 @@ export default function TeacherGradesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [assignments, setAssignments] = useState<any[]>([])
   const [students, setStudents] = useState<any[]>([])
+  // Nilai ujian bersifat OTOMATIS: dihitung server saat siswa mengumpulkan
+  // (PG) atau saat guru selesai mengoreksi esai. Karena itu ditampilkan
+  // sebagai kolom baca-saja, bukan kotak isian seperti nilai tugas.
+  const [ujian, setUjian] = useState<any[]>([])
   const [grades, setGrades] = useState<{ [key: string]: { score: number; description: string } }>({})
   // Hanya baris yang benar-benar disunting guru yang dikirim saat menyimpan.
   // Sebelumnya `handleSaveAll` mengirim SELURUH peta nilai, sehingga sekali
@@ -61,6 +65,7 @@ export default function TeacherGradesPage() {
     const data = await getGradesByClass(classId, subjectId)
     setAssignments(data.assignments)
     setStudents(data.students)
+    setUjian(data.ujian)
 
     // Build grades map
     const gradeMap: { [key: string]: { score: number; description: string } } = {}
@@ -280,18 +285,31 @@ export default function TeacherGradesPage() {
           <div className="p-6 text-center text-xs text-slate-400 italic">
             Belum ada siswa di kelas ini.
           </div>
-        ) : assignments.length === 0 ? (
+        ) : assignments.length === 0 && ujian.length === 0 ? (
           <div className="p-6 text-center text-xs text-slate-400 italic">
             Belum ada kolom penilaian. Klik &quot;Tambah Penilaian&quot; untuk memulai.
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
             {students.map((student: any) => {
-              const totalScore = assignments.reduce((sum: number, a: any) => {
-                const key = `${student.id}_${a.id}`
-                return sum + (grades[key]?.score || 0)
-              }, 0)
-              const avg = assignments.length > 0 ? Math.round(totalScore / assignments.length) : 0
+              // Rata-rata menggabungkan tugas dan ujian. Nilai ujian sudah
+              // berskala 0-100 seperti nilai tugas, jadi bisa dirata-rata
+              // langsung. Ujian yang esainya belum dikoreksi bernilai null
+              // dan sengaja TIDAK dihitung sebagai nol - itu akan menyeret
+              // rata-rata siswa turun karena pekerjaan guru yang belum selesai.
+              const nilaiTugas = assignments.map(
+                (a: any) => grades[`${student.id}_${a.id}`]?.score ?? null
+              )
+              const nilaiUjian = ujian.map((u: any) => u.nilai?.[student.id] ?? null)
+              const terisi = [...nilaiTugas, ...nilaiUjian].filter(
+                (n: any): n is number => typeof n === "number"
+              )
+              const avg =
+                terisi.length > 0
+                  ? Math.round(
+                      (terisi.reduce((a: number, b: number) => a + b, 0) / terisi.length) * 100
+                    ) / 100
+                  : 0
 
               return (
                 <div 
@@ -332,6 +350,41 @@ export default function TeacherGradesPage() {
                             placeholder="Ket."
                             className="w-full text-center py-0.5 bg-white border border-slate-100 rounded-lg text-[9px] text-slate-500 focus:outline-none focus:border-emerald-400 mt-0.5"
                           />
+                        </div>
+                      )
+                    })}
+
+                    {/* Nilai ujian - baca saja. Diisi sendiri oleh sistem:
+                        PG dinilai saat siswa mengumpulkan, esai begitu guru
+                        selesai mengoreksi di halaman ujian. */}
+                    {ujian.map((u: any) => {
+                      const n = u.nilai?.[student.id]
+                      const ada = typeof n === "number"
+                      return (
+                        <div key={u.id} className="flex flex-col">
+                          <span
+                            className="text-[9px] font-semibold text-blue-600 mb-0.5 line-clamp-1"
+                            title={`Ujian: ${u.title}`}
+                          >
+                            {u.title}
+                          </span>
+                          <div
+                            className={`w-full text-center py-1 rounded-lg text-xs font-bold border ${
+                              ada
+                                ? "bg-blue-50 border-blue-200 text-blue-800"
+                                : "bg-slate-100 border-slate-200 text-slate-400"
+                            }`}
+                            title={
+                              ada
+                                ? "Nilai ujian, dihitung otomatis"
+                                : "Belum dikerjakan atau esainya belum dikoreksi"
+                            }
+                          >
+                            {ada ? n : "—"}
+                          </div>
+                          <span className="text-center text-[9px] text-slate-400 mt-0.5">
+                            ujian
+                          </span>
                         </div>
                       )
                     })}
