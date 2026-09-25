@@ -120,11 +120,12 @@ export default function LoginPage() {
             {/* Logo lengkap di layar lebar, lambang saja di ponsel supaya
                 formulir tetap terlihat tanpa menggulir. */}
             <div className="hidden md:block">
-                // Lambang sekolah adalah PNG statis 45 KB yang dilihat setiap
-                // pengunjung. Melewatkannya ke pengoptimal gambar Next tidak
-                // menghemat apa pun - ia justru memaksa satu penyandian ulang
-                // per permintaan. Terukur pada ujian 122 siswa: 282 kegagalan
-                // tulis cache dan satu sambungan putus tepat pada berkas ini.
+              {/* `unoptimized`: lambang sekolah adalah PNG statis 45 KB yang
+                  dilihat setiap pengunjung. Melewatkannya ke pengoptimal
+                  gambar Next tidak menghemat apa pun - ia justru memaksa satu
+                  penyandian ulang per permintaan. Terukur pada ujian 122
+                  siswa: 282 kegagalan tulis cache dan satu sambungan putus
+                  tepat pada berkas ini. */}
               <Image
                 src="/logo-pelita-full.png"
                 alt="PELITA — Platform Edukasi, Layanan Informasi, dan Tata Kelola Akademik"
