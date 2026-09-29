@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-TUJUAN="sk@100.115.131.69"
+TUJUAN="sk@192.100.1.10"
 DIR_SERVER="pelita"
 BUILD=1
 [[ "${1:-}" == "--tanpa-build" ]] && BUILD=0
