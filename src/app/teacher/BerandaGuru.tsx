@@ -5,7 +5,7 @@ import { tanggalPanjangWIB } from "@/lib/logic/waktu"
 import Link from "next/link"
 import { LayananGrid } from "@/components/LayananGrid"
 import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getTeacherHome, createMaterial, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
+import { getTeacherHome, createMaterial, createViolation, getStudentsByClass, createJournal, deleteMaterial } from "@/app/actions/teacher"
 import type { DataBerandaGuru } from "@/lib/types/beranda"
 import { bacaJenisPelanggaran, type JenisPelanggaran } from "@/lib/logic/pelanggaran"
 import { 
@@ -31,7 +31,8 @@ import {
   Loader2,
   Eye,
   Printer,
-  ClipboardList
+  ClipboardList,
+  Trash2
 } from "lucide-react"
 
 export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
@@ -155,6 +156,17 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
         setShowViolationModal(false)
         setViolationSaved(false)
       }, 1200)
+    }
+  }
+
+  const handleDeleteMaterial = async (id: string) => {
+    if (!confirm("Hapus materi ini secara permanen?")) return
+    const res = await deleteMaterial(id)
+    if (res.error) {
+      alert(res.error)
+    } else {
+      const segar = await getTeacherHome()
+      setMaterials(segar?.materi ?? [])
     }
   }
 
@@ -460,9 +472,12 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
                   <span className="font-bold text-slate-800 block">{mat.title}</span>
                   <span className="text-[10px] text-slate-500">{mat.classInfo?.name} — {mat.subject?.name}</span>
                 </div>
-                {mat.url && (
-                  <a href={mat.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-semibold shrink-0">Buka</a>
-                )}
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => handleDeleteMaterial(mat.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition" title="Hapus">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <Link href={`/teacher/materials`} className="text-blue-600 hover:underline text-[10px] font-semibold mt-1">Buka / Diskusi</Link>
+                  </div>
               </div>
             ))}
             {materials.length > 5 && (

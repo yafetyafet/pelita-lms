@@ -52,6 +52,7 @@ model User {
   SpiritualJournal   SpiritualJournal[]
   ForumDiscussion    ForumDiscussion[]
   ForumReply         ForumReply[]
+  MaterialComment    MaterialComment[]
   Exam               Exam[]
   ExamSubmission     ExamSubmission[]
   gradedExams        ExamSubmission[]   @relation("PenilaiUjian")
@@ -199,6 +200,7 @@ model Material {
   author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   classInfo   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  comments    MaterialComment[]
 
   @@index([classId, createdAt])
   @@index([authorId])
@@ -243,6 +245,18 @@ model UserAssignment {
 
   @@id([userId, assignmentId])
   @@index([assignmentId, status])
+}
+
+model MaterialComment {
+  id         String   @id @default(uuid())
+  materialId String
+  userId     String
+  content    String
+  createdAt  DateTime @default(now())
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, createdAt])
 }
 
 model Journal {

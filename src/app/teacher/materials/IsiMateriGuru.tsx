@@ -4,7 +4,7 @@ import React, { useState } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import { DiskusiMateri } from "@/components/DiskusiMateri"
 import Link from "next/link"
-import { getStudentMaterials } from "@/app/actions/student"
+import { getTeacherMaterials } from "@/app/actions/teacher"
 import { 
   ArrowLeft, 
   Video, 
@@ -16,7 +16,7 @@ import {
   Clock,
 } from "lucide-react"
 
-export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudentMaterials>> }) {
+export function IsiMateriGuru({ awal }: { awal: Awaited<ReturnType<typeof getTeacherMaterials>> }) {
   const [materials, setMaterials] = useState<any[]>(awal)
   const [isLoading, setIsLoading] = useState(false)
   const [activeMaterialId, setActiveMaterialId] = useState<string | null>(awal[0]?.id ?? null)
@@ -60,7 +60,7 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
       {/* Header */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2.5">
-          <Link href="/student" className="p-2 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm">
+          <Link href="/teacher" className="p-2 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>

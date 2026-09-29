@@ -28,6 +28,7 @@ import {
 import { muatXlsx } from "@/lib/xlsx"
 import { parseSoalTempel } from "@/lib/logic/parser-soal"
 import { normalisasiUrlGambar, peringatanUrlGambar } from "@/lib/logic/gambar-url"
+import { ImageWithZoom } from "@/components/ImageWithZoom"
 
 export default function TeacherExamsPage() {
   const [teacherClasses, setTeacherClasses] = useState<any[]>([])
@@ -1055,17 +1056,13 @@ export default function TeacherExamsPage() {
                       </p>
                     )}
                     {q.imageUrl && !peringatanUrlGambar(q.imageUrl) && (
-                      /* Pratinjau memakai tautan yang SUDAH dinormalkan, jadi
-                         apa yang guru lihat di sini sama dengan yang dilihat
-                         siswa nanti. */
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={normalisasiUrlGambar(q.imageUrl)}
-                        alt=""
-                        className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
-                        onLoad={e => { (e.currentTarget as HTMLImageElement).style.display = "block" }}
-                      />
+                        /* Pratinjau memakai tautan yang SUDAH dinormalkan, jadi
+                           apa yang guru lihat di sini sama dengan yang dilihat
+                           siswa nanti. */
+                        <ImageWithZoom
+                          src={normalisasiUrlGambar(q.imageUrl)}
+                          className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
+                        />
                     )}
 
                     {q.type !== "ESAI" && (
