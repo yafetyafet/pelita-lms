@@ -32,6 +32,28 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
   const isYouTube = (url: string) => url?.includes("youtube") || url?.includes("youtu.be")
   const isDrive = (url: string) => url?.includes("drive.google")
 
+  const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return ""
+    try {
+      const urlObj = new URL(url)
+      let videoId = ""
+      if (urlObj.hostname.includes("youtu.be")) {
+        videoId = urlObj.pathname.slice(1)
+      } else if (urlObj.hostname.includes("youtube.com")) {
+        if (urlObj.pathname === "/watch") {
+          videoId = urlObj.searchParams.get("v") || ""
+        } else if (urlObj.pathname.startsWith("/embed/")) {
+          videoId = urlObj.pathname.split("/")[2]
+        } else if (urlObj.pathname.startsWith("/shorts/")) {
+          videoId = urlObj.pathname.split("/")[2]
+        }
+      }
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : url
+    } catch (e) {
+      return url.replace("watch?v=", "embed/")
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
@@ -74,7 +96,7 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
                 {activeMaterial.url && isYouTube(activeMaterial.url) ? (
                   <iframe
                     className="w-full h-full"
-                    src={activeMaterial.url.replace("watch?v=", "embed/")}
+                    src={getYouTubeEmbedUrl(activeMaterial.url)}
                     title={activeMaterial.title}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
