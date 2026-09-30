@@ -21,15 +21,20 @@ export async function generateModulAjar(data: {
   const modelSetting = await prisma.appSetting.findUnique({ where: { key: "AI_MODEL" } })
   const apiKeySetting = await prisma.appSetting.findUnique({ where: { key: "AI_API_KEY" } })
 
-  let endpoint = endpointSetting?.value || "http://192.100.1.10:20128/v1/chat/completions"
+  let endpoint = (endpointSetting?.value || "http://192.100.1.10:20128/v1/chat/completions").trim()
   
   // Pastikan endpoint mengarah ke /chat/completions jika formatnya OpenAI compatible
+  // Banyak pengguna memasukkan base URL saja tanpa /chat/completions
   if (endpoint.endsWith('/v1') || endpoint.endsWith('/v1/')) {
+    endpoint = endpoint.replace(/\/$/, '') + '/chat/completions'
+  } else if (!endpoint.endsWith('/chat/completions')) {
+    // Jika tidak ada /v1 dan tidak ada /chat/completions, coba tambahkan saja
+    // jika itu memang base URL 9router atau OpenAI lain.
     endpoint = endpoint.replace(/\/$/, '') + '/chat/completions'
   }
 
-  const modelId = modelSetting?.value || "oc/muse-spark-1.3-contributor-free"
-  const apiKey = apiKeySetting?.value || "sk-d7c04fe4ad11505d-qhe2co-0cbda760"
+  const modelId = (modelSetting?.value || "oc/muse-spark-1.3-contributor-free").trim()
+  const apiKey = (apiKeySetting?.value || "sk-d7c04fe4ad11505d-qhe2co-0cbda760").trim()
 
   const systemPrompt = `Anda adalah asisten ahli pendidikan di Indonesia (Guru Penggerak). Buatlah Modul Ajar (Perangkat Pembelajaran) sesuai regulasi Kurikulum Merdeka terbaru (Kepmendikbudristek No. 56/M/2022 / BSKAP No. 033/H/KR/2022 atau yang lebih baru).
 
