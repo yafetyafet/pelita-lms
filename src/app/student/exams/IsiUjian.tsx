@@ -17,6 +17,11 @@ import {
   Loader2,
   ListChecks,
   Flag,
+  ZoomIn,
+  ZoomOut,
+  X,
+  RotateCcw,
+  Maximize2,
 } from "lucide-react"
 import { getStudentExams, getExamPaper, submitExam } from "@/app/actions/student"
 import {
@@ -134,6 +139,14 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   const [submissionId, setSubmissionId] = useState("")
   const [dipulihkan, setDipulihkan] = useState(false)
 
+  // Zoom gambar soal
+  const [zoomImg, setZoomImg] = useState<string | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [panPos, setPanPos] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const zoomContainerRef = useRef<HTMLDivElement>(null)
+
   // Dipakai handler timer/submit agar tidak menangkap state kedaluwarsa.
   const submitLock = useRef(false)
   const answersRef = useRef(answers)
@@ -160,7 +173,117 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   }
 
 
+  // -- Fungsi zoom gambar soal --
+  const bukaZoom = useCallback((url: string) => {
+    setZoomImg(url)
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+  }, [])
+
+  const tutupZoom = useCallback(() => {
+    setZoomImg(null)
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+    setIsPanning(false)
+  }, [])
+
+  const zoomIn = useCallback(() => {
+    setZoomLevel((z) => Math.min(z + 0.5, 5))
+  }, [])
+
+  const zoomOut = useCallback(() => {
+    setZoomLevel((z) => {
+      const baru = Math.max(z - 0.5, 1)
+      if (baru === 1) setPanPos({ x: 0, y: 0 })
+      return baru
+    })
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+  }, [])
+
+  // Mouse pan handlers
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (zoomLevel <= 1) return
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - panPos.x, y: e.clientY - panPos.y })
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [zoomLevel, panPos]
+  )
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isPanning) return
+      setPanPos({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+    },
+    [isPanning, panStart]
+  )
+
+  const onPointerUp = useCallback(() => {
+    setIsPanning(false)
+  }, [])
+
+  // Scroll/wheel zoom
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.25 : 0.25
+      setZoomLevel((z) => {
+        const baru = Math.min(Math.max(z + delta, 1), 5)
+        if (baru === 1) setPanPos({ x: 0, y: 0 })
+        return baru
+      })
+    },
+    []
+  )
+
+  // Touch pinch-to-zoom
+  const lastPinchDist = useRef(0)
+  const onTouchStartZoom = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastPinchDist.current = Math.hypot(dx, dy)
+    }
+  }, [])
+
+  const onTouchMoveZoom = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.hypot(dx, dy)
+      if (lastPinchDist.current > 0) {
+        const scale = dist / lastPinchDist.current
+        setZoomLevel((z) => {
+          const baru = Math.min(Math.max(z * scale, 1), 5)
+          if (baru === 1) setPanPos({ x: 0, y: 0 })
+          return baru
+        })
+      }
+      lastPinchDist.current = dist
+    }
+  }, [])
+
   const inExamRoom = paper !== null && !isFinished
+
+  // Tutup modal zoom saat pindah soal
+  useEffect(() => {
+    setZoomImg(null)
+  }, [currentIdx])
+
+  // Tutup modal zoom saat tekan Escape
+  useEffect(() => {
+    if (!zoomImg) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") tutupZoom()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [zoomImg, tutupZoom])
 
   const handleFinishExam = useCallback(
     async (otomatis = false) => {
@@ -474,6 +597,98 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
             </div>
           </div>
         )}
+        {/* Modal zoom gambar soal — siswa bisa memperbesar/mengecilkan
+            gambar agar bisa membaca teks kecil. Mendukung:
+            • Tombol zoom in/out dan reset
+            • Drag (pan) saat sudah di-zoom
+            • Scroll wheel zoom (desktop)
+            • Pinch-to-zoom (mobile)
+            z-index 90: di bawah penghalang layar terbagi (z-100) tapi
+            di atas semua isi ujian. */}
+        {zoomImg && (
+          <div
+            className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-md flex flex-col"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) tutupZoom()
+            }}
+          >
+            {/* Bilah atas modal */}
+            <div className="flex items-center justify-between px-4 py-3 bg-black/40">
+              <span className="text-white/80 text-xs font-bold">
+                Gambar Soal {currentIdx + 1}
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-white/60 text-[10px] font-mono mr-2">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  disabled={zoomLevel <= 1}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition disabled:opacity-30"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  disabled={zoomLevel >= 5}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition disabled:opacity-30"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={tutupZoom}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Area gambar dengan pan & zoom */}
+            <div
+              ref={zoomContainerRef}
+              className="flex-1 overflow-hidden flex items-center justify-center touch-none select-none"
+              style={{ cursor: zoomLevel > 1 ? (isPanning ? "grabbing" : "grab") : "default" }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onWheel={onWheel}
+              onTouchStart={onTouchStartZoom}
+              onTouchMove={onTouchMoveZoom}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={zoomImg}
+                alt="Gambar soal (diperbesar)"
+                draggable={false}
+                className="max-w-full max-h-full object-contain pointer-events-none"
+                style={{
+                  transform: `translate(${panPos.x}px, ${panPos.y}px) scale(${zoomLevel})`,
+                  transition: isPanning ? "none" : "transform 0.2s ease",
+                }}
+              />
+            </div>
+
+            {/* Petunjuk di bawah */}
+            <div className="flex items-center justify-center gap-3 px-4 py-2.5 bg-black/40">
+              <p className="text-[10px] text-white/50 text-center">
+                {zoomLevel > 1
+                  ? "Geser untuk menggerakkan gambar • Cubit dua jari atau scroll untuk zoom"
+                  : "Cubit dua jari, scroll, atau gunakan tombol +/− untuk memperbesar"}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Bilah waktu */}
         <div className="sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between">
@@ -583,21 +798,32 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
             </p>
 
             {q.imageUrl && (
-              // Kalau gambar gagal dimuat, tampilkan pesan yang bisa
-              // dilaporkan siswa - bukan teks alt telanjang yang terbaca
-              // seperti halaman rusak.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={q.imageUrl}
-                alt="Gambar soal"
-                className="rounded-2xl border border-slate-200 max-h-64 object-contain self-center"
-                onError={(e) => {
-                  const img = e.currentTarget
-                  img.style.display = "none"
-                  const pesan = img.nextElementSibling as HTMLElement | null
-                  if (pesan) pesan.style.display = "block"
-                }}
-              />
+              // Gambar soal yang bisa di-tap untuk zoom. Siswa mungkin perlu
+              // membaca teks kecil di gambar, terutama di layar HP.
+              <div className="self-center relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={q.imageUrl}
+                  alt="Gambar soal"
+                  className="rounded-2xl border border-slate-200 max-h-64 object-contain cursor-pointer transition hover:brightness-95 active:scale-[0.98]"
+                  onClick={() => bukaZoom(q.imageUrl!)}
+                  onError={(e) => {
+                    const img = e.currentTarget
+                    img.parentElement!.style.display = "none"
+                    const pesan = img.parentElement!.nextElementSibling as HTMLElement | null
+                    if (pesan) pesan.style.display = "block"
+                  }}
+                />
+                {/* Petunjuk zoom — muncul di pojok kanan bawah gambar */}
+                <button
+                  type="button"
+                  onClick={() => bukaZoom(q.imageUrl!)}
+                  className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold opacity-80 hover:opacity-100 backdrop-blur-sm transition"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                  Perbesar
+                </button>
+              </div>
             )}
             {q.imageUrl && (
               <p

@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -79,6 +79,12 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
   const [attended, setAttended] = useState(Boolean(p0))
   const [attendedTime, setAttendedTime] = useState<string | null>(
     p0 ? jamLabelWIB(p0.createdAt) : null
+  )
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(
+    p0 ? p0.status : null
+  )
+  const [recordedBy, setRecordedBy] = useState<string | null>(
+    p0 ? p0.recordedById : null
   )
   const [checkedOut, setCheckedOut] = useState(Boolean(p0?.checkOutTime))
   const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(
@@ -323,7 +329,11 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
           ) : (
             <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Masuk Berhasil: {attendedTime}</span>
+              <span>
+                {recordedBy
+                  ? `Status: ${attendanceStatus?.toUpperCase()} (Guru)`
+                  : `Masuk Berhasil: ${attendedTime}`}
+              </span>
             </div>
           )}
 

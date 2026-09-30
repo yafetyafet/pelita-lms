@@ -203,7 +203,8 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
     // pun pintu untuk membuatnya - createAssignment tidak pernah dipanggil
     // dari halaman mana pun.
     { id: "tugas", title: "Beri Tugas", desc: "Buat & nilai tugas", icon: FileText, color: "from-green-600 to-emerald-700", count: null, href: "/teacher/assignments" },
-    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, action: "scroll-materi" },
+    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, href: "/teacher/materials" },
+    { id: "perangkat", title: "Modul Ajar AI", desc: "Buat RPP Otomatis", icon: Sparkles, color: "from-fuchsia-600 to-purple-600", count: "Baru", href: "/teacher/perangkat" },
     { id: "absensi", title: "Presensi Kelas", desc: "Input Hadir/Sakit/Izin", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/attendance" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
     { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
