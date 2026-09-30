@@ -27,6 +27,7 @@ import {
   updateExamSettings,
   saveEssayScore,
   recomputeExamScores,
+  getPenugasanSaya,
 } from "@/app/actions/teacher"
 import { EditorSoal } from "@/components/EditorSoal"
 
@@ -55,6 +56,10 @@ export default function ExamDetailPage({
   const [error, setError] = useState("")
 
   // Form pengaturan
+  const [title, setTitle] = useState("")
+  const [classIds, setClassIds] = useState<string[]>([])
+  const [teacherClasses, setTeacherClasses] = useState<any[]>([])
+  
   const [startAt, setStartAt] = useState("")
   const [endAt, setEndAt] = useState("")
   const [token, setToken] = useState("")
@@ -75,17 +80,21 @@ export default function ExamDetailPage({
   const [rekap, setRekap] = useState<any>(null)
 
   const load = async () => {
-    const [res, hasil] = await Promise.all([
+    const [res, hasil, cls] = await Promise.all([
       getExamSubmissions(id),
       getHasilUjianPerRombel(id),
+      getPenugasanSaya()
     ])
     setRekap(hasil)
+    setTeacherClasses(cls)
     if (!res) {
       setError("Ujian tidak ditemukan atau kamu tidak berhak membukanya.")
       setIsLoading(false)
       return
     }
     setData(res)
+    setTitle(res.exam.title)
+    setClassIds(res.exam.kelas.map((c: any) => c.id))
     setStartAt(toLocalInput(res.exam.startAt))
     setEndAt(toLocalInput(res.exam.endAt))
     setToken(res.exam.token || "")
@@ -111,11 +120,21 @@ export default function ExamDetailPage({
 
   const simpanPengaturan = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!title.trim()) {
+      setError("Judul ujian tidak boleh kosong.")
+      return
+    }
+    if (classIds.length === 0) {
+      setError("Pilih minimal satu rombel peserta ujian.")
+      return
+    }
     setError("")
     setSavingSettings(true)
 
     const res = await updateExamSettings({
       examId: id,
+      title: title.trim(),
+      classIds,
       startAt: startAt ? new Date(startAt).toISOString() : null,
       endAt: endAt ? new Date(endAt).toISOString() : null,
       token: token.trim() || null,
@@ -276,23 +295,61 @@ export default function ExamDetailPage({
         })}
       </div>
 
-      {/* Pengaturan */}
-      <form
-        onSubmit={simpanPengaturan}
-        className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3"
-      >
-        <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-          <Clock className="w-4 h-4 text-rose-600" />
-          Jadwal, Token & Penerbitan
-        </h3>
+        {/* Pengaturan */}
+        <form
+          onSubmit={simpanPengaturan}
+          className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3"
+        >
+          <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-rose-600" />
+            Informasi Ujian, Jadwal & Token
+          </h3>
 
-        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
-          Ujian hanya tampil ke siswa kalau <strong>diterbitkan</strong>. Jendela
-          waktu dan durasi divalidasi di server, jadi siswa tidak bisa menambah
-          waktu dengan menyegarkan halaman.
-        </p>
+          <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
+            Ujian hanya tampil ke siswa kalau <strong>diterbitkan</strong>. Jendela
+            waktu dan durasi divalidasi di server, jadi siswa tidak bisa menambah
+            waktu dengan menyegarkan halaman.
+          </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1 mt-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Judul Ujian
+            </span>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Rombel Peserta (Tahan Ctrl untuk banyak kelas)
+            </span>
+            <select
+              multiple
+              required
+              size={3}
+              value={classIds}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions).map(opt => opt.value)
+                setClassIds(selected)
+              }}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+            >
+              {teacherClasses
+                .filter((tc: any) => tc.subjectId === data.exam.subjectId)
+                .map((tc: any) => (
+                  <option key={tc.classId} value={tc.classId}>
+                    {tc.classInfo.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Dibuka

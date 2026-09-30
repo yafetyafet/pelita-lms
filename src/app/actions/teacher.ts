@@ -1472,6 +1472,8 @@ async function examMilikSaya(session: { uid: string; role: string }, examId: str
  */
 export async function updateExamSettings(input: {
   examId: string
+  title?: string
+  classIds?: string[]
   startAt?: string | null
   endAt?: string | null
   token?: string | null
@@ -1523,26 +1525,36 @@ export async function updateExamSettings(input: {
       return { error: 'Durasi ujian tidak valid.' }
     }
 
+    const updateData: any = {
+      ...(input.title !== undefined && input.title.trim() !== '' ? { title: input.title.trim() } : {}),
+      ...(input.startAt !== undefined ? { startAt } : {}),
+      ...(input.endAt !== undefined ? { endAt } : {}),
+      ...(input.token !== undefined
+        ? { token: input.token?.trim().toUpperCase() || null }
+        : {}),
+      ...(input.duration !== undefined ? { duration: input.duration } : {}),
+      ...(input.shuffle !== undefined ? { shuffle: input.shuffle } : {}),
+      ...(input.isPublished !== undefined
+        ? { isPublished: input.isPublished }
+        : {}),
+      ...(input.showResult !== undefined
+        ? { showResult: input.showResult }
+        : {}),
+      ...(input.passingScore !== undefined
+        ? { passingScore: input.passingScore }
+        : {}),
+    }
+
+    if (input.classIds !== undefined && input.classIds.length > 0) {
+      updateData.classes = {
+        deleteMany: {},
+        create: input.classIds.map((cid) => ({ classId: cid }))
+      }
+    }
+
     await prisma.exam.update({
       where: { id: input.examId },
-      data: {
-        ...(input.startAt !== undefined ? { startAt } : {}),
-        ...(input.endAt !== undefined ? { endAt } : {}),
-        ...(input.token !== undefined
-          ? { token: input.token?.trim().toUpperCase() || null }
-          : {}),
-        ...(input.duration !== undefined ? { duration: input.duration } : {}),
-        ...(input.shuffle !== undefined ? { shuffle: input.shuffle } : {}),
-        ...(input.isPublished !== undefined
-          ? { isPublished: input.isPublished }
-          : {}),
-        ...(input.showResult !== undefined
-          ? { showResult: input.showResult }
-          : {}),
-        ...(input.passingScore !== undefined
-          ? { passingScore: input.passingScore }
-          : {}),
-      },
+      data: updateData,
     })
     return peringatan ? { success: true, peringatan } : { success: true }
   } catch (err) {
