@@ -3,7 +3,6 @@
 import React, { useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Sparkles, Wand2, Copy, FileText, Check } from "lucide-react"
-import { generateModulAjar } from "@/app/actions/ai"
 
 export function PerangkatPembelajaranUI() {
   const [mapel, setMapel] = useState("")
@@ -28,15 +27,57 @@ export function PerangkatPembelajaranUI() {
     setLoading(true)
     setResult("")
 
-    const res = await generateModulAjar({
-      mapel, kelas, topik, alokasi, catatan
-    })
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mapel, kelas, topik, alokasi, catatan })
+      })
 
-    setLoading(false)
-    if (res.error) {
-      setErrorMsg(res.error)
-    } else if (res.content) {
-      setResult(res.content)
+      if (!res.ok) {
+        const errorText = await res.text()
+        setErrorMsg(errorText)
+        setLoading(false)
+        return
+      }
+
+      if (!res.body) {
+        setErrorMsg("Response body is null")
+        setLoading(false)
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let done = false
+      let fullText = ""
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read()
+        done = doneReading
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true })
+          
+          // OpenAI SSE format parsing
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const data = JSON.parse(line.substring(6))
+                const token = data.choices[0]?.delta?.content || ''
+                fullText += token
+                setResult(fullText)
+              } catch (e) {
+                // Ignore parse errors on incomplete chunks
+              }
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || "Gagal menghubungi server lokal.")
+    } finally {
+      setLoading(false)
     }
   }
 
