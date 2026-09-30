@@ -1,6 +1,7 @@
 "use server"
 
 import { requireSession } from "@/lib/auth/session"
+import { prisma } from "@/lib/prisma"
 
 export async function generateModulAjar(data: {
   mapel: string
@@ -8,15 +9,21 @@ export async function generateModulAjar(data: {
   topik: string
   alokasi: string
   catatan?: string
-  endpoint: string
-  modelId: string
-  apiKey: string
 }) {
   await requireSession('TEACHER', 'ADMIN')
   
   if (!data.mapel || !data.kelas || !data.topik) {
     return { error: "Semua kolom wajib (Mapel, Kelas, Topik) harus diisi." }
   }
+
+  // Ambil pengaturan AI dari database (AppSetting)
+  const endpointSetting = await prisma.appSetting.findUnique({ where: { key: "AI_ENDPOINT" } })
+  const modelSetting = await prisma.appSetting.findUnique({ where: { key: "AI_MODEL" } })
+  const apiKeySetting = await prisma.appSetting.findUnique({ where: { key: "AI_API_KEY" } })
+
+  const endpoint = endpointSetting?.value || "http://192.100.1.10:20128/v1/chat/completions"
+  const modelId = modelSetting?.value || "oc/muse-spark-1.3-contributor-free"
+  const apiKey = apiKeySetting?.value || "sk-d7c04fe4ad11505d-qhe2co-0cbda760"
 
   const systemPrompt = `Anda adalah asisten ahli pendidikan di Indonesia (Guru Penggerak). Buatlah Modul Ajar (Perangkat Pembelajaran) sesuai regulasi Kurikulum Merdeka terbaru (Kepmendikbudristek No. 56/M/2022 / BSKAP No. 033/H/KR/2022 atau yang lebih baru).
 
@@ -35,14 +42,14 @@ Berikan output secara langsung dalam format Markdown yang rapi (gunakan heading 
 ${data.catatan ? `- Catatan Tambahan/Fokus: ${data.catatan}` : ''}`
 
   try {
-    const res = await fetch(data.endpoint, {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${data.apiKey}`
+        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: data.modelId,
+        model: modelId,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }

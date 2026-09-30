@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Sparkles, Wand2, Copy, FileText, Check, Settings2 } from "lucide-react"
+import { ArrowLeft, Sparkles, Wand2, Copy, FileText, Check } from "lucide-react"
 import { generateModulAjar } from "@/app/actions/ai"
 
 export function PerangkatPembelajaranUI() {
@@ -11,41 +11,14 @@ export function PerangkatPembelajaranUI() {
   const [topik, setTopik] = useState("")
   const [alokasi, setAlokasi] = useState("2 x 45 Menit (1 Pertemuan)")
   const [catatan, setCatatan] = useState("")
-  
-  const [endpoint, setEndpoint] = useState("")
-  const [modelId, setModelId] = useState("")
-  const [apiKey, setApiKey] = useState("")
-  const [showConfig, setShowConfig] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState("")
   const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
 
-  useEffect(() => {
-    const savedEp = localStorage.getItem("ai_endpoint") || "http://192.100.1.10:20128/v1/chat/completions"
-    const savedMod = localStorage.getItem("ai_model") || "oc/muse-spark-1.3-contributor-free"
-    const savedKey = localStorage.getItem("ai_key") || "sk-d7c04fe4ad11505d-qhe2co-0cbda760"
-    
-    setEndpoint(savedEp)
-    setModelId(savedMod)
-    setApiKey(savedKey)
-  }, [])
-
-  const handleSaveConfig = () => {
-    localStorage.setItem("ai_endpoint", endpoint)
-    localStorage.setItem("ai_model", modelId)
-    localStorage.setItem("ai_key", apiKey)
-    setShowConfig(false)
-  }
-
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!endpoint || !modelId || !apiKey) {
-      setShowConfig(true)
-      setErrorMsg("Mohon isi konfigurasi AI (Endpoint, Model, API Key) terlebih dahulu.")
-      return
-    }
     if (!mapel || !kelas || !topik) {
       setErrorMsg("Mata Pelajaran, Fase/Kelas, dan Topik wajib diisi.")
       return
@@ -56,8 +29,7 @@ export function PerangkatPembelajaranUI() {
     setResult("")
 
     const res = await generateModulAjar({
-      mapel, kelas, topik, alokasi, catatan,
-      endpoint, modelId, apiKey
+      mapel, kelas, topik, alokasi, catatan
     })
 
     setLoading(false)
@@ -90,25 +62,7 @@ export function PerangkatPembelajaranUI() {
             <p className="text-[11px] text-slate-500 font-medium">Generate Perangkat Pembelajaran Kurikulum Merdeka</p>
           </div>
         </div>
-        <button 
-          onClick={() => setShowConfig(!showConfig)}
-          className={`p-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${showConfig ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm'}`}
-        >
-          <Settings2 className="w-3.5 h-3.5" /> {showConfig ? "Tutup Config" : "Config AI"}
-        </button>
       </div>
-
-      {showConfig && (
-        <div className="bg-fuchsia-50/50 border border-fuchsia-200/60 rounded-3xl p-4 flex flex-col gap-3">
-          <h3 className="text-xs font-bold text-fuchsia-900">Konfigurasi Endpoint AI (OpenAI Compatible)</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input type="text" placeholder="Endpoint (cth: http://192.100.1.10:20128/v1/chat/completions)" value={endpoint} onChange={e=>setEndpoint(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
-            <input type="text" placeholder="Model ID (cth: oc/muse-spark-1.3-contributor-free)" value={modelId} onChange={e=>setModelId(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
-            <input type="password" placeholder="API Key" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400 md:col-span-2" />
-          </div>
-          <button onClick={handleSaveConfig} className="bg-fuchsia-600 text-white px-4 py-2 rounded-xl text-xs font-bold w-max shadow hover:bg-fuchsia-700 transition">Simpan Konfigurasi</button>
-        </div>
-      )}
 
       {errorMsg && (
         <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl text-xs border border-red-200">
