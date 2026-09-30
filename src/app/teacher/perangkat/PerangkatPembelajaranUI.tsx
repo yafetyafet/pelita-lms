@@ -23,13 +23,13 @@ export function PerangkatPembelajaranUI() {
   const [errorMsg, setErrorMsg] = useState("")
 
   useEffect(() => {
-    // Coba ambil config tersimpan dari localStorage supaya tidak perlu input terus
-    const savedEp = localStorage.getItem("ai_endpoint")
-    const savedMod = localStorage.getItem("ai_model")
-    const savedKey = localStorage.getItem("ai_key")
-    if (savedEp) setEndpoint(savedEp)
-    if (savedMod) setModelId(savedMod)
-    if (savedKey) setApiKey(savedKey)
+    const savedEp = localStorage.getItem("ai_endpoint") || "http://192.100.1.10:20128/v1/chat/completions"
+    const savedMod = localStorage.getItem("ai_model") || "oc/muse-spark-1.3-contributor-free"
+    const savedKey = localStorage.getItem("ai_key") || "sk-d7c04fe4ad11505d-qhe2co-0cbda760"
+    
+    setEndpoint(savedEp)
+    setModelId(savedMod)
+    setApiKey(savedKey)
   }, [])
 
   const handleSaveConfig = () => {
@@ -102,8 +102,8 @@ export function PerangkatPembelajaranUI() {
         <div className="bg-fuchsia-50/50 border border-fuchsia-200/60 rounded-3xl p-4 flex flex-col gap-3">
           <h3 className="text-xs font-bold text-fuchsia-900">Konfigurasi Endpoint AI (OpenAI Compatible)</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input type="text" placeholder="Endpoint (cth: https://api.openai.com/v1/chat/completions)" value={endpoint} onChange={e=>setEndpoint(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
-            <input type="text" placeholder="Model ID (cth: gpt-4o-mini)" value={modelId} onChange={e=>setModelId(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
+            <input type="text" placeholder="Endpoint (cth: http://192.100.1.10:20128/v1/chat/completions)" value={endpoint} onChange={e=>setEndpoint(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
+            <input type="text" placeholder="Model ID (cth: oc/muse-spark-1.3-contributor-free)" value={modelId} onChange={e=>setModelId(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400" />
             <input type="password" placeholder="API Key" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="px-3 py-2 text-xs rounded-xl border border-fuchsia-200 bg-white focus:outline-none focus:border-fuchsia-400 md:col-span-2" />
           </div>
           <button onClick={handleSaveConfig} className="bg-fuchsia-600 text-white px-4 py-2 rounded-xl text-xs font-bold w-max shadow hover:bg-fuchsia-700 transition">Simpan Konfigurasi</button>
