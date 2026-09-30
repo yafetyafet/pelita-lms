@@ -340,7 +340,7 @@ export default function ExamDetailPage({
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
             >
               {teacherClasses
-                .filter((tc: any) => tc.subjectId === data.exam.subjectId)
+                .filter((tc: any) => tc.subjectId === data.exam.subject?.id)
                 .map((tc: any) => (
                   <option key={tc.classId} value={tc.classId}>
                     {tc.classInfo.name}
