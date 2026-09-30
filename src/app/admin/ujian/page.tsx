@@ -129,20 +129,24 @@ export default function AdminUjianPage() {
           <Key className="w-24 h-24" />
         </div>
         
-        <div className="relative z-10">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-200 bg-white/10 px-2 py-0.5 rounded-md">
-            Token Akses Sesi Ujian Aktif
-          </span>
-          <div className="flex items-center gap-3 mt-2">
-            {isLoading ? (
-              <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow flex items-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin" />
-              </span>
-            ) : (
-              <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow">
-                {token}
-              </span>
-            )}
+          <div className="relative z-10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-200 bg-white/10 px-2 py-0.5 rounded-md">
+              Token Akses Sesi Ujian Aktif
+            </span>
+            <div className="flex items-center gap-3 mt-2">
+              {isLoading ? (
+                <span className="text-3xl font-black text-white/30 animate-pulse">
+                  MEMUAT...
+                </span>
+              ) : (
+                <span className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-300 drop-shadow">
+                  {token}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-purple-200/90 mt-1">
+              Sistem akan merotasi token ini secara otomatis setiap 15 menit jika ada ujian CBT yang sedang aktif.
+            </p>
           </div>
           <p className="text-[11px] text-purple-200/90 mt-1">
             Bagikan kode token ini ke pengawas ruang untuk dibuka di HP siswa sebelum ujian dimulai.
