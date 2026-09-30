@@ -21,7 +21,13 @@ export async function generateModulAjar(data: {
   const modelSetting = await prisma.appSetting.findUnique({ where: { key: "AI_MODEL" } })
   const apiKeySetting = await prisma.appSetting.findUnique({ where: { key: "AI_API_KEY" } })
 
-  const endpoint = endpointSetting?.value || "http://192.100.1.10:20128/v1/chat/completions"
+  let endpoint = endpointSetting?.value || "http://192.100.1.10:20128/v1/chat/completions"
+  
+  // Pastikan endpoint mengarah ke /chat/completions jika formatnya OpenAI compatible
+  if (endpoint.endsWith('/v1') || endpoint.endsWith('/v1/')) {
+    endpoint = endpoint.replace(/\/$/, '') + '/chat/completions'
+  }
+
   const modelId = modelSetting?.value || "oc/muse-spark-1.3-contributor-free"
   const apiKey = apiKeySetting?.value || "sk-d7c04fe4ad11505d-qhe2co-0cbda760"
 
