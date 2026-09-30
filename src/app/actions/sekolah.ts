@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
+import { normalisasiUrlGambar } from '@/lib/logic/gambar-url'
 
 export type ProfilSekolah = {
   namaYayasan: string
@@ -24,7 +25,10 @@ export type ProfilSekolah = {
   telepon: string
   email: string
   website: string
+  /** Logo kiri pada kop - lazimnya lambang pemerintah/yayasan. */
   logoUrl: string
+  /** Logo kanan pada kop - lazimnya lambang sekolah itu sendiri. */
+  logoKananUrl: string
   kepalaSekolah: string
   nipKepalaSekolah: string
   /** Kota yang tercetak sebelum tanggal pada blok tanda tangan. */
@@ -42,6 +46,7 @@ const BAWAAN: ProfilSekolah = {
   email: '',
   website: '',
   logoUrl: '',
+  logoKananUrl: '',
   kepalaSekolah: '',
   nipKepalaSekolah: '',
   kotaTandaTangan: 'Purbalingga',
@@ -78,6 +83,13 @@ export async function getSchoolProfile(): Promise<ProfilSekolah> {
     const v = peta.get(kunci(k))
     if (typeof v === 'string' && v.trim()) hasil[k] = v.trim()
   }
+
+  // Tautan logo dinormalkan SAAT DIBACA, bukan hanya saat disimpan, supaya
+  // tautan yang sudah telanjur tersimpan dalam bentuk halaman penampil
+  // Google Drive ikut tampil benar tanpa admin perlu mengisinya ulang.
+  hasil.logoUrl = normalisasiUrlGambar(hasil.logoUrl)
+  hasil.logoKananUrl = normalisasiUrlGambar(hasil.logoKananUrl)
+
   return hasil
 }
 
@@ -97,7 +109,13 @@ export async function setSchoolProfile(
 
     await prisma.$transaction(
       masuk.map((k) => {
-        const nilai = String(data[k] ?? '').trim()
+        const mentah = String(data[k] ?? '').trim()
+        // Tautan berbagi Drive adalah halaman HTML, bukan gambar; disimpan
+        // apa adanya, <img> akan selalu gagal memuatnya.
+        const nilai =
+          k === 'logoUrl' || k === 'logoKananUrl'
+            ? normalisasiUrlGambar(mentah)
+            : mentah
         return prisma.appSetting.upsert({
           where: { key: kunci(k) },
           update: { value: nilai },

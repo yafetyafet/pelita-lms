@@ -24,6 +24,17 @@ export type SessionPayload = {
   role: 'STUDENT' | 'TEACHER' | 'ADMIN' | 'DUDI'
   /** Nama tampilan, supaya header tidak perlu query DB. */
   name: string
+  /**
+   * Id sesi. Dicocokkan dengan `User.sesiId` supaya satu akun hanya sah di
+   * satu perangkat: begitu akun dipakai login di tempat lain, `sesiId` di
+   * basis data berganti dan token lama - meski tanda tangannya masih benar
+   * dan belum kedaluwarsa - tidak lagi diterima.
+   *
+   * Opsional supaya token yang terbit sebelum fitur ini ada tidak serentak
+   * membuat semua orang keluar; token tanpa `sid` diperlakukan sebagai sesi
+   * warisan dan diminta login ulang sekali.
+   */
+  sid?: string
   /** Kedaluwarsa, epoch detik. */
   exp: number
 }

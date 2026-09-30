@@ -17,8 +17,21 @@ import {
   Loader2,
   ListChecks,
   Flag,
+  ZoomIn,
+  ZoomOut,
+  X,
+  RotateCcw,
+  Maximize2,
 } from "lucide-react"
 import { getStudentExams, getExamPaper, submitExam } from "@/app/actions/student"
+import {
+  bacaRincian,
+  nilaiLayar,
+  ringkasPelanggaran,
+  totalPelanggaran,
+  type JenisPelanggaran,
+  type RincianPelanggaran,
+} from "@/lib/logic/pengawas-ujian"
 
 /**
  * Simpanan jawaban sementara di perangkat siswa.
@@ -38,6 +51,7 @@ type Simpanan = {
   answers: Record<string, string>
   doubtful: Record<string, boolean>
   tabSwitch: number
+  rincian: RincianPelanggaran
   disimpan: number
 }
 
@@ -53,6 +67,9 @@ function bacaSimpanan(submissionId: string): Simpanan | null {
       answers: p.answers ?? {},
       doubtful: p.doubtful ?? {},
       tabSwitch: Number(p.tabSwitch) || 0,
+      rincian: bacaRincian(
+        typeof p.rincian === "string" ? p.rincian : JSON.stringify(p.rincian ?? {})
+      ),
       disimpan: Number(p.disimpan) || 0,
     }
   } catch {
@@ -111,8 +128,24 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tabSwitch, setTabSwitch] = useState(0)
+  // Rincian per jenis kecurangan. `tabSwitch` dipertahankan sebagai total
+  // supaya data lama tetap terbaca, sedangkan rincian inilah yang memberi
+  // tahu pengawas BENTUK pelanggarannya.
+  const [rincian, setRincian] = useState<RincianPelanggaran>({})
+  // Layar penghalang saat ujian tidak lagi menguasai layar penuh. Isi soal
+  // disembunyikan selama ini tampil - inilah yang membuat layar terbagi
+  // tidak berguna untuk menyontek, bukan sekadar mencatatnya.
+  const [terhalang, setTerhalang] = useState<string | null>(null)
   const [submissionId, setSubmissionId] = useState("")
   const [dipulihkan, setDipulihkan] = useState(false)
+
+  // Zoom gambar soal
+  const [zoomImg, setZoomImg] = useState<string | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [panPos, setPanPos] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+  const zoomContainerRef = useRef<HTMLDivElement>(null)
 
   // Dipakai handler timer/submit agar tidak menangkap state kedaluwarsa.
   const submitLock = useRef(false)
@@ -120,6 +153,18 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   answersRef.current = answers
   const tabSwitchRef = useRef(tabSwitch)
   tabSwitchRef.current = tabSwitch
+  const rincianRef = useRef(rincian)
+  rincianRef.current = rincian
+
+  // Satu pintu untuk mencatat semua jenis pelanggaran, supaya total dan
+  // rincian tidak pernah berbeda.
+  const catatLanggar = useCallback((jenis: JenisPelanggaran) => {
+    setRincian((r) => {
+      const baru = { ...r, [jenis]: (r[jenis] ?? 0) + 1 }
+      setTabSwitch(totalPelanggaran(baru))
+      return baru
+    })
+  }, [])
 
   const loadList = async () => {
     const data = await getStudentExams()
@@ -128,7 +173,117 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   }
 
 
+  // -- Fungsi zoom gambar soal --
+  const bukaZoom = useCallback((url: string) => {
+    setZoomImg(url)
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+  }, [])
+
+  const tutupZoom = useCallback(() => {
+    setZoomImg(null)
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+    setIsPanning(false)
+  }, [])
+
+  const zoomIn = useCallback(() => {
+    setZoomLevel((z) => Math.min(z + 0.5, 5))
+  }, [])
+
+  const zoomOut = useCallback(() => {
+    setZoomLevel((z) => {
+      const baru = Math.max(z - 0.5, 1)
+      if (baru === 1) setPanPos({ x: 0, y: 0 })
+      return baru
+    })
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setZoomLevel(1)
+    setPanPos({ x: 0, y: 0 })
+  }, [])
+
+  // Mouse pan handlers
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (zoomLevel <= 1) return
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - panPos.x, y: e.clientY - panPos.y })
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [zoomLevel, panPos]
+  )
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isPanning) return
+      setPanPos({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+    },
+    [isPanning, panStart]
+  )
+
+  const onPointerUp = useCallback(() => {
+    setIsPanning(false)
+  }, [])
+
+  // Scroll/wheel zoom
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.25 : 0.25
+      setZoomLevel((z) => {
+        const baru = Math.min(Math.max(z + delta, 1), 5)
+        if (baru === 1) setPanPos({ x: 0, y: 0 })
+        return baru
+      })
+    },
+    []
+  )
+
+  // Touch pinch-to-zoom
+  const lastPinchDist = useRef(0)
+  const onTouchStartZoom = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastPinchDist.current = Math.hypot(dx, dy)
+    }
+  }, [])
+
+  const onTouchMoveZoom = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.hypot(dx, dy)
+      if (lastPinchDist.current > 0) {
+        const scale = dist / lastPinchDist.current
+        setZoomLevel((z) => {
+          const baru = Math.min(Math.max(z * scale, 1), 5)
+          if (baru === 1) setPanPos({ x: 0, y: 0 })
+          return baru
+        })
+      }
+      lastPinchDist.current = dist
+    }
+  }, [])
+
   const inExamRoom = paper !== null && !isFinished
+
+  // Tutup modal zoom saat pindah soal
+  useEffect(() => {
+    setZoomImg(null)
+  }, [currentIdx])
+
+  // Tutup modal zoom saat tekan Escape
+  useEffect(() => {
+    if (!zoomImg) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") tutupZoom()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [zoomImg, tutupZoom])
 
   const handleFinishExam = useCallback(
     async (otomatis = false) => {
@@ -139,7 +294,8 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       const res = await submitExam(
         selected.id,
         JSON.stringify(answersRef.current),
-        tabSwitchRef.current
+        tabSwitchRef.current,
+        JSON.stringify(rincianRef.current)
       )
 
       setIsSubmitting(false)
@@ -172,9 +328,10 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       answers,
       doubtful,
       tabSwitch,
+      rincian,
       disimpan: Date.now(),
     })
-  }, [submissionId, paper, isFinished, answers, doubtful, tabSwitch])
+  }, [submissionId, paper, isFinished, answers, doubtful, tabSwitch, rincian])
 
   // Cegah siswa menutup tab tanpa sadar saat ujian berlangsung.
   useEffect(() => {
@@ -192,11 +349,77 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   useEffect(() => {
     if (!inExamRoom) return
     const onVisibility = () => {
-      if (document.hidden) setTabSwitch((n) => n + 1)
+      if (document.hidden) catatLanggar("pindahTab")
     }
     document.addEventListener("visibilitychange", onVisibility)
     return () => document.removeEventListener("visibilitychange", onVisibility)
-  }, [inExamRoom])
+  }, [inExamRoom, catatLanggar])
+
+  // Jendela kehilangan fokus tanpa ikut tersembunyi. Inilah yang terjadi
+  // pada layar terbagi: ujian tetap terlihat, `document.hidden` tetap false,
+  // sehingga deteksi perpindahan tab di atas TIDAK menangkapnya.
+  useEffect(() => {
+    if (!inExamRoom) return
+    const onBlur = () => {
+      if (!document.hidden) catatLanggar("hilangFokus")
+    }
+    window.addEventListener("blur", onBlur)
+    return () => window.removeEventListener("blur", onBlur)
+  }, [inExamRoom, catatLanggar])
+
+  // Pengawasan layar terbagi.
+  //
+  // Peramban tidak punya API "apakah saya sedang di mode layar terbagi", jadi
+  // yang diukur adalah luas jendela dibanding luas layar. Penyusutan karena
+  // papan ketik virtual sengaja diampuni di `nilaiLayar` - tanpa itu setiap
+  // siswa yang mengetik jawaban esai akan tercatat melanggar.
+  useEffect(() => {
+    if (!inExamRoom) return
+
+    let terakhirTerbagi = false
+
+    const periksa = () => {
+      const aktif = document.activeElement
+      const adaIsianAktif =
+        !!aktif &&
+        (aktif.tagName === "INPUT" ||
+          aktif.tagName === "TEXTAREA" ||
+          (aktif as HTMLElement).isContentEditable)
+
+      const putusan = nilaiLayar({
+        u: {
+          lebarJendela: window.innerWidth,
+          tinggiJendela: window.innerHeight,
+          lebarLayar: window.screen.width,
+          tinggiLayar: window.screen.height,
+        },
+        adaIsianAktif,
+      })
+
+      if (putusan.terbagi) {
+        // Hitung sekali per kejadian, bukan sekali per event resize -
+        // menggeser pemisah layar bisa memicu puluhan event beruntun.
+        if (!terakhirTerbagi) catatLanggar("layarTerbagi")
+        terakhirTerbagi = true
+        setTerhalang(
+          `Ujian harus dikerjakan pada satu layar penuh. Saat ini ${putusan.alasan}. Tutup aplikasi lain atau keluar dari mode layar terbagi untuk melanjutkan.`
+        )
+      } else {
+        terakhirTerbagi = false
+        setTerhalang(null)
+      }
+    }
+
+    periksa()
+    window.addEventListener("resize", periksa)
+    window.addEventListener("orientationchange", periksa)
+    const jaga = setInterval(periksa, 2000)
+    return () => {
+      window.removeEventListener("resize", periksa)
+      window.removeEventListener("orientationchange", periksa)
+      clearInterval(jaga)
+    }
+  }, [inExamRoom, catatLanggar])
 
   // Hitung mundur. Nilai awalnya berasal dari server (`sisaDetik`), jadi
   // menyegarkan halaman tidak mengembalikan waktu.
@@ -253,11 +476,13 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       setAnswers(simpan.answers)
       setDoubtful(simpan.doubtful)
       setTabSwitch(simpan.tabSwitch)
+      setRincian(simpan.rincian)
       setDipulihkan(true)
     } else {
       setAnswers({})
       setDoubtful({})
       setTabSwitch(0)
+      setRincian({})
       setDipulihkan(false)
     }
 
@@ -347,6 +572,124 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
 
     return (
       <div className="flex flex-col gap-3 p-4 pb-24">
+        {/* Penghalang layar terbagi.
+            Ditaruh sebagai lapisan tetap yang menutupi seluruh layar dan
+            diletakkan SEBELUM isi soal: selama ini tampil, soal benar-benar
+            tidak terbaca. Mencatat pelanggaran saja tidak cukup - siswa yang
+            sudah sempat membaca soal di layar terbagi tetap diuntungkan.
+            Hitung mundur sengaja TIDAK dihentikan supaya menahan layar
+            terbagi tidak menjadi cara memperpanjang waktu. */}
+        {terhalang && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <div className="max-w-sm text-center flex flex-col items-center gap-3">
+              <AlertTriangle className="w-10 h-10 text-amber-400" />
+              <h3 className="text-base font-bold text-white">
+                Ujian dijeda sementara
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">{terhalang}</p>
+              <p className="text-[11px] text-amber-300 font-semibold">
+                Waktu ujian tetap berjalan. Kejadian ini tercatat untuk pengawas.
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Modal zoom gambar soal — siswa bisa memperbesar/mengecilkan
+            gambar agar bisa membaca teks kecil. Mendukung:
+            • Tombol zoom in/out dan reset
+            • Drag (pan) saat sudah di-zoom
+            • Scroll wheel zoom (desktop)
+            • Pinch-to-zoom (mobile)
+            z-index 90: di bawah penghalang layar terbagi (z-100) tapi
+            di atas semua isi ujian. */}
+        {zoomImg && (
+          <div
+            className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-md flex flex-col"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) tutupZoom()
+            }}
+          >
+            {/* Bilah atas modal */}
+            <div className="flex items-center justify-between px-4 py-3 bg-black/40">
+              <span className="text-white/80 text-xs font-bold">
+                Gambar Soal {currentIdx + 1}
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-white/60 text-[10px] font-mono mr-2">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  disabled={zoomLevel <= 1}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition disabled:opacity-30"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  disabled={zoomLevel >= 5}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition disabled:opacity-30"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={tutupZoom}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Area gambar dengan pan & zoom */}
+            <div
+              ref={zoomContainerRef}
+              className="flex-1 overflow-hidden flex items-center justify-center touch-none select-none"
+              style={{ cursor: zoomLevel > 1 ? (isPanning ? "grabbing" : "grab") : "default" }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onWheel={onWheel}
+              onTouchStart={onTouchStartZoom}
+              onTouchMove={onTouchMoveZoom}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={zoomImg}
+                alt="Gambar soal (diperbesar)"
+                draggable={false}
+                className="max-w-full max-h-full object-contain pointer-events-none"
+                style={{
+                  transform: `translate(${panPos.x}px, ${panPos.y}px) scale(${zoomLevel})`,
+                  transition: isPanning ? "none" : "transform 0.2s ease",
+                }}
+              />
+            </div>
+
+            {/* Petunjuk di bawah */}
+            <div className="flex items-center justify-center gap-3 px-4 py-2.5 bg-black/40">
+              <p className="text-[10px] text-white/50 text-center">
+                {zoomLevel > 1
+                  ? "Geser untuk menggerakkan gambar • Cubit dua jari atau scroll untuk zoom"
+                  : "Cubit dua jari, scroll, atau gunakan tombol +/− untuk memperbesar"}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Bilah waktu */}
         <div className="sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between">
           <div className="min-w-0">
@@ -381,8 +724,8 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
           <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-start gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
             <span>
-              Terdeteksi {tabSwitch}x meninggalkan halaman ujian. Catatan ini
-              dilaporkan ke pengawas bersama jawabanmu.
+              Terdeteksi {ringkasPelanggaran(rincian) || `${tabSwitch}x meninggalkan halaman ujian`}.
+              Catatan ini dilaporkan ke pengawas bersama jawabanmu.
             </span>
           </div>
         )}
@@ -455,21 +798,32 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
             </p>
 
             {q.imageUrl && (
-              // Kalau gambar gagal dimuat, tampilkan pesan yang bisa
-              // dilaporkan siswa - bukan teks alt telanjang yang terbaca
-              // seperti halaman rusak.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={q.imageUrl}
-                alt="Gambar soal"
-                className="rounded-2xl border border-slate-200 max-h-64 object-contain self-center"
-                onError={(e) => {
-                  const img = e.currentTarget
-                  img.style.display = "none"
-                  const pesan = img.nextElementSibling as HTMLElement | null
-                  if (pesan) pesan.style.display = "block"
-                }}
-              />
+              // Gambar soal yang bisa di-tap untuk zoom. Siswa mungkin perlu
+              // membaca teks kecil di gambar, terutama di layar HP.
+              <div className="self-center relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={q.imageUrl}
+                  alt="Gambar soal"
+                  className="rounded-2xl border border-slate-200 max-h-64 object-contain cursor-pointer transition hover:brightness-95 active:scale-[0.98]"
+                  onClick={() => bukaZoom(q.imageUrl!)}
+                  onError={(e) => {
+                    const img = e.currentTarget
+                    img.parentElement!.style.display = "none"
+                    const pesan = img.parentElement!.nextElementSibling as HTMLElement | null
+                    if (pesan) pesan.style.display = "block"
+                  }}
+                />
+                {/* Petunjuk zoom — muncul di pojok kanan bawah gambar */}
+                <button
+                  type="button"
+                  onClick={() => bukaZoom(q.imageUrl!)}
+                  className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold opacity-80 hover:opacity-100 backdrop-blur-sm transition"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                  Perbesar
+                </button>
+              </div>
             )}
             {q.imageUrl && (
               <p

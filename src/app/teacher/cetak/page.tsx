@@ -424,6 +424,17 @@ function LaporanNilai({ data, profil }: { data: any; profil: ProfilSekolah }) {
                   N{i + 1}
                 </th>
               ))}
+              {/* Kolom ujian dibedakan awalannya (U) dari kolom tugas (N)
+                  supaya pembaca laporan tahu mana yang nilai ujian. */}
+              {data.ujian.map((u: any, i: number) => (
+                <th
+                  key={u.id}
+                  className="border border-black p-1.5 w-12"
+                  title={u.title}
+                >
+                  U{i + 1}
+                </th>
+              ))}
               <th className="border border-black p-1.5 w-14">Rata-rata</th>
             </tr>
           </thead>
@@ -440,6 +451,11 @@ function LaporanNilai({ data, profil }: { data: any; profil: ProfilSekolah }) {
                     {n ?? "—"}
                   </td>
                 ))}
+                {r.nilaiUjian.map((n: number | null, j: number) => (
+                  <td key={`u${j}`} className="border border-black p-1.5 text-center">
+                    {n ?? "—"}
+                  </td>
+                ))}
                 <td className="border border-black p-1.5 text-center font-bold">
                   {r.rata ?? "—"}
                 </td>
@@ -450,13 +466,18 @@ function LaporanNilai({ data, profil }: { data: any; profil: ProfilSekolah }) {
       )}
 
       {/* Nama penilaian tidak muat di kepala tabel, jadi didaftar di bawah. */}
-      {data.tugas.length > 0 && (
+      {(data.tugas.length > 0 || data.ujian.length > 0) && (
         <div className="mt-3 text-[10px]">
           <p className="font-semibold mb-1">Keterangan kolom penilaian:</p>
           <div className="grid grid-cols-2 gap-x-6">
             {data.tugas.map((t: any, i: number) => (
               <p key={t.id}>
                 <strong>N{i + 1}</strong> — {t.title} (maks {t.maxScore})
+              </p>
+            ))}
+            {data.ujian.map((u: any, i: number) => (
+              <p key={u.id}>
+                <strong>U{i + 1}</strong> — {u.title} (ujian, skala 100)
               </p>
             ))}
           </div>

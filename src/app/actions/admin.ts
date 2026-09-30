@@ -255,6 +255,10 @@ export async function getUsers() {
       nomorInduk: true,
       isActive: true,
       lastLoginAt: true,
+      // Perangkat yang sedang memegang sesi akun ini, supaya admin bisa
+      // menjawab pertanyaan "kenapa saya keluar sendiri?" tanpa menebak.
+      sesiPerangkat: true,
+      sesiSejak: true,
       studentClasses: { select: { classInfo: { select: { id: true, name: true } } } },
     },
   })
@@ -1515,4 +1519,81 @@ export async function downloadBackupData(): Promise<AksiHasil<{ data: unknown }>
   } catch (err) {
     return gagal(err)
   }
+}
+
+// ==========================================
+// MONITORING SOAL UJIAN GURU
+// ==========================================
+
+/**
+ * Guru yang sudah ditugaskan mengampu kelas + mapel tetapi belum membuat
+ * ujian yang memiliki soal untuk mapel tersebut.
+ *
+ * Logikanya:
+ * 1. Ambil semua penugasan guru (ClassTeacher) — ini berarti guru X mengajar
+ *    mapel Y di kelas Z.
+ * 2. Untuk tiap penugasan, periksa apakah guru tersebut sudah membuat minimal
+ *    satu Exam untuk mapel itu yang memiliki minimal satu ExamQuestion.
+ * 3. Yang BELUM → masuk daftar.
+ */
+export async function getTeachersWithoutExamQuestions() {
+  await requireSession('ADMIN')
+
+  // Ambil semua penugasan guru beserta info yang dibutuhkan
+  const assignments = await prisma.classTeacher.findMany({
+    select: {
+      userId: true,
+      classId: true,
+      subjectId: true,
+      user: { select: { id: true, name: true, username: true } },
+      subject: { select: { id: true, name: true } },
+      classInfo: { select: { id: true, name: true } },
+    },
+    orderBy: [
+      { user: { name: 'asc' } },
+      { subject: { name: 'asc' } },
+      { classInfo: { name: 'asc' } },
+    ],
+  })
+
+  // Ambil semua ujian yang sudah memiliki soal, dikelompokkan per author+subject
+  const examsWithQuestions = await prisma.exam.findMany({
+    where: {
+      questions: { some: {} },
+    },
+    select: {
+      authorId: true,
+      subjectId: true,
+    },
+  })
+
+  // Buat set kunci "authorId::subjectId" untuk pencarian cepat
+  const sudahBuatSoal = new Set(
+    examsWithQuestions.map((e) => `${e.authorId}::${e.subjectId}`)
+  )
+
+  // Filter penugasan yang gurunya belum membuat soal ujian untuk mapel tsb
+  type GuruBelumSoal = {
+    guru: { id: string; name: string; username: string }
+    mapel: { id: string; name: string }
+    kelas: { id: string; name: string }[]
+  }
+
+  const petaGuru = new Map<string, GuruBelumSoal>()
+
+  for (const a of assignments) {
+    const kunci = `${a.userId}::${a.subjectId}`
+    if (sudahBuatSoal.has(kunci)) continue // sudah ada ujian + soal
+
+    if (!petaGuru.has(kunci)) {
+      petaGuru.set(kunci, {
+        guru: a.user,
+        mapel: a.subject,
+        kelas: [],
+      })
+    }
+    petaGuru.get(kunci)!.kelas.push(a.classInfo)
+  }
+
+  return Array.from(petaGuru.values())
 }

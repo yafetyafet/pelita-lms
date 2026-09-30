@@ -52,9 +52,42 @@ const isTautanGambar = (t: string) =>
   (/\.(png|jpe?g|gif|webp|svg|bmp)(\?\S*)?$/i.test(t) ||
     /(drive\.google|googleusercontent|imgur|ibb\.co|cloudinary|blogspot|wp\.com)/i.test(t))
 
-/** Stem yang jelas-jelas meminta penilaian benar/salah per pernyataan. */
+/**
+ * Stem yang jelas-jelas meminta penilaian benar/salah per pernyataan.
+ *
+ * Daftarnya sengaja panjang karena guru menuliskan perintah yang sama dengan
+ * belasan kalimat berbeda. Satu pola yang tidak dikenali berarti seluruh
+ * soalnya salah tipe, dan itu baru ketahuan setelah siswa mengerjakannya.
+ */
 const stemTerlihatBS = (q: string) =>
-  /benar\s*(atau|\/|-|dan)\s*salah|salah\s*(atau|\/)\s*benar|tentukan\s+(b\s*\/\s*s|benar|salah)|sesuai\s*(atau|\/)\s*tidak\s*sesuai/i.test(
+  [
+    // "benar atau salah", "benar/salah", "benar dan salah"
+    /benar\s*(atau|\/|-|dan)\s*salah/i,
+    /salah\s*(atau|\/|-|dan)\s*benar/i,
+    // "tentukan B/S", "tentukan benar", "tentukan apakah ... benar"
+    /tentukan\s+(b\s*\/\s*s|benar|salah)/i,
+    /tentukan\s+apakah[\s\S]{0,60}?(benar|salah|tepat|sesuai)/i,
+    // "sesuai atau tidak sesuai"
+    /sesuai\s*(atau|\/)\s*tidak\s*sesuai/i,
+    // "beri tanda (B) jika benar", "(S) jika salah"
+    /\(\s*b\s*\)\s*(jika|bila|apabila|untuk)/i,
+    /\(\s*s\s*\)\s*(jika|bila|apabila|untuk)/i,
+    // "true or false"
+    /true\s*(or|\/)\s*false/i,
+    // "centang jika benar"
+    /(centang|ceklis|beri\s*tanda)[\s\S]{0,30}?(benar|salah)/i,
+  ].some((r) => r.test(q)) && !stemMemintaMemilih(q)
+
+/**
+ * Stem yang meminta MEMILIH satu jawaban, bukan menilai tiap pernyataan.
+ *
+ * Penjaga ini perlu karena kalimat seperti "Pernyataan manakah yang benar
+ * tentang router?" memuat kata "pernyataan" dan "benar" sekaligus, padahal
+ * itu soal pilihan ganda biasa. Tanpa penjaga, soal PG semacam itu berubah
+ * menjadi Benar/Salah dan seluruh kunci jawabannya jadi salah arti.
+ */
+const stemMemintaMemilih = (q: string) =>
+  /manakah|yang\s+manakah|pilihlah|pilih\s+satu|berikut\s+ini\s+yang\s+(benar|tepat|salah)\s+adalah|yang\s+(benar|tepat|salah)\s+adalah/i.test(
     q
   )
 
@@ -95,6 +128,16 @@ type Draf = SoalTempel & {
   bintang: boolean[]
   tandaBS: ("B" | "S" | null)[]
   kunciDariBaris: string | null
+  /**
+   * Baris polos yang menyusul stem dan belum jelas perannya.
+   *
+   * Disimpan terpisah - bukan langsung ditempel ke `question` - supaya bisa
+   * ditarik kembali menjadi pernyataan Benar/Salah kalau baris "Jawaban:"
+   * di akhir ternyata membuktikan soalnya memang Benar/Salah. Tanpa ini,
+   * pernyataan yang ditulis polos tanpa penanda apa pun sudah telanjur
+   * menyatu dengan teks soal dan tidak bisa dipisahkan lagi.
+   */
+  barisLanjutan: string[]
 }
 
 export function parseSoalTempel(teksMentah: string): HasilParse {
@@ -109,6 +152,40 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
     const c = current
     current = null
     const nomor = soal.length + 1
+
+    // Tarik kembali pernyataan Benar/Salah yang tertulis polos.
+    //
+    // Bentuk "stem, lalu pernyataan tanpa penanda apa pun, lalu baris
+    // Jawaban: B,S,B" tidak bisa dipilah saat membaca baris demi baris -
+    // saat itu belum ketahuan mana stem dan mana pernyataan. Baru setelah
+    // baris kunci terbaca, jumlahnya memberi tahu persis berapa baris
+    // terakhir yang sebenarnya pernyataan. Sisanya tetap bagian dari stem,
+    // sehingga stem yang membungkus ke baris kedua tidak ikut tercomot.
+    const kunciBS = c.kunciDariBaris && /^[BS](,[BS])*$/.test(c.kunciDariBaris)
+      ? c.kunciDariBaris.split(",")
+      : null
+    if (
+      kunciBS &&
+      c.options.length === 0 &&
+      c.barisLanjutan.length >= kunciBS.length
+    ) {
+      const mulai = c.barisLanjutan.length - kunciBS.length
+      for (const baris of c.barisLanjutan.slice(mulai)) {
+        const p = pisahPenanda(baris)
+        c.options.push(p.teks)
+        c.bintang.push(p.bintang)
+        c.tandaBS.push(p.bs)
+      }
+      c.barisLanjutan = c.barisLanjutan.slice(0, mulai)
+      c.type = "BENAR_SALAH"
+    }
+
+    // Baris lanjutan yang tersisa memang bagian dari kalimat soal.
+    if (c.barisLanjutan.length > 0) {
+      c.question = [c.question, ...c.barisLanjutan].join(" ")
+      c.barisLanjutan = []
+    }
+
     const cuplik = String(c.question).slice(0, 24) + "..."
 
     // Buang opsi kosong beserta penandanya di posisi yang sama.
@@ -252,6 +329,7 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
         bintang: [],
         tandaBS: [],
         kunciDariBaris: null,
+        barisLanjutan: [],
       }
       continue
     }
@@ -308,10 +386,26 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
       const tokenBS = bagian.map((x) =>
         x === "BENAR" || x === "TRUE" || x === "T" ? "B" : x === "SALAH" || x === "FALSE" || x === "F" ? "S" : x
       )
-      const adaTandaBS = bagian.some((x) => ["S", "SALAH", "BENAR", "TRUE", "FALSE", "T", "F"].includes(x))
-      const semuaBS = tokenBS.every((x) => x === "B" || x === "S")
+      // Kata utuh tidak mungkin berarti opsi pilihan ganda.
+      const kataBS = bagian.some((x) => ["BENAR", "SALAH", "TRUE", "FALSE"].includes(x))
+      const semuaBS = tokenBS.length > 0 && tokenBS.every((x) => x === "B" || x === "S")
+      // "S" bukan huruf opsi yang sah (opsi hanya A-H), jadi kemunculannya
+      // sudah memastikan ini kunci Benar/Salah.
+      const adaS = tokenBS.includes("S")
+      // "Jawaban: B,B,B" - semua pernyataan benar. Dulu ini jatuh ke
+      // penguraian indeks dan "B" dibaca sebagai opsi B, sehingga soalnya
+      // berubah menjadi pilihan ganda. Dua token atau lebih yang seluruhnya
+      // B/S hanya masuk akal sebagai kunci Benar/Salah - "Jawaban: B"
+      // tunggal tetap diperlakukan sebagai opsi B pilihan ganda.
+      const rentetanBS = semuaBS && tokenBS.length >= 2
 
-      if (current.type === "BENAR_SALAH" || stemTerlihatBS(current.question) || (adaTandaBS && semuaBS)) {
+      if (
+        current.type === "BENAR_SALAH" ||
+        stemTerlihatBS(current.question) ||
+        kataBS ||
+        adaS ||
+        rentetanBS
+      ) {
         current.type = "BENAR_SALAH"
         if (semuaBS) current.kunciDariBaris = tokenBS.join(",")
         else catatan.push(`Kunci Benar/Salah "${mJawab[2].trim()}" hanya boleh B atau S`)
@@ -356,9 +450,38 @@ export function parseSoalTempel(teksMentah: string): HasilParse {
       continue
     }
 
+    // --- pernyataan Benar/Salah TANPA awalan ---
+    //
+    // Ini bentuk yang paling sering ditempel guru: stem di baris pertama,
+    // lalu pernyataannya langsung di baris-baris berikutnya tanpa "-", "•",
+    // maupun "A.". Sebelumnya baris begini dianggap lanjutan kalimat soal,
+    // sehingga soalnya berakhir tanpa satu pun opsi - dan soal tanpa opsi
+    // otomatis dijadikan ESAI. Itulah sebabnya soal Benar/Salah yang
+    // ditempel selalu salah tipe.
+    const pPolos = pisahPenanda(t)
+    const adaTandaBSBaris = pPolos.bs !== null
+    const stemBS = current.type === "BENAR_SALAH" || stemTerlihatBS(current.question)
+
+    if (
+      // Akhiran (B)/(S) tidak mungkin lanjutan kalimat soal - penanda itu
+      // hanya bermakna pada pernyataan Benar/Salah. Cukup kuat untuk
+      // sekaligus menetapkan tipe soalnya.
+      adaTandaBSBaris ||
+      // Kalau stemnya memang meminta benar/salah, baris berbintang adalah
+      // pernyataan; begitu pula baris polos SESUDAH pernyataan pertama.
+      (stemBS && (pPolos.bintang || current.options.length > 0))
+    ) {
+      current.type = "BENAR_SALAH"
+      current.options.push(pPolos.teks)
+      current.bintang.push(pPolos.bintang)
+      current.tandaBS.push(pPolos.bs)
+      current.teksSelesai = true
+      continue
+    }
+
     // --- lanjutan teks soal ---
     if (!current.teksSelesai && current.options.length === 0) {
-      current.question += " " + t
+      current.barisLanjutan.push(t)
     }
   }
   tutup()

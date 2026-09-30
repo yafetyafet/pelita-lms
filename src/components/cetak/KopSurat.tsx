@@ -10,26 +10,47 @@ import type { ProfilSekolah } from "@/app/actions/sekolah"
  * yang diisi admin — next/image menuntut domainnya didaftarkan lebih dulu di
  * next.config, dan itu tidak praktis untuk nilai yang bisa berubah kapan saja.
  */
+/**
+ * Satu slot logo pada kop.
+ *
+ * Ruangnya SELALU disediakan meski logonya kosong, supaya blok teks di tengah
+ * tetap benar-benar di tengah - kop dengan satu logo saja akan terlihat
+ * miring kalau sisi yang kosong ikut menghilang.
+ *
+ * `onError` menyembunyikan gambar yang gagal dimuat: tautan yang salah lebih
+ * baik menyisakan ruang kosong daripada ikon gambar rusak di tengah dokumen
+ * resmi yang akan ditandatangani kepala sekolah.
+ */
+function SlotLogo({ url, alt }: { url: string; alt: string }) {
+  if (!url) {
+    return (
+      <div
+        className="w-20 h-20 shrink-0"
+        aria-hidden
+        data-slot-logo-kosong
+      />
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      className="w-20 h-20 object-contain shrink-0"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden"
+      }}
+    />
+  )
+}
+
 export function KopSurat({ profil }: { profil: ProfilSekolah }) {
   const adaKontak = profil.telepon || profil.email || profil.website
 
   return (
     <header className="border-b-[3px] border-black pb-2 mb-4">
       <div className="flex items-center gap-4">
-        {profil.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={profil.logoUrl}
-            alt="Logo sekolah"
-            className="w-20 h-20 object-contain shrink-0"
-          />
-        ) : (
-          // Ruang logo tetap disediakan agar tata letak kop tidak bergeser
-          // saat logo belum diisi.
-          <div className="w-20 h-20 shrink-0 border border-dashed border-slate-300 flex items-center justify-center text-[8px] text-slate-400 text-center leading-tight p-1">
-            Logo belum diatur
-          </div>
-        )}
+        <SlotLogo url={profil.logoUrl} alt="Logo pemerintah/yayasan" />
 
         <div className="flex-1 text-center leading-tight">
           {profil.namaYayasan && (
@@ -59,8 +80,7 @@ export function KopSurat({ profil }: { profil: ProfilSekolah }) {
           )}
         </div>
 
-        {/* Penyeimbang lebar logo supaya blok tengah benar-benar di tengah. */}
-        <div className="w-20 shrink-0" aria-hidden />
+        <SlotLogo url={profil.logoKananUrl} alt="Logo sekolah" />
       </div>
     </header>
   )
@@ -166,7 +186,7 @@ export function PeringatanProfil({ profil }: { profil: ProfilSekolah }) {
   if (!profil.kepalaSekolah) kurang.push("nama kepala sekolah")
   if (!profil.nipKepalaSekolah) kurang.push("NIP kepala sekolah")
   if (!profil.alamat) kurang.push("alamat")
-  if (!profil.logoUrl) kurang.push("logo")
+  if (!profil.logoUrl && !profil.logoKananUrl) kurang.push("logo kop")
 
   if (kurang.length === 0) return null
 

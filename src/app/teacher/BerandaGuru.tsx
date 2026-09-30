@@ -5,7 +5,7 @@ import { tanggalPanjangWIB } from "@/lib/logic/waktu"
 import Link from "next/link"
 import { LayananGrid } from "@/components/LayananGrid"
 import { getCurrentUser, logout } from "@/app/actions/auth"
-import { getTeacherHome, createMaterial, createViolation, getStudentsByClass, createJournal } from "@/app/actions/teacher"
+import { getTeacherHome, createMaterial, createViolation, getStudentsByClass, createJournal, deleteMaterial } from "@/app/actions/teacher"
 import type { DataBerandaGuru } from "@/lib/types/beranda"
 import { bacaJenisPelanggaran, type JenisPelanggaran } from "@/lib/logic/pelanggaran"
 import { 
@@ -31,7 +31,8 @@ import {
   Loader2,
   Eye,
   Printer,
-  ClipboardList
+  ClipboardList,
+  Trash2
 } from "lucide-react"
 
 export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
@@ -158,6 +159,17 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
     }
   }
 
+  const handleDeleteMaterial = async (id: string) => {
+    if (!confirm("Hapus materi ini secara permanen?")) return
+    const res = await deleteMaterial(id)
+    if (res.error) {
+      alert(res.error)
+    } else {
+      const segar = await getTeacherHome()
+      setMaterials(segar?.materi ?? [])
+    }
+  }
+
   const handleSaveMateri = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!materiTitle || !materiClassId || !materiSubjectId) return
@@ -191,7 +203,8 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
     // pun pintu untuk membuatnya - createAssignment tidak pernah dipanggil
     // dari halaman mana pun.
     { id: "tugas", title: "Beri Tugas", desc: "Buat & nilai tugas", icon: FileText, color: "from-green-600 to-emerald-700", count: null, href: "/teacher/assignments" },
-    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, action: "scroll-materi" },
+    { id: "materi", title: "Upload Materi", desc: "Embed Video/Drive", icon: UploadCloud, color: "from-blue-600 to-indigo-600", count: `${materials.length} Modul`, href: "/teacher/materials" },
+    { id: "perangkat", title: "Modul Ajar AI", desc: "Buat RPP Otomatis", icon: Sparkles, color: "from-fuchsia-600 to-purple-600", count: "Baru", href: "/teacher/perangkat" },
     { id: "absensi", title: "Presensi Kelas", desc: "Input Hadir/Sakit/Izin", icon: MapPin, color: "from-cyan-600 to-blue-700", count: null, href: "/teacher/attendance" },
     { id: "jadwal", title: "Jadwal Mandiri", desc: "Input Roster Guru", icon: Calendar, color: "from-amber-500 to-orange-600", count: null, href: "/teacher/schedule" },
     { id: "ujian", title: "Ujian", desc: "Buat & Kelola Ujian", icon: Timer, color: "from-rose-600 to-red-600", count: null, href: "/teacher/exams" },
@@ -460,9 +473,12 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
                   <span className="font-bold text-slate-800 block">{mat.title}</span>
                   <span className="text-[10px] text-slate-500">{mat.classInfo?.name} — {mat.subject?.name}</span>
                 </div>
-                {mat.url && (
-                  <a href={mat.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-[10px] font-semibold shrink-0">Buka</a>
-                )}
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => handleDeleteMaterial(mat.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition" title="Hapus">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <Link href={`/teacher/materials`} className="text-blue-600 hover:underline text-[10px] font-semibold mt-1">Buka / Diskusi</Link>
+                  </div>
               </div>
             ))}
             {materials.length > 5 && (

@@ -176,7 +176,19 @@ export function koreksiOtomatis(
     }
   }
 
-  return { skorOtomatis, skorMaksOtomatis, bobotEsai, benar, salah, kosong };
+  // Bobot boleh pecahan (mis. 2.5), dan menjumlahkan pecahan biner
+  // meninggalkan ekor seperti 7.500000000000001. Dibulatkan ke 2 desimal
+  // supaya nilai yang tersimpan dan yang dibaca guru berupa 7.5.
+  const bulat = (n: number) => Math.round(n * 100) / 100;
+
+  return {
+    skorOtomatis: bulat(skorOtomatis),
+    skorMaksOtomatis: bulat(skorMaksOtomatis),
+    bobotEsai: bulat(bobotEsai),
+    benar,
+    salah,
+    kosong,
+  };
 }
 
 export function keNilaiAkhir(

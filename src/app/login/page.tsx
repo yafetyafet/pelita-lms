@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { login } from "@/app/actions/auth"
@@ -54,6 +54,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [catatan, setCatatan] = useState("")
+
+  // Penjaga perangkat mengarahkan ke sini dengan ?alasan=perangkat-lain.
+  // Tanpa keterangan, pengguna yang tiba-tiba terlempar keluar akan mengira
+  // aplikasinya rusak - padahal akunnya memang baru dipakai di tempat lain.
+  useEffect(() => {
+    const alasan = new URLSearchParams(window.location.search).get("alasan")
+    if (alasan === "perangkat-lain") {
+      setCatatan(
+        "Kamu keluar otomatis karena akun ini baru dipakai masuk di perangkat lain. Satu akun hanya boleh aktif di satu perangkat."
+      )
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,6 +84,17 @@ export default function LoginPage() {
         setError(res.error)
         setIsLoading(false)
         return
+      }
+
+      // Akun ternyata masih aktif di tempat lain saat kita masuk. Sesi itu
+      // sudah dibatalkan, tapi pemiliknya perlu tahu - ini sinyal paling awal
+      // kalau sandinya dipakai orang lain.
+      if (res?.perangkatSebelumnya) {
+        try {
+          sessionStorage.setItem("pelita_sesi_tergeser", res.perangkatSebelumnya)
+        } catch {
+          // Mode penyamaran memblokir sessionStorage; bukan alasan gagal masuk.
+        }
       }
 
       // Kembalikan ke halaman yang tadi dijaga proxy, kalau ada.
@@ -96,12 +120,19 @@ export default function LoginPage() {
             {/* Logo lengkap di layar lebar, lambang saja di ponsel supaya
                 formulir tetap terlihat tanpa menggulir. */}
             <div className="hidden md:block">
+              {/* `unoptimized`: lambang sekolah adalah PNG statis 45 KB yang
+                  dilihat setiap pengunjung. Melewatkannya ke pengoptimal
+                  gambar Next tidak menghemat apa pun - ia justru memaksa satu
+                  penyandian ulang per permintaan. Terukur pada ujian 122
+                  siswa: 282 kegagalan tulis cache dan satu sambungan putus
+                  tepat pada berkas ini. */}
               <Image
                 src="/logo-pelita-full.png"
                 alt="PELITA — Platform Edukasi, Layanan Informasi, dan Tata Kelola Akademik"
                 width={420}
                 height={389}
                 priority
+                unoptimized
                 className="w-[380px] lg:w-[420px] h-auto"
               />
             </div>
@@ -112,6 +143,7 @@ export default function LoginPage() {
                 width={64}
                 height={64}
                 priority
+                unoptimized
               />
               <div className="text-left">
                 <h1 className="text-2xl font-black text-blue-900 leading-none tracking-tight">
@@ -164,6 +196,15 @@ export default function LoginPage() {
               </div>
 
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                {catatan && !error && (
+                  <div
+                    role="status"
+                    className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center font-medium"
+                  >
+                    {catatan}
+                  </div>
+                )}
+
                 {error && (
                   <div
                     role="alert"

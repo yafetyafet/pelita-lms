@@ -17,12 +17,17 @@ import {
   RefreshCw,
   ShieldAlert,
   Users,
+  ListChecks,
 } from "lucide-react"
+import { bacaRincian, ringkasPelanggaran } from "@/lib/logic/pengawas-ujian"
+import { RekapHasilUjian } from "@/components/RekapHasilUjian"
 import {
   getExamSubmissions,
+  getHasilUjianPerRombel,
   updateExamSettings,
   saveEssayScore,
   recomputeExamScores,
+  getPenugasanSaya,
 } from "@/app/actions/teacher"
 import { EditorSoal } from "@/components/EditorSoal"
 
@@ -51,6 +56,10 @@ export default function ExamDetailPage({
   const [error, setError] = useState("")
 
   // Form pengaturan
+  const [title, setTitle] = useState("")
+  const [classIds, setClassIds] = useState<string[]>([])
+  const [teacherClasses, setTeacherClasses] = useState<any[]>([])
+  
   const [startAt, setStartAt] = useState("")
   const [endAt, setEndAt] = useState("")
   const [token, setToken] = useState("")
@@ -65,15 +74,27 @@ export default function ExamDetailPage({
   const [essayDraft, setEssayDraft] = useState<Record<string, string>>({})
   const [savingEssay, setSavingEssay] = useState<string | null>(null)
   const [openSub, setOpenSub] = useState<string | null>(null)
+  // Rekap per rombel diambil terpisah dari daftar koreksi: keduanya menyusun
+  // data yang berbeda dari ujian yang sama, dan rekap tetap harus utuh
+  // meski daftar koreksinya sedang difilter.
+  const [rekap, setRekap] = useState<any>(null)
 
   const load = async () => {
-    const res = await getExamSubmissions(id)
+    const [res, hasil, cls] = await Promise.all([
+      getExamSubmissions(id),
+      getHasilUjianPerRombel(id),
+      getPenugasanSaya()
+    ])
+    setRekap(hasil)
+    setTeacherClasses(cls)
     if (!res) {
       setError("Ujian tidak ditemukan atau kamu tidak berhak membukanya.")
       setIsLoading(false)
       return
     }
     setData(res)
+    setTitle(res.exam.title)
+    setClassIds(res.exam.kelas.map((c: any) => c.id))
     setStartAt(toLocalInput(res.exam.startAt))
     setEndAt(toLocalInput(res.exam.endAt))
     setToken(res.exam.token || "")
@@ -99,11 +120,21 @@ export default function ExamDetailPage({
 
   const simpanPengaturan = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!title.trim()) {
+      setError("Judul ujian tidak boleh kosong.")
+      return
+    }
+    if (classIds.length === 0) {
+      setError("Pilih minimal satu rombel peserta ujian.")
+      return
+    }
     setError("")
     setSavingSettings(true)
 
     const res = await updateExamSettings({
       examId: id,
+      title: title.trim(),
+      classIds,
       startAt: startAt ? new Date(startAt).toISOString() : null,
       endAt: endAt ? new Date(endAt).toISOString() : null,
       token: token.trim() || null,
@@ -222,7 +253,11 @@ export default function ExamDetailPage({
             {data.exam.title}
           </h2>
           <p className="text-[11px] text-slate-500 font-medium">
-            {data.exam.classInfo?.name} • {data.exam.subject?.name} •{" "}
+            {(data.exam.kelas ?? [])
+              .map((k: any) => k?.name)
+              .filter(Boolean)
+              .join(", ") || "Tanpa rombel"}{" "}
+            • {data.exam.subject?.name} •{" "}
             {data.questions.length} soal
           </p>
         </div>
@@ -260,23 +295,72 @@ export default function ExamDetailPage({
         })}
       </div>
 
-      {/* Pengaturan */}
-      <form
-        onSubmit={simpanPengaturan}
-        className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3"
-      >
-        <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-          <Clock className="w-4 h-4 text-rose-600" />
-          Jadwal, Token & Penerbitan
-        </h3>
+        {/* Pengaturan */}
+        <form
+          onSubmit={simpanPengaturan}
+          className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3"
+        >
+          <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-rose-600" />
+            Informasi Ujian, Jadwal & Token
+          </h3>
 
-        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
-          Ujian hanya tampil ke siswa kalau <strong>diterbitkan</strong>. Jendela
-          waktu dan durasi divalidasi di server, jadi siswa tidak bisa menambah
-          waktu dengan menyegarkan halaman.
-        </p>
+          <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
+            Ujian hanya tampil ke siswa kalau <strong>diterbitkan</strong>. Jendela
+            waktu dan durasi divalidasi di server, jadi siswa tidak bisa menambah
+            waktu dengan menyegarkan halaman.
+          </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1 mt-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Judul Ujian
+            </span>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Rombel Peserta
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {teacherClasses
+                .filter((tc: any) => tc.subjectId === data.exam.subject?.id)
+                .map((tc: any) => {
+                  const active = classIds.includes(tc.classId)
+                  return (
+                    <button
+                      key={tc.classId}
+                      type="button"
+                      onClick={() => {
+                        if (active) {
+                          setClassIds(classIds.filter(id => id !== tc.classId))
+                        } else {
+                          setClassIds([...classIds, tc.classId])
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                        active
+                          ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:text-rose-600"
+                      }`}
+                    >
+                      {tc.classInfo.name}
+                    </button>
+                  )
+                })}
+            </div>
+            {classIds.length === 0 && (
+              <p className="text-[10px] text-red-500 mt-0.5">Pilih minimal satu rombel.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Dibuka
@@ -435,6 +519,22 @@ export default function ExamDetailPage({
         onBerubah={load}
       />
 
+      {/* Rekap hasil per rombel + ekspor Excel.
+          Ditaruh SEBELUM daftar koreksi karena inilah yang dicari guru
+          setelah ujian selesai; daftar koreksi baru dipakai saat menilai
+          esai satu per satu. */}
+      {rekap && (
+        <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <ListChecks className="w-4 h-4 text-emerald-600" />
+              Rekap Hasil per Rombel
+            </h3>
+          </div>
+          <RekapHasilUjian info={rekap.exam} rombel={rekap.rombel} />
+        </div>
+      )}
+
       {/* Peserta & koreksi */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -474,7 +574,14 @@ export default function ExamDetailPage({
                         {s.user.name}
                       </p>
                       <p className="text-[10px] text-slate-500">
-                        @{s.user.username} •{" "}
+                        @{s.user.username}
+                        {s.rombel && (
+                          <span className="font-semibold text-slate-600">
+                            {" "}
+                            • {s.rombel}
+                          </span>
+                        )}{" "}
+                        •{" "}
                         {s.status === "ONGOING"
                           ? "sedang mengerjakan"
                           : s.status === "GRADED"
@@ -483,7 +590,9 @@ export default function ExamDetailPage({
                         {s.violationCount > 0 && (
                           <span className="text-red-600 font-bold">
                             {" "}
-                            • {s.violationCount}x pindah tab
+                            •{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x pindah tab`}
                           </span>
                         )}
                       </p>
@@ -504,7 +613,15 @@ export default function ExamDetailPage({
                         <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-start gap-1.5">
                           <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>
-                            Siswa meninggalkan halaman ujian {s.violationCount} kali.
+                            {/* Bentuk pelanggaran ditulis apa adanya, tanpa
+                                menyimpulkan siswa menyontek: notifikasi masuk
+                                dan panggilan telepon juga memicu catatan ini.
+                                Penilaiannya tetap pada guru. */}
+                            Terdeteksi{" "}
+                            {ringkasPelanggaran(bacaRincian(s.violationDetail)) ||
+                              `${s.violationCount}x meninggalkan halaman ujian`}
+                            . Perlu ditanyakan kepada siswa — catatan ini belum
+                            tentu berarti menyontek.
                           </span>
                         </p>
                       )}

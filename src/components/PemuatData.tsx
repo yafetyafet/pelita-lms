@@ -38,12 +38,16 @@ export function PemuatData({
           className={`absolute ${cincin} rounded-full border-2 border-slate-200 border-t-blue-600 border-r-amber-500 animate-spin`}
           aria-hidden="true"
         />
+        {/* `unoptimized`: PNG kecil yang muncul di SETIAP pemuatan data di
+            semua peran. Mengoptimalkannya per permintaan justru menjadi
+            beban tersendiri - lihat catatan di halaman masuk. */}
         <Image
           src="/logo-pelita.png"
           alt=""
           width={sisi}
           height={sisi}
           priority
+          unoptimized
           className="relative animate-pulse"
         />
       </div>
