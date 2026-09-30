@@ -326,27 +326,38 @@ export default function ExamDetailPage({
 
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Rombel Peserta (Tahan Ctrl untuk banyak kelas)
+              Rombel Peserta
             </span>
-            <select
-              multiple
-              required
-              size={3}
-              value={classIds}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions).map(opt => opt.value)
-                setClassIds(selected)
-              }}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-            >
+            <div className="flex flex-wrap gap-1.5">
               {teacherClasses
                 .filter((tc: any) => tc.subjectId === data.exam.subject?.id)
-                .map((tc: any) => (
-                  <option key={tc.classId} value={tc.classId}>
-                    {tc.classInfo.name}
-                  </option>
-                ))}
-            </select>
+                .map((tc: any) => {
+                  const active = classIds.includes(tc.classId)
+                  return (
+                    <button
+                      key={tc.classId}
+                      type="button"
+                      onClick={() => {
+                        if (active) {
+                          setClassIds(classIds.filter(id => id !== tc.classId))
+                        } else {
+                          setClassIds([...classIds, tc.classId])
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                        active
+                          ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:text-rose-600"
+                      }`}
+                    >
+                      {tc.classInfo.name}
+                    </button>
+                  )
+                })}
+            </div>
+            {classIds.length === 0 && (
+              <p className="text-[10px] text-red-500 mt-0.5">Pilih minimal satu rombel.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
