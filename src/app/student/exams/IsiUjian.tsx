@@ -290,31 +290,42 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       if (!selected || submitLock.current) return
       submitLock.current = true
       setIsSubmitting(true)
+      setTokenError("")
 
-      const res = await submitExam(
-        selected.id,
-        JSON.stringify(answersRef.current),
-        tabSwitchRef.current,
-        JSON.stringify(rincianRef.current)
-      )
+      try {
+        const res = await submitExam(
+          selected.id,
+          JSON.stringify(answersRef.current),
+          tabSwitchRef.current,
+          JSON.stringify(rincianRef.current)
+        )
 
-      setIsSubmitting(false)
-      if (res.error && !otomatis) {
-        setTokenError(res.error)
+        setIsSubmitting(false)
+        if (res.error && !otomatis) {
+          setTokenError(res.error)
+          submitLock.current = false
+          return
+        }
+
+        // Jawaban sudah aman di server; simpanan lokal tidak diperlukan lagi.
+        if (submissionId) hapusSimpanan(submissionId)
+
+        setHasil({
+          score: res.score ?? null,
+          scoreMax: res.scoreMax ?? null,
+          menungguKoreksi: res.menungguKoreksi ?? false,
+        })
+        setIsFinished(true)
         submitLock.current = false
-        return
+        await loadList()
+      } catch (err: any) {
+        setIsSubmitting(false)
+        submitLock.current = false
+        setTokenError(err.message || "Gagal menghubungi server. Silakan tekan Kumpulkan Jawaban lagi.")
+        
+        // Jika gagal karena terputus dan ini kiriman otomatis (waktu habis), 
+        // biarkan siswa mengklik tombol secara manual ketika jaringannya sudah membaik
       }
-
-      // Jawaban sudah aman di server; simpanan lokal tidak diperlukan lagi.
-      if (submissionId) hapusSimpanan(submissionId)
-
-      setHasil({
-        score: res.score ?? null,
-        scoreMax: res.scoreMax ?? null,
-        menungguKoreksi: res.menungguKoreksi ?? false,
-      })
-      setIsFinished(true)
-      await loadList()
     },
     [selected, submissionId]
   )
@@ -429,14 +440,20 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          handleFinishExam(true)
           return 0
         }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [inExamRoom, handleFinishExam])
+  }, [inExamRoom])
+
+  // Pemicu kirim otomatis saat waktu benar-benar menyentuh nol
+  useEffect(() => {
+    if (inExamRoom && timeLeft === 0 && !isSubmitting && !isFinished) {
+      handleFinishExam(true)
+    }
+  }, [inExamRoom, timeLeft, isSubmitting, isFinished, handleFinishExam])
 
   const formatTimer = (total: number) => {
     const h = Math.floor(total / 3600)
@@ -846,16 +863,17 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                   setiap pernyataan. Dinilai utuh: semua pernyataan harus tepat.
                 </p>
 
-                {(q.options || []).map((pernyataan, i) => {
-                  const jawab = String(answers[q.id] || "").split(",")
-                  const nilaiIni = (jawab[i] || "").trim().toUpperCase()
+                  {(q.options || []).map((pernyataan, i) => {
+                    const jawab = String(answers[q.id] || "").split(",")
+                    const nilaiIni = (jawab[i] || "").trim().toUpperCase()
 
-                  const pilih = (v: "B" | "S") => {
-                    const baru = [...jawab]
-                    while (baru.length < (q.options || []).length) baru.push("")
-                    baru[i] = baru[i]?.trim().toUpperCase() === v ? "" : v
-                    setAnswers((p) => ({ ...p, [q.id]: baru.join(",") }))
-                  }
+                    const pilih = (v: "B" | "S") => {
+                      if (timeLeft <= 0 || isSubmitting) return
+                      const baru = [...jawab]
+                      while (baru.length < (q.options || []).length) baru.push("")
+                      baru[i] = baru[i]?.trim().toUpperCase() === v ? "" : v
+                      setAnswers((p) => ({ ...p, [q.id]: baru.join(",") }))
+                    }
 
                   return (
                     <div
@@ -907,6 +925,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
               </div>
             ) : q.type === "ESAI" ? (
               <textarea
+                disabled={timeLeft <= 0 || isSubmitting}
                 value={answers[q.id] || ""}
                 onChange={(e) =>
                   setAnswers((p) => ({ ...p, [q.id]: e.target.value }))
@@ -924,37 +943,39 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                   </p>
                 )}
 
-                {(q.options || []).map((opt, i) => {
-                  const huruf = String.fromCharCode(65 + i)
-                  // Kunci jawaban disimpan guru sebagai INDEKS ("0".."4"),
-                  // bukan huruf — jawaban harus dikirim dalam format yang sama
-                  // agar koreksiOtomatis() cocok dengan ujian yang sudah ada.
-                  // Untuk PG kompleks, beberapa indeks dipisah koma ("0,2").
-                  const nilai = String(i)
-                  const terpilih = String(answers[q.id] || "")
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean)
-                  const dipilih = terpilih.includes(nilai)
+                  {(q.options || []).map((opt, i) => {
+                    const huruf = String.fromCharCode(65 + i)
+                    // Kunci jawaban disimpan guru sebagai INDEKS ("0".."4"),
+                    // bukan huruf — jawaban harus dikirim dalam format yang sama
+                    // agar koreksiOtomatis() cocok dengan ujian yang sudah ada.
+                    // Untuk PG kompleks, beberapa indeks dipisah koma ("0,2").
+                    const nilai = String(i)
+                    const terpilih = String(answers[q.id] || "")
+                      .split(",")
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                    const dipilih = terpilih.includes(nilai)
 
-                  const pilih = () => {
-                    if (q.type !== "PG_KOMPLEKS") {
-                      setAnswers((p) => ({ ...p, [q.id]: nilai }))
-                      return
+                    const pilih = () => {
+                      if (timeLeft <= 0 || isSubmitting) return
+                      if (q.type !== "PG_KOMPLEKS") {
+                        setAnswers((p) => ({ ...p, [q.id]: nilai }))
+                        return
+                      }
+                      const set = new Set(terpilih)
+                      if (set.has(nilai)) set.delete(nilai)
+                      else set.add(nilai)
+                      setAnswers((p) => ({
+                        ...p,
+                        [q.id]: Array.from(set).join(","),
+                      }))
                     }
-                    const set = new Set(terpilih)
-                    if (set.has(nilai)) set.delete(nilai)
-                    else set.add(nilai)
-                    setAnswers((p) => ({
-                      ...p,
-                      [q.id]: Array.from(set).sort((a, b) => Number(a) - Number(b)).join(","),
-                    }))
-                  }
 
-                  return (
-                    <button
-                      key={i}
-                      onClick={pilih}
+                    return (
+                      <button
+                        key={i}
+                        disabled={timeLeft <= 0 || isSubmitting}
+                        onClick={pilih}
                       className={`text-left px-3 py-2.5 rounded-2xl border text-xs flex items-start gap-2.5 transition ${
                         dipilih
                           ? "bg-blue-50 border-blue-500 ring-1 ring-blue-300"

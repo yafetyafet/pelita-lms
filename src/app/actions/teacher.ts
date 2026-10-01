@@ -1759,6 +1759,24 @@ export async function addExamQuestion(input: {
   }
 }
 
+export async function deleteExamSubmission(submissionId: string): Promise<AksiHasil> {
+  try {
+    const session = await requireSession('TEACHER', 'ADMIN')
+
+    const sub = await prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      select: { examId: true }
+    })
+    if (!sub) return { error: 'Pengerjaan tidak ditemukan.' }
+    await examMilikSaya(session, sub.examId)
+
+    await prisma.examSubmission.delete({ where: { id: submissionId } })
+    return { success: true }
+  } catch (err) {
+    return gagal(err)
+  }
+}
+
 export async function deleteExamQuestion(
   questionId: string
 ): Promise<AksiHasil> {
