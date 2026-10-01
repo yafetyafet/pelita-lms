@@ -1028,20 +1028,24 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
             >
               Berikutnya <ChevronRight className="w-4 h-4" />
             </button>
-          ) : (
-            <button
-              onClick={() => handleFinishExam(false)}
-              disabled={isSubmitting}
-              className="flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              {isSubmitting ? "Mengirim..." : "Kumpulkan Jawaban"}
-            </button>
-          )}
+            ) : (
+              <button
+                onClick={() => {
+                  if (confirm("Apakah kamu yakin sudah selesai dan ingin mengumpulkan jawaban? Aksi ini tidak dapat dibatalkan.")) {
+                    handleFinishExam(false)
+                  }
+                }}
+                disabled={isSubmitting}
+                className="flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                {isSubmitting ? "Mengirim..." : "Kumpulkan Jawaban"}
+              </button>
+            )}
         </div>
 
         {tokenError && (
