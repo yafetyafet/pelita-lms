@@ -148,20 +148,16 @@ export default function AdminUjianPage() {
               Sistem akan merotasi token ini secara otomatis setiap 15 menit jika ada ujian CBT yang sedang aktif.
             </p>
           </div>
-          <p className="text-[11px] text-purple-200/90 mt-1">
-            Bagikan kode token ini ke pengawas ruang untuk dibuka di HP siswa sebelum ujian dimulai.
-          </p>
-        </div>
 
-        <button 
-          onClick={generateNewToken}
-          disabled={isGenerating || isLoading}
-          className="relative z-10 bg-white text-purple-900 hover:bg-purple-50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-md flex items-center gap-2 transition shrink-0 disabled:opacity-70"
-        >
-          {isGenerating ? <Loader2 className="w-4 h-4 text-purple-600 animate-spin" /> : <RefreshCw className="w-4 h-4 text-purple-600" />}
-          <span>Generate Token Baru</span>
-        </button>
-      </div>
+          <button 
+            onClick={generateNewToken}
+            disabled={isGenerating || isLoading}
+            className="relative z-10 bg-white text-purple-900 hover:bg-purple-50 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-md flex items-center gap-2 transition shrink-0 disabled:opacity-70"
+          >
+            {isGenerating ? <Loader2 className="w-4 h-4 text-purple-600 animate-spin" /> : <RefreshCw className="w-4 h-4 text-purple-600" />}
+            <span>Generate Token Baru</span>
+          </button>
+        </div>
 
       {/* === GURU BELUM MEMASUKKAN SOAL === */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
