@@ -64,21 +64,41 @@ export default function AdminDashboard() {
     { title: "Status Server", count: isLoading ? "..." : stats.database, sub: "Sinkronisasi Realtime", icon: Database, color: "from-slate-700 to-slate-900" },
   ]
 
-  const quickActions = [
-    { id: "sekolah", title: "Identitas Sekolah & Kop Surat", desc: "Kop & Tanda Tangan Laporan Cetak", icon: School },
-    { id: "users", title: "Manajemen Akun & Upload Massal", desc: "Input Satuan / Upload Sekaligus (Excel)", icon: Users },
-    { id: "broadcast", title: "Pengumuman Sekolah (Broadcast)", desc: "Kirim Pesan ke Semua HP", icon: Bell },
-    { id: "rombel", title: "Master Rombel & Wali Kelas", desc: "Atur Tingkat & Penetapan Wali Kelas", icon: School },
-    { id: "sesi", title: "Master Sesi & Jam Pelajaran", desc: "Atur Durasi & Shift Jam Ke-X", icon: Clock },
-    { id: "mapel", title: "Master Mapel & Pengampu", desc: "Data Mata Pelajaran & Relasi Guru", icon: BookMarked },
-    { id: "jadwal", title: "Plotting Jadwal Mandiri Guru", desc: "Guru Mapel Menginput Jadwal Sendiri", icon: Calendar },
-    { id: "attendance-settings", title: "Aturan Presensi (GPS)", desc: "Set Titik Koordinat & Radius Absen", icon: MapPin },
-    { id: "ujian", title: "Jadwal & Token Ujian PTS CBT", desc: "Pengaturan Token & Ruang CBT", icon: BookOpen },
-    { id: "pelanggaran", title: "Kesiswaan & Catatan Pelanggaran", desc: "Atur Jenis, Poin & Tindak Lanjut", icon: AlertTriangle },
-    { id: "library", title: "Perpustakaan Digital", desc: "Isi Koleksi Buku yang Dibaca Siswa", icon: BookMarked },
-    { id: "pkl", title: "PKL / Prakerin & Mitra DUDI", desc: "Mitra Industri & Penempatan Siswa", icon: Building2 },
-    { id: "ai", title: "Konfigurasi AI (Modul Ajar)", desc: "Set Endpoint, Model & API Key AI", icon: Sparkles },
-    { id: "backup", title: "Backup Database Supabase", desc: "Sinkronisasi & Snapshot Data", icon: Database },
+  const adminCategories = [
+    {
+      category: "Akademik & Pengguna",
+      items: [
+        { id: "sekolah", title: "Identitas Sekolah & Kop Surat", desc: "Kop & Tanda Tangan Laporan Cetak", icon: School },
+        { id: "users", title: "Manajemen Akun & Upload Massal", desc: "Input Satuan / Upload Sekaligus (Excel)", icon: Users },
+        { id: "rombel", title: "Master Rombel & Wali Kelas", desc: "Atur Tingkat & Penetapan Wali Kelas", icon: School },
+        { id: "mapel", title: "Master Mapel & Pengampu", desc: "Data Mata Pelajaran & Relasi Guru", icon: BookMarked },
+      ]
+    },
+    {
+      category: "Jadwal & Kehadiran",
+      items: [
+        { id: "sesi", title: "Master Sesi & Jam Pelajaran", desc: "Atur Durasi & Shift Jam Ke-X", icon: Clock },
+        { id: "jadwal", title: "Plotting Jadwal Mandiri Guru", desc: "Guru Mapel Menginput Jadwal Sendiri", icon: Calendar },
+        { id: "attendance-settings", title: "Aturan Presensi (GPS)", desc: "Set Titik Koordinat & Radius Absen", icon: MapPin },
+      ]
+    },
+    {
+      category: "Kegiatan Siswa",
+      items: [
+        { id: "ujian", title: "Jadwal & Token Ujian PTS CBT", desc: "Pengaturan Token & Ruang CBT", icon: BookOpen },
+        { id: "pelanggaran", title: "Kesiswaan & Catatan Pelanggaran", desc: "Atur Jenis, Poin & Tindak Lanjut", icon: AlertTriangle },
+        { id: "pkl", title: "PKL / Prakerin & Mitra DUDI", desc: "Mitra Industri & Penempatan Siswa", icon: Building2 },
+      ]
+    },
+    {
+      category: "Sistem & Integrasi",
+      items: [
+        { id: "broadcast", title: "Pengumuman Sekolah (Broadcast)", desc: "Kirim Pesan ke Semua HP", icon: Bell },
+        { id: "library", title: "Perpustakaan Digital", desc: "Isi Koleksi Buku yang Dibaca Siswa", icon: BookMarked },
+        { id: "ai", title: "Konfigurasi AI (Modul Ajar)", desc: "Set Endpoint, Model & API Key AI", icon: Sparkles },
+        { id: "backup", title: "Backup Database Supabase", desc: "Sinkronisasi & Snapshot Data", icon: Database },
+      ]
+    }
   ]
 
   return (
@@ -206,34 +226,38 @@ export default function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Grid Manajemen Master Data */}
-      <div className="mt-1">
-        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 mb-3 px-1">
-          <Sparkles className="w-4 h-4 text-blue-600 fill-blue-600" />
-          Menu Konfigurasi Master Data
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {quickActions.map((action) => {
-            const Icon = action.icon
-            return (
-              <Link
-                key={action.id}
-                href={`/admin/${action.id}`}
-                className="group bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm flex items-center gap-3 hover:border-blue-300 hover:shadow-md transition-all text-left w-full"
-              >
-                <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{action.title}</h4>
-                  <p className="text-[10px] text-slate-500 truncate mt-0.5">{action.desc}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
-              </Link>
-            )
-          })}
-        </div>
+      {/* Grid Manajemen Master Data per Kategori */}
+      <div className="mt-1 flex flex-col gap-6">
+        {adminCategories.map((group, groupIdx) => (
+          <div key={groupIdx} className="flex flex-col gap-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 px-1 border-b border-slate-200 pb-2">
+              <Sparkles className="w-4 h-4 text-blue-600 fill-blue-600" />
+              {group.category}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {group.items.map((action) => {
+                const Icon = action.icon
+                return (
+                  <Link
+                    key={action.id}
+                    href={`/admin/${action.id}`}
+                    className="group bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm flex items-center gap-3 hover:border-blue-300 hover:shadow-md transition-all text-left w-full"
+                  >
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{action.title}</h4>
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5">{action.desc}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       
       {/* Bottom padding for mobile scroll */}
