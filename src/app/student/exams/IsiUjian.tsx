@@ -588,7 +588,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
     const terjawab = Object.keys(answers).filter((k) => adaIsi(answers[k] || "")).length
 
     return (
-      <div className="flex flex-col gap-3 p-4 pb-24">
+      <div className="flex flex-col gap-3 p-4 pb-24 notranslate" translate="no">
         {/* Penghalang layar terbagi.
             Ditaruh sebagai lapisan tetap yang menutupi seluruh layar dan
             diletakkan SEBELUM isi soal: selama ini tampil, soal benar-benar
