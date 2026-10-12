@@ -20,6 +20,62 @@ import {
 } from "@/app/actions/sekolah"
 import { KopSurat, BlokTandaTangan } from "@/components/cetak/KopSurat"
 
+/**
+ * Satu isian tautan logo beserta pratinjaunya.
+ *
+ * Pratinjau ada supaya tautan yang salah ketahuan di sini - bukan setelah
+ * laporan dicetak dan kopnya ternyata kosong. Status "gagal dimuat"
+ * dibedakan dari "belum diisi" karena penyebab dan tindakannya berbeda.
+ */
+function IsianLogo({
+  label,
+  keterangan,
+  nilai,
+  onChange,
+}: {
+  label: string
+  keterangan: string
+  nilai: string
+  onChange: (v: string) => void
+}) {
+  const [gagal, setGagal] = useState(false)
+
+  return (
+    <label className="flex flex-col gap-1.5 p-2.5 rounded-2xl bg-slate-50 border border-slate-200">
+      <span className="text-[10px] font-bold text-slate-700">{label}</span>
+      <span className="text-[9px] text-slate-500 -mt-1">{keterangan}</span>
+
+      <div className="h-20 flex items-center justify-center rounded-xl bg-white border border-dashed border-slate-300 overflow-hidden">
+        {!nilai ? (
+          <span className="text-[9px] text-slate-400">Belum diisi</span>
+        ) : gagal ? (
+          <span className="text-[9px] text-rose-600 text-center px-2 leading-tight">
+            Tautan tidak bisa dimuat
+          </span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={nilai}
+            alt=""
+            className="max-h-[4.5rem] max-w-full object-contain"
+            onError={() => setGagal(true)}
+          />
+        )}
+      </div>
+
+      <input
+        value={nilai}
+        onChange={(e) => {
+          setGagal(false)
+          onChange(e.target.value)
+        }}
+        placeholder="https://..."
+        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px]"
+      />
+    </label>
+  )
+}
+
 export default function AdminSekolahPage() {
   const [form, setForm] = useState<ProfilSekolah | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -159,21 +215,35 @@ export default function AdminSekolahPage() {
         </div>
         <Field k="website" label="Website" placeholder="www..." />
 
-        <label className="flex flex-col gap-1">
+        {/* Dua logo, sesuai tata letak kop surat sekolah negeri: lambang
+            pemerintah/yayasan di kiri, lambang sekolah di kanan. */}
+        <div className="flex flex-col gap-2">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <ImageIcon className="w-3 h-3" /> Tautan logo sekolah
+            <ImageIcon className="w-3 h-3" /> Logo kop surat
           </span>
-          <input
-            value={form.logoUrl}
-            onChange={(e) => set("logoUrl", e.target.value)}
-            placeholder="https://... (png/jpg, latar transparan lebih baik)"
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <IsianLogo
+              label="Logo kiri"
+              keterangan="Lambang pemerintah / yayasan"
+              nilai={form.logoUrl}
+              onChange={(v) => set("logoUrl", v)}
+            />
+            <IsianLogo
+              label="Logo kanan"
+              keterangan="Lambang sekolah"
+              nilai={form.logoKananUrl}
+              onChange={(v) => set("logoKananUrl", v)}
+            />
+          </div>
+
           <span className="text-[10px] text-slate-500 leading-relaxed">
-            Harus berupa tautan yang bisa dibuka publik — unggah dulu ke Drive
-            atau layanan gambar. Unggah berkas langsung belum didukung.
+            Tautannya harus bisa dibuka publik. Untuk Google Drive, pakai
+            tautan berkas (bukan folder) dan setel aksesnya ke &quot;Siapa saja
+            yang memiliki link&quot; — tautannya akan disesuaikan otomatis.
+            Unggah berkas langsung belum didukung.
           </span>
-        </label>
+        </div>
       </div>
 
       {/* Kepala sekolah & periode */}

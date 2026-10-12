@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -54,7 +54,18 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: Awaited<ReturnType<typeof getTodayAttendance>> } }) {
   const [loading, setLoading] = useState(false)
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  // Selain lat/lng, sinyal mentah lain ikut disimpan dan dikirim: server
+  // memakainya untuk menilai keaslian lokasi (GPS palsu umumnya tidak
+  // melaporkan ketinggian dan memberi akurasi yang terlalu rapi).
+  const [currentCoords, setCurrentCoords] = useState<{
+    lat: number
+    lng: number
+    accuracy: number
+    altitude: number | null
+    speed: number | null
+    heading: number | null
+    timestamp: number
+  } | null>(null)
   const [distance, setDistance] = useState<number | null>(null)
   const [gedungTerdekat, setGedungTerdekat] = useState<Lokasi | null>(null)
   const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null)
@@ -68,6 +79,12 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
   const [attended, setAttended] = useState(Boolean(p0))
   const [attendedTime, setAttendedTime] = useState<string | null>(
     p0 ? jamLabelWIB(p0.createdAt) : null
+  )
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(
+    p0 ? p0.status : null
+  )
+  const [recordedBy, setRecordedBy] = useState<string | null>(
+    p0 ? p0.recordedById : null
   )
   const [checkedOut, setCheckedOut] = useState(Boolean(p0?.checkOutTime))
   const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(
@@ -93,8 +110,16 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords
-        setCurrentCoords({ lat: latitude, lng: longitude, accuracy })
+        const { latitude, longitude, accuracy, altitude, speed, heading } = pos.coords
+        setCurrentCoords({
+          lat: latitude,
+          lng: longitude,
+          accuracy,
+          altitude: altitude ?? null,
+          speed: speed ?? null,
+          heading: heading ?? null,
+          timestamp: pos.timestamp,
+        })
 
         // Kalau admin belum mengisi titik sekolah, tidak ada yang bisa
         // dibandingkan. Presensi tetap boleh dikirim — server yang menandainya
@@ -148,7 +173,13 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
     setIsSubmitting(true)
     
     if (!attended) {
-      const res = await submitAttendance(currentCoords.lat, currentCoords.lng)
+      const res = await submitAttendance(currentCoords.lat, currentCoords.lng, {
+        accuracy: currentCoords.accuracy,
+        altitude: currentCoords.altitude,
+        speed: currentCoords.speed,
+        heading: currentCoords.heading,
+        timestamp: currentCoords.timestamp,
+      })
       if (res.success) {
         const now = new Date()
         setAttended(true)
@@ -157,7 +188,13 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
         alert(res.error || "Gagal melakukan presensi")
       }
     } else if (!checkedOut) {
-      const res = await submitCheckOut(currentCoords.lat, currentCoords.lng)
+      const res = await submitCheckOut(currentCoords.lat, currentCoords.lng, {
+        accuracy: currentCoords.accuracy,
+        altitude: currentCoords.altitude,
+        speed: currentCoords.speed,
+        heading: currentCoords.heading,
+        timestamp: currentCoords.timestamp,
+      })
       if (res.success) {
         const now = new Date()
         setCheckedOut(true)
@@ -292,7 +329,11 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
           ) : (
             <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Masuk Berhasil: {attendedTime}</span>
+              <span>
+                {recordedBy
+                  ? `Status: ${attendanceStatus?.toUpperCase()} (Guru)`
+                  : `Masuk Berhasil: ${attendedTime}`}
+              </span>
             </div>
           )}
 

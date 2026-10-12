@@ -48,6 +48,12 @@ export function BerandaSiswa({ awal }: { awal: DataBerandaSiswa | null }) {
   const [attendanceTime, setAttendanceTime] = useState<string | null>(
     presensiAwal ? jam(presensiAwal.createdAt) : null
   )
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(
+    presensiAwal ? presensiAwal.status : null
+  )
+  const [recordedBy, setRecordedBy] = useState<string | null>(
+    presensiAwal ? presensiAwal.recordedById : null
+  )
   const [checkedOut, setCheckedOut] = useState(Boolean(presensiAwal?.checkOutTime))
   const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(
     presensiAwal?.checkOutTime ? jam(presensiAwal.checkOutTime) : null
@@ -317,7 +323,11 @@ export function BerandaSiswa({ awal }: { awal: DataBerandaSiswa | null }) {
             ) : (
               <div className="flex-1 py-2.5 px-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 font-semibold text-xs flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                <span>Masuk: {attendanceTime}</span>
+                <span>
+                  {recordedBy
+                    ? `Status: ${attendanceStatus?.toUpperCase()} (Guru)`
+                    : `Masuk: ${attendanceTime}`}
+                </span>
               </div>
             )}
 

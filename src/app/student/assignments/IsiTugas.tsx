@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Pencil,
 } from "lucide-react"
+import { TampilanDeskripsiTugas } from "@/components/TampilanDeskripsiTugas"
 
 type Submission = {
   score: number | null
@@ -195,9 +196,7 @@ export function IsiTugas({ awal }: { awal: Awaited<ReturnType<typeof getStudentA
                 </div>
 
                 {a.description && (
-                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    {a.description}
-                  </p>
+                  <TampilanDeskripsiTugas description={a.description} />
                 )}
 
                 {a.dueDate && (
@@ -230,15 +229,18 @@ export function IsiTugas({ awal }: { awal: Awaited<ReturnType<typeof getStudentA
                       </p>
                     )}
                     {sub.fileUrl && (
-                      <a
-                        href={sub.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 break-all"
-                      >
-                        <Paperclip className="w-3 h-3 shrink-0" />
-                        {sub.fileName || sub.fileUrl}
-                      </a>
+                      <div className="flex flex-col gap-1.5">
+                        <a
+                          href={sub.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 break-all"
+                        >
+                          <Paperclip className="w-3 h-3 shrink-0" />
+                          {sub.fileName || sub.fileUrl}
+                        </a>
+                        <TampilanDeskripsiTugas description={sub.fileUrl} />
+                      </div>
                     )}
                     {sub.submittedAt && (
                       <span className="text-[10px] text-slate-400">

@@ -19,6 +19,7 @@ import {
   deleteExamQuestion,
 } from "@/app/actions/teacher"
 import { normalisasiUrlGambar, peringatanUrlGambar } from "@/lib/logic/gambar-url"
+import { ImageWithZoom } from "@/components/ImageWithZoom"
 
 /**
  * Penyunting soal untuk ujian yang sudah dibuat.
@@ -547,15 +548,12 @@ function FormSoal({
           {peringatanUrlGambar(nilai.imageUrl)}
         </p>
       )}
-      {nilai.imageUrl && !peringatanUrlGambar(nilai.imageUrl) && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={normalisasiUrlGambar(nilai.imageUrl)}
-          alt=""
-          className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
-        />
-      )}
+        {nilai.imageUrl && !peringatanUrlGambar(nilai.imageUrl) && (
+          <ImageWithZoom
+            src={normalisasiUrlGambar(nilai.imageUrl)}
+            className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
+          />
+        )}
 
       {!esai && (
         <div className="flex flex-col gap-1">

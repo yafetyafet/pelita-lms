@@ -1,7 +1,10 @@
 'use server'
 
+import { randomUUID } from 'node:crypto'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+import { labelPerangkat } from '@/lib/logic/perangkat'
 import type { AksiHasil } from '@/lib/types/aksi'
 import type { Role } from '@prisma/client'
 import {
@@ -13,7 +16,17 @@ import {
 } from '@/lib/auth/session'
 import { hashPassword, needsUpgrade, verifyPassword } from '@/lib/auth/password'
 
-export async function login(username: string, password?: string): Promise<AksiHasil<{ role: Role; redirectTo: string; mustChangePassword: boolean }>> {
+export async function login(
+  username: string,
+  password?: string
+): Promise<
+  AksiHasil<{
+    role: Role
+    redirectTo: string
+    mustChangePassword: boolean
+    perangkatSebelumnya: string | null
+  }>
+> {
   try {
     const uname = String(username || '').trim()
     if (!uname) return { error: 'Username harus diisi.' }
@@ -34,10 +47,27 @@ export async function login(username: string, password?: string): Promise<AksiHa
       return { error: 'Akun ini dinonaktifkan. Hubungi administrator.' }
     }
 
+    // Satu akun = satu perangkat. Login baru SELALU menang: sesi lama
+    // langsung batal begitu `sesiId` di sini tertimpa. Dipilih begini - bukan
+    // menolak login kedua - supaya tidak ada siswa yang terkunci di luar
+    // akunnya sendiri gara-gara ponsel lama hilang atau lupa keluar.
+    const sid = randomUUID()
+    const perangkat = labelPerangkat((await headers()).get('user-agent'))
+    const sesiSebelumnya = user.sesiPerangkat
+
     // Akun warisan masih menyimpan kata sandi plaintext — tulis ulang
     // sebagai hash begitu kata sandinya terbukti benar.
-    const patch: { lastLoginAt: Date; password?: string } = {
+    const patch: {
+      lastLoginAt: Date
+      password?: string
+      sesiId: string
+      sesiPerangkat: string
+      sesiSejak: Date
+    } = {
       lastLoginAt: new Date(),
+      sesiId: sid,
+      sesiPerangkat: perangkat,
+      sesiSejak: new Date(),
     }
     if (needsUpgrade(user.password)) {
       patch.password = await hashPassword(password)
@@ -48,6 +78,7 @@ export async function login(username: string, password?: string): Promise<AksiHa
       uid: user.id,
       role: user.role,
       name: user.name,
+      sid,
     })
 
     return {
@@ -55,6 +86,11 @@ export async function login(username: string, password?: string): Promise<AksiHa
       role: user.role,
       redirectTo: homeForRole(user.role),
       mustChangePassword: user.mustChangePassword,
+      // Diberitahukan supaya pemilik akun sadar kalau akunnya ternyata masih
+      // aktif di tempat lain - ini cara paling awal seorang siswa tahu
+      // sandinya dipakai orang.
+      perangkatSebelumnya:
+        user.sesiId && sesiSebelumnya ? sesiSebelumnya : null,
     }
   } catch (err: any) {
     console.error('Login Error:', err)
@@ -63,8 +99,43 @@ export async function login(username: string, password?: string): Promise<AksiHa
 }
 
 export async function logout() {
+  // Lepaskan juga kunci perangkat, bukan hanya cookie-nya. Kalau `sesiId`
+  // dibiarkan, siswa yang keluar dengan benar di lab lalu masuk lagi dari
+  // ponselnya akan melihat peringatan "dipakai di perangkat lain" yang
+  // sebetulnya menunjuk dirinya sendiri.
+  const session = await getSession()
+  if (session) {
+    await prisma.user
+      .updateMany({
+        where: { id: session.uid, sesiId: session.sid ?? undefined },
+        data: { sesiId: null, sesiPerangkat: null, sesiSejak: null },
+      })
+      // Keluar tidak boleh gagal gara-gara basis data sedang bermasalah.
+      .catch(() => {})
+  }
   await clearSessionCookie()
   redirect('/login')
+}
+
+/**
+ * Lepaskan kunci perangkat sebuah akun (admin).
+ *
+ * Diperlukan untuk kasus nyata: ponsel siswa hilang/rusak sementara sesinya
+ * masih tercatat aktif, atau siswa memakai perangkat pinjaman lalu tidak
+ * bisa masuk dari perangkatnya sendiri. Tanpa ini, satu-satunya jalan keluar
+ * adalah menunggu sesi 7 hari kedaluwarsa.
+ */
+export async function resetPerangkat(userId: string): Promise<AksiHasil> {
+  try {
+    await requireSession('ADMIN')
+    await prisma.user.update({
+      where: { id: userId },
+      data: { sesiId: null, sesiPerangkat: null, sesiSejak: null },
+    })
+    return { success: true }
+  } catch (err: any) {
+    return { error: err?.message || 'Gagal melepas perangkat.' }
+  }
 }
 
 export async function getCurrentUser() {
