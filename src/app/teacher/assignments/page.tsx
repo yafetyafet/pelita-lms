@@ -24,6 +24,7 @@ import {
   updateAssignment,
   deleteAssignment,
 } from "@/app/actions/teacher"
+import { TampilanDeskripsiTugas } from "@/components/TampilanDeskripsiTugas"
 
 /** Ubah Date/ISO ke nilai yang diterima <input type="datetime-local">. */
 function toLocalInput(value: string | Date | null | undefined): string {
@@ -324,6 +325,15 @@ export default function TeacherAssignmentsPage() {
             />
           </label>
 
+          {form.description && (
+            <div className="flex flex-col gap-1.5 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Pratinjau Berkas / Tampilan Siswa:
+              </span>
+              <TampilanDeskripsiTugas description={form.description} />
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -445,6 +455,12 @@ export default function TeacherAssignmentsPage() {
                         {t.maxScore}
                         {!t.allowLateSubmission && " · tanpa susulan"}
                       </p>
+
+                      {t.description && (
+                        <div className="mt-2.5">
+                          <TampilanDeskripsiTugas description={t.description} />
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-0.5 shrink-0">
