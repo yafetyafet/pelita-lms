@@ -1,5 +1,6 @@
 "use client"
 
+import { RichTextView } from "@/components/RichTextEditor"
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
@@ -588,7 +589,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
     const terjawab = Object.keys(answers).filter((k) => adaIsi(answers[k] || "")).length
 
     return (
-      <div className="flex flex-col gap-3 p-4 pb-24 notranslate" translate="no">
+      <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto notranslate" translate="no">
         {/* Penghalang layar terbagi.
             Ditaruh sebagai lapisan tetap yang menutupi seluruh layar dan
             diletakkan SEBELUM isi soal: selama ini tampil, soal benar-benar
@@ -708,7 +709,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
         )}
 
         {/* Bilah waktu */}
-        <div className="sticky top-0 z-30 -mx-4 -mt-4 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between">
+        <div className="sticky top-0 z-30 -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between gap-3 shadow-xs">
           <div className="min-w-0">
             <h2 className="text-xs font-bold text-slate-900 truncate">{paper.title}</h2>
             <p className="text-[10px] text-slate-500">
@@ -748,14 +749,19 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
         )}
 
         {/* Navigasi nomor soal */}
-        <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm">
-          <div className="flex items-center gap-1.5 mb-2">
-            <ListChecks className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Navigasi Soal
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 shadow-sm min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <ListChecks className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Navigasi Soal
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold text-slate-500">
+              {terjawab}/{questions.length} terjawab
             </span>
           </div>
-          <div className="grid grid-cols-8 gap-1.5">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {questions.map((s, i) => {
               const sudah = adaIsi(String(answers[s.id] || ""))
               const ragu = doubtful[s.id]
@@ -763,14 +769,14 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                 <button
                   key={s.id}
                   onClick={() => setCurrentIdx(i)}
-                  className={`aspect-square rounded-lg text-[11px] font-bold transition ${
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-[11px] sm:text-xs font-bold transition flex items-center justify-center shrink-0 ${
                     i === currentIdx
-                      ? "bg-blue-600 text-white ring-2 ring-blue-300"
+                      ? "bg-blue-600 text-white ring-2 ring-blue-300 shadow-xs"
                       : ragu
                         ? "bg-amber-100 text-amber-800 border border-amber-300"
                         : sudah
                           ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                          : "bg-slate-100 text-slate-500 border border-slate-200"
+                          : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
                   }`}
                 >
                   {i + 1}
@@ -782,9 +788,9 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
 
         {/* Soal */}
         {q && (
-          <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md">
+          <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col gap-3 sm:gap-4 min-w-0">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] sm:text-xs font-bold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-lg">
                 Soal {currentIdx + 1} •{" "}
                 {q.type === "ESAI"
                   ? "Esai"
@@ -799,10 +805,10 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                 onClick={() =>
                   setDoubtful((p) => ({ ...p, [q.id]: !p[q.id] }))
                 }
-                className={`text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 transition ${
+                className={`text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
                   doubtful[q.id]
                     ? "bg-amber-500 text-white"
-                    : "bg-slate-100 text-slate-600"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
                 <Flag className="w-3 h-3" />
@@ -810,9 +816,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
               </button>
             </div>
 
-            <p className="text-sm text-slate-900 leading-relaxed whitespace-pre-wrap">
-              {q.question}
-            </p>
+            <RichTextView html={q.question} className="text-sm sm:text-base text-slate-900 leading-relaxed [overflow-wrap:anywhere]" />
 
             {q.imageUrl && (
               // Gambar soal yang bisa di-tap untuk zoom. Siswa mungkin perlu
@@ -878,21 +882,21 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                   return (
                     <div
                       key={i}
-                      className={`rounded-2xl border px-3 py-2.5 flex flex-col gap-2 transition ${
+                      className={`rounded-2xl border p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-4 transition min-w-0 ${
                         nilaiIni
                           ? "bg-blue-50/60 border-blue-300"
                           : "bg-white border-slate-200"
                       }`}
                     >
-                      <div className="flex items-start gap-2.5">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
                         <span className="w-6 h-6 shrink-0 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[11px]">
                           {i + 1}
                         </span>
-                        <span className="text-xs text-slate-800 leading-relaxed pt-0.5">
+                        <span className="text-xs sm:text-sm text-slate-800 leading-relaxed pt-0.5 break-words min-w-0 flex-1">
                           {pernyataan}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 pl-8">
+                      <div className="grid grid-cols-2 gap-2 w-full sm:w-48 shrink-0">
                         {(["B", "S"] as const).map((v) => {
                           const aktif = nilaiIni === v
                           return (
@@ -976,15 +980,15 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                         key={i}
                         disabled={timeLeft <= 0 || isSubmitting}
                         onClick={pilih}
-                      className={`text-left px-3 py-2.5 rounded-2xl border text-xs flex items-start gap-2.5 transition ${
+                      className={`text-left px-3.5 py-3 rounded-2xl border text-xs sm:text-sm flex items-start gap-3 transition min-w-0 ${
                         dipilih
-                          ? "bg-blue-50 border-blue-500 ring-1 ring-blue-300"
+                          ? "bg-blue-50 border-blue-500 ring-1 ring-blue-300 shadow-2xs"
                           : "bg-white border-slate-200 hover:bg-slate-50"
                       }`}
                     >
                       <span
-                        className={`w-6 h-6 shrink-0 flex items-center justify-center font-bold text-[11px] ${
-                          q.type === "PG_KOMPLEKS" ? "rounded-md border-2" : "rounded-lg"
+                        className={`w-7 h-7 shrink-0 flex items-center justify-center font-bold text-xs ${
+                          q.type === "PG_KOMPLEKS" ? "rounded-lg border-2" : "rounded-xl"
                         } ${
                           dipilih
                             ? "bg-blue-600 text-white border-blue-600"
@@ -993,7 +997,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
                       >
                         {huruf}
                       </span>
-                      <span className="text-slate-800 leading-relaxed pt-0.5">
+                      <span className="text-slate-800 leading-relaxed pt-0.5 break-words min-w-0 flex-1">
                         {opt}
                       </span>
                     </button>
@@ -1060,7 +1064,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
   // ---------- Layar token ----------
   if (selected) {
     return (
-      <div className="flex flex-col gap-4 p-4">
+      <div className="flex flex-col gap-4 p-4 md:p-6 w-full min-w-0 max-w-xl mx-auto">
         <div className="flex items-center gap-2.5 pt-1">
           <button
             onClick={() => {
@@ -1154,7 +1158,7 @@ export function IsiUjian({ awal }: { awal: Awaited<ReturnType<typeof getStudentE
 
   // ---------- Daftar ujian ----------
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       <div className="flex items-center gap-2.5 pt-1">
         <Link
           href="/student"

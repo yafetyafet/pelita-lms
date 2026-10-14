@@ -260,7 +260,7 @@ export default function TeacherAssignmentsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-28 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white shadow-xl text-xs font-bold flex items-center gap-2 animate-bounce">
           <CheckCircle2 className="w-4 h-4" />

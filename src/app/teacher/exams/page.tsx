@@ -1,5 +1,6 @@
 "use client"
 
+import { RichTextEditor } from "@/components/RichTextEditor"
 import React, { useState, useEffect } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
@@ -596,7 +597,7 @@ export default function TeacherExamsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2.5">
@@ -1031,12 +1032,11 @@ export default function TeacherExamsPage() {
                       </div>
                     </div>
 
-                    <textarea
-                      rows={2}
+                    <RichTextEditor
                       value={q.question}
-                      onChange={e => updateQuestion(idx, "question", e.target.value)}
+                      onChange={html => updateQuestion(idx, "question", html)}
                       placeholder="Tulis pertanyaan..."
-                      className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] resize-none focus:outline-none"
+                      minHeight={80}
                     />
 
                     {/* Image URL */}

@@ -72,8 +72,8 @@ ${data.catatan ? `- Catatan Tambahan/Fokus: ${data.catatan}` : ''}`
 
     if (!res.ok) {
       const errBody = await res.text()
-      console.error("AI Error:", errBody)
-      return { error: `Gagal menghubungi AI. Status HTTP ${res.status}` }
+      console.error("AI Error:", res.status, errBody)
+      return { error: `Gagal menghubungi AI. Status HTTP ${res.status}. ${errBody.substring(0, 100)}` }
     }
 
     const result = await res.json()

@@ -411,6 +411,9 @@ export async function resetUserPassword(id: string, newPassword?: string): Promi
       data: {
         password: await hashPassword(plain),
         mustChangePassword: true,
+        sesiId: null,
+        sesiPerangkat: null,
+        sesiSejak: null,
       },
     })
     return { success: true, password: plain }

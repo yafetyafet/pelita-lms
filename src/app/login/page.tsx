@@ -14,6 +14,7 @@ import {
   Timer,
   BookOpen,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react"
 
 /**
@@ -55,6 +56,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [catatan, setCatatan] = useState("")
+  const [perangkatAktif, setPerangkatAktif] = useState<string | null>(null)
+  const [bisaAmbilAlih, setBisaAmbilAlih] = useState(false)
 
   // Penjaga perangkat mengarahkan ke sini dengan ?alasan=perangkat-lain.
   // Tanpa keterangan, pengguna yang tiba-tiba terlempar keluar akan mengira
@@ -68,8 +71,8 @@ export default function LoginPage() {
     }
   }, [])
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = async (e?: React.FormEvent, force = false) => {
+    if (e) e.preventDefault()
     if (!identifier || !password) {
       setError("Username dan Password harus diisi")
       return
@@ -77,11 +80,19 @@ export default function LoginPage() {
 
     setIsLoading(true)
     setError("")
+    setPerangkatAktif(null)
+    setBisaAmbilAlih(false)
 
     try {
-      const res = await login(identifier, password)
+      const res = await login(identifier, password, { force })
       if (res?.error) {
         setError(res.error)
+        if (res.perangkatAktif) {
+          setPerangkatAktif(res.perangkatAktif)
+        }
+        if (res.bisaAmbilAlih) {
+          setBisaAmbilAlih(true)
+        }
         setIsLoading(false)
         return
       }
@@ -195,22 +206,44 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+              <form onSubmit={(e) => handleLogin(e, false)} className="flex flex-col gap-4">
                 {catatan && !error && (
                   <div
                     role="status"
-                    className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center font-medium"
+                    className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left font-medium flex items-start gap-2.5"
                   >
-                    {catatan}
+                    <Smartphone className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <p className="font-bold text-amber-950 mb-0.5">Sesi Berpindah</p>
+                      <p>{catatan}</p>
+                    </div>
                   </div>
                 )}
 
                 {error && (
                   <div
                     role="alert"
-                    className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs text-center font-medium"
+                    className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs text-left font-medium flex flex-col gap-2"
                   >
-                    {error}
+                    <div className="flex items-start gap-2.5">
+                      <Smartphone className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 leading-relaxed">
+                        <p className="font-bold text-red-950 mb-0.5">
+                          {perangkatAktif ? "Akun Sedang Digunakan" : "Gagal Masuk"}
+                        </p>
+                        <p>{error}</p>
+                      </div>
+                    </div>
+                    {bisaAmbilAlih && (
+                      <button
+                        type="button"
+                        onClick={() => handleLogin(undefined, true)}
+                        disabled={isLoading}
+                        className="mt-1 w-full py-2.5 px-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        {isLoading ? "Memproses..." : "Ambil Alih Sesi (Khusus Admin)"}
+                      </button>
+                    )}
                   </div>
                 )}
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { RichTextView } from "@/components/RichTextEditor"
 import React, { useState, useEffect, use as useUnwrap } from "react"
 import { PemuatData } from "@/components/PemuatData"
 import Link from "next/link"
@@ -246,7 +247,7 @@ export default function ExamDetailPage({
   )
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white shadow-xl text-xs font-bold flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
@@ -662,9 +663,7 @@ export default function ExamDetailPage({
                               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                                 Esai {i + 1} • {q.points} poin
                               </p>
-                              <p className="text-xs text-slate-800 mt-1 font-semibold">
-                                {q.question}
-                              </p>
+                              <RichTextView html={q.question} className="text-xs text-slate-800 mt-1" />
                               <p className="text-xs text-slate-700 mt-2 whitespace-pre-wrap bg-white rounded-xl p-2.5 border border-slate-200">
                                 {s.parsedAnswers?.[q.id] || (
                                   <span className="italic text-slate-400">

@@ -217,7 +217,7 @@ export function BerandaGuru({ awal }: { awal: DataBerandaGuru | null }) {
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       {/* Teacher Profile Header */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-3">

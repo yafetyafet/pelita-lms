@@ -172,7 +172,7 @@ export function IsiTugas({
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-28 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-5 p-4 sm:p-6 lg:p-8 pb-28 w-full min-w-0 max-w-7xl mx-auto">
       {/* Toast Notifikasi */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white shadow-xl text-xs font-bold flex items-center gap-2 animate-bounce">
@@ -182,15 +182,15 @@ export function IsiTugas({
       )}
 
       {/* Header Halaman */}
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href="/student"
             className="p-2.5 rounded-2xl bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50 transition shadow-sm"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-base font-bold text-slate-900 leading-tight flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-emerald-600" />
               Tugas &amp; Kuis Siswa
@@ -210,17 +210,20 @@ export function IsiTugas({
       </div>
 
       {/* Tab Navigasi Status */}
-      <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200/80 rounded-2xl text-[11px] font-bold">
+      <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200/80 rounded-2xl text-[10px] sm:text-xs font-bold w-full min-w-0">
         <button
           type="button"
           onClick={() => setTabAktif("belum")}
-          className={`py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-w-0 py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-center ${
             tabAktif === "belum"
               ? "bg-white text-rose-600 shadow-sm"
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          <span>Belum Dikerjakan</span>
+          <span className="truncate max-w-full">
+            <span className="inline sm:hidden">Belum</span>
+            <span className="hidden sm:inline">Belum Dikerjakan</span>
+          </span>
           {stats.belum > 0 && (
             <span
               className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
@@ -237,13 +240,16 @@ export function IsiTugas({
         <button
           type="button"
           onClick={() => setTabAktif("menunggu")}
-          className={`py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-w-0 py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-center ${
             tabAktif === "menunggu"
               ? "bg-white text-amber-700 shadow-sm"
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          <span>Menunggu Nilai</span>
+          <span className="truncate max-w-full">
+            <span className="inline sm:hidden">Menunggu</span>
+            <span className="hidden sm:inline">Menunggu Nilai</span>
+          </span>
           {stats.menunggu > 0 && (
             <span
               className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
@@ -260,13 +266,16 @@ export function IsiTugas({
         <button
           type="button"
           onClick={() => setTabAktif("selesai")}
-          className={`py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-w-0 py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-center ${
             tabAktif === "selesai"
               ? "bg-white text-emerald-700 shadow-sm"
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          <span>Sudah Dinilai</span>
+          <span className="truncate max-w-full">
+            <span className="inline sm:hidden">Dinilai</span>
+            <span className="hidden sm:inline">Sudah Dinilai</span>
+          </span>
           {stats.selesai > 0 && (
             <span
               className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
@@ -283,20 +292,23 @@ export function IsiTugas({
         <button
           type="button"
           onClick={() => setTabAktif("semua")}
-          className={`py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-w-0 py-2 px-1 rounded-xl transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-center ${
             tabAktif === "semua"
               ? "bg-white text-slate-900 shadow-sm"
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          <span>Semua Tugas</span>
+          <span className="truncate max-w-full">
+            <span className="inline sm:hidden">Semua</span>
+            <span className="hidden sm:inline">Semua Tugas</span>
+          </span>
           <span className="text-[9px] opacity-75 font-normal">({stats.total})</span>
         </button>
       </div>
 
       {/* Filter Mata Pelajaran & Pencarian */}
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar min-w-0">
           <button
             type="button"
             onClick={() => setMapelFilter("semua")}
@@ -324,7 +336,7 @@ export function IsiTugas({
           ))}
         </div>
 
-        <div className="relative shrink-0 sm:w-60">
+        <div className="relative w-full sm:w-60 shrink-0">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -375,7 +387,7 @@ export function IsiTugas({
             return (
               <div
                 key={a.id}
-                className={`bg-white rounded-3xl p-5 border shadow-sm flex flex-col gap-3 transition-all ${
+                className={`bg-white rounded-3xl p-4 sm:p-5 border shadow-sm flex flex-col gap-3 min-w-0 transition-all ${
                   belum
                     ? "border-amber-300 ring-2 ring-amber-100/60"
                     : "border-slate-200/80"
@@ -399,7 +411,7 @@ export function IsiTugas({
                       </span>
                     </div>
 
-                    <h3 className="font-bold text-slate-900 mt-1 text-base leading-snug">
+                    <h3 className="font-bold text-slate-900 mt-1 text-base leading-snug break-words">
                       {a.title}
                     </h3>
                     <p className="text-[11px] text-slate-500">
@@ -436,7 +448,7 @@ export function IsiTugas({
 
                 {/* Tanggal Batas Waktu */}
                 {a.dueDate && (
-                  <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
                     <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>
                       Batas Pengumpulan:{" "}
@@ -486,7 +498,7 @@ export function IsiTugas({
                 {/* Riwayat Jawaban Siswa jika sudah pernah mengumpulkan */}
                 {sub && (sub.answerText || sub.fileUrl) && openId !== a.id && (
                   <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 flex flex-col gap-2 mt-1">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         Jawaban yang Sudah Kamu Kumpulkan
@@ -504,7 +516,7 @@ export function IsiTugas({
                     </div>
 
                     {sub.answerText && (
-                      <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">
                         {sub.answerText}
                       </div>
                     )}
@@ -517,7 +529,7 @@ export function IsiTugas({
                           rel="noreferrer"
                           className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 flex items-center justify-between gap-2 transition"
                         >
-                          <span className="flex items-center gap-2 truncate">
+                          <span className="flex items-center gap-2 truncate min-w-0">
                             <Paperclip className="w-3.5 h-3.5 shrink-0 text-blue-600" />
                             {sub.fileName || "Tautan Berkas Tugas Anda"}
                           </span>
@@ -532,7 +544,7 @@ export function IsiTugas({
                 {/* Form Pengerjaan / Pengumpulan */}
                 {openId === a.id ? (
                   <div className="flex flex-col gap-3 pt-3 border-t border-slate-200 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
                       <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                         <Send className="w-3.5 h-3.5 text-blue-600" />
                         Lembar Pengerjaan Tugas
@@ -543,11 +555,11 @@ export function IsiTugas({
                     </div>
 
                     {/* Pilihan Metode Pengumpulan */}
-                    <div className="grid grid-cols-3 gap-1 p-1 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+                    <div className="grid grid-cols-3 gap-1 p-1 bg-white border border-slate-200 rounded-xl text-[10px] sm:text-xs font-bold w-full min-w-0">
                       <button
                         type="button"
                         onClick={() => setModeInput("teks")}
-                        className={`py-1.5 px-2 rounded-lg transition ${
+                        className={`min-w-0 py-2 px-1 rounded-lg transition truncate text-center ${
                           modeInput === "teks"
                             ? "bg-blue-600 text-white shadow-xs"
                             : "text-slate-600 hover:text-slate-900"
@@ -558,18 +570,18 @@ export function IsiTugas({
                       <button
                         type="button"
                         onClick={() => setModeInput("berkas")}
-                        className={`py-1.5 px-2 rounded-lg transition ${
+                        className={`min-w-0 py-2 px-1 rounded-lg transition truncate text-center ${
                           modeInput === "berkas"
                             ? "bg-blue-600 text-white shadow-xs"
                             : "text-slate-600 hover:text-slate-900"
                         }`}
                       >
-                        📎 Tautan File/Drive
+                        📎 Tautan File
                       </button>
                       <button
                         type="button"
                         onClick={() => setModeInput("keduanya")}
-                        className={`py-1.5 px-2 rounded-lg transition ${
+                        className={`min-w-0 py-2 px-1 rounded-lg transition truncate text-center ${
                           modeInput === "keduanya"
                             ? "bg-blue-600 text-white shadow-xs"
                             : "text-slate-600 hover:text-slate-900"

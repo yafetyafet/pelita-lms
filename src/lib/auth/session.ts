@@ -80,11 +80,9 @@ export async function getSessionTerverifikasi(): Promise<SessionPayload | null> 
   // Akun terhapus atau dinonaktifkan setelah token terbit.
   if (!user || !user.isActive) return null
 
-  // Belum pernah login sejak fitur ini aktif: belum ada yang bisa dibandingkan,
-  // biarkan lewat agar tidak mengeluarkan semua orang sekaligus.
-  if (!user.sesiId) return session
-
-  if (!session.sid) return null
+  // Belum ada sesi aktif di basis data (misal: dilepas admin atau sudah logout):
+  // batalkan sesi agar perangkat lama tidak tetap bisa mengakses.
+  if (!user.sesiId || !session.sid) return null
   if (session.sid !== user.sesiId) throw new PerangkatLainError(user.sesiPerangkat)
 
   return session

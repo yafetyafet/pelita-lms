@@ -14,17 +14,21 @@ import {
   requireSession,
   setSessionCookie,
 } from '@/lib/auth/session'
+import { SESSION_MAX_AGE } from '@/lib/auth/token'
 import { hashPassword, needsUpgrade, verifyPassword } from '@/lib/auth/password'
 
 export async function login(
   username: string,
-  password?: string
+  password?: string,
+  opsi?: { force?: boolean }
 ): Promise<
   AksiHasil<{
     role: Role
     redirectTo: string
     mustChangePassword: boolean
     perangkatSebelumnya: string | null
+    perangkatAktif?: string | null
+    bisaAmbilAlih?: boolean
   }>
 > {
   try {
@@ -47,10 +51,37 @@ export async function login(
       return { error: 'Akun ini dinonaktifkan. Hubungi administrator.' }
     }
 
-    // Satu akun = satu perangkat. Login baru SELALU menang: sesi lama
-    // langsung batal begitu `sesiId` di sini tertimpa. Dipilih begini - bukan
-    // menolak login kedua - supaya tidak ada siswa yang terkunci di luar
-    // akunnya sendiri gara-gara ponsel lama hilang atau lupa keluar.
+    // Satu akun = satu perangkat.
+    // Jika akun sedang aktif di perangkat lain, tolak masuk dan beri tahu pengguna.
+    const sessionExpired =
+      !user.sesiSejak ||
+      Date.now() - new Date(user.sesiSejak).getTime() > SESSION_MAX_AGE * 1000
+
+    const currentSession = await getSession()
+    const isSameDevice = Boolean(
+      currentSession &&
+      currentSession.uid === user.id &&
+      currentSession.sid &&
+      currentSession.sid === user.sesiId
+    )
+
+    const sedangDipakaiDiPerangkatLain = Boolean(
+      user.sesiId && !sessionExpired && !isSameDevice
+    )
+
+    if (sedangDipakaiDiPerangkatLain) {
+      const isAdmin = user.role === 'ADMIN'
+      // Hanya ADMIN yang diizinkan mengambil alih sesi secara paksa jika opsi force diaktifkan.
+      if (!opsi?.force || !isAdmin) {
+        const perangkatInfo = user.sesiPerangkat ? ` (${user.sesiPerangkat})` : ''
+        return {
+          error: `Akun ini sedang digunakan di perangkat lain${perangkatInfo}. Satu akun hanya boleh aktif di satu perangkat. Silakan keluar (logout) dari perangkat tersebut terlebih dahulu atau hubungi admin sekolah untuk mereset perangkat.`,
+          perangkatAktif: user.sesiPerangkat || 'Perangkat lain',
+          bisaAmbilAlih: isAdmin,
+        }
+      }
+    }
+
     const sid = randomUUID()
     const perangkat = labelPerangkat((await headers()).get('user-agent'))
     const sesiSebelumnya = user.sesiPerangkat

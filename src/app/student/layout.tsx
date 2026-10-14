@@ -17,7 +17,7 @@ export default async function StudentLayout({
           dari isinya (min-height: auto), sehingga `overflow-y-auto` tidak
           pernah aktif: kolom ini memanjang melewati cangkang 100dvh, seluruh
           halaman ikut bergulir, dan navigasi bawah ikut terbawa ke atas. */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar relative">
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar relative">
         {children}
       </div>
       <div className="flex-none">

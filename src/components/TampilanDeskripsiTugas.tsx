@@ -207,10 +207,10 @@ function renderTextWithLinks(text: string) {
         href={fullUrl}
         target="_blank"
         rel="noreferrer"
-        className="text-blue-600 hover:text-blue-800 underline font-semibold break-all inline-flex items-center gap-0.5 mx-0.5"
+        className="text-blue-600 hover:text-blue-800 underline font-semibold break-all mx-0.5"
       >
         <span>{cleanUrl}</span>
-        <ExternalLink className="w-3 h-3 inline-block shrink-0" />
+        <ExternalLink className="w-3 h-3 inline-block shrink-0 ml-0.5 -mt-0.5" />
       </a>
     )
 
@@ -245,7 +245,7 @@ function EmbedCard({ embed }: { embed: EmbedItem }) {
   if (embed.type === "image") {
     return (
       <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm flex flex-col">
-        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2">
+        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             {getIcon()}
             <span className="text-xs font-bold text-slate-800">{embed.label}</span>
@@ -263,7 +263,7 @@ function EmbedCard({ embed }: { embed: EmbedItem }) {
         <div className="p-3 flex justify-center bg-slate-900/5">
           <ImageWithZoom
             src={embed.embedUrl}
-            className="max-h-[480px] w-auto object-contain rounded-xl shadow-xs"
+            className="max-h-[480px] max-w-full w-auto object-contain rounded-xl shadow-xs"
           />
         </div>
       </div>
@@ -273,7 +273,7 @@ function EmbedCard({ embed }: { embed: EmbedItem }) {
   if (embed.type === "youtube") {
     return (
       <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm flex flex-col">
-        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2">
+        <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             {getIcon()}
             <span className="text-xs font-bold text-slate-800">{embed.label}</span>
@@ -355,14 +355,14 @@ function EmbedCard({ embed }: { embed: EmbedItem }) {
           src={embed.embedUrl}
           title={embed.label}
           className={`w-full ${
-            isExpanded ? "h-[750px]" : "h-[450px] sm:h-[550px]"
+            isExpanded ? "h-[80vh] sm:h-[750px]" : "h-[60vh] sm:h-[550px]"
           } border-0 bg-white transition-all`}
           allow="autoplay; encrypted-media"
           allowFullScreen
         />
       </div>
 
-      <div className="px-3.5 py-2 bg-slate-50/70 border-t border-slate-100 text-[10px] text-slate-500 flex items-center justify-between gap-2">
+      <div className="px-3.5 py-2 bg-slate-50/70 border-t border-slate-100 text-[10px] text-slate-500 flex items-center justify-between gap-x-2 gap-y-1 flex-wrap">
         <span>
           💡 Dokumen tidak tampil? Pastikan akses tautan diatur ke <strong>"Siapa saja yang memiliki link"</strong>.
         </span>
@@ -389,10 +389,10 @@ export function TampilanDeskripsiTugas({
   const { embeds, hasOnlyUrl } = parseEmbeds(description)
 
   return (
-    <div className="flex flex-col gap-2.5 w-full">
+    <div className="flex flex-col gap-2.5 w-full min-w-0">
       {/* Jika ada instruksi teks (selain tautan tunggal yang di-embed) */}
       {!hasOnlyUrl && (
-        <div className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100 whitespace-pre-wrap">
+        <div className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100 whitespace-pre-wrap [overflow-wrap:anywhere]">
           {renderTextWithLinks(description)}
         </div>
       )}
