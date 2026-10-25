@@ -73,19 +73,38 @@ export function BerandaSiswa({ awal }: { awal: DataBerandaSiswa | null }) {
   const [violations] = useState<any[]>(awal?.violations ?? [])
   const [broadcasts, setBroadcasts] = useState<any[]>(awal?.broadcasts ?? [])
 
-  /** Ambil koordinat sesungguhnya dari perangkat. */
+  /**
+   * Ambil koordinat GPS segar dari perangkat.
+   *
+   * Sengaja TIDAK ada fallback `enableHighAccuracy: false`: saat GPS mati,
+   * fallback itu memberi lokasi perkiraan WiFi/IP atau cache sehingga siswa
+   * bisa presensi tanpa menyalakan GPS.
+   */
   const ambilKoordinat = () =>
-    new Promise<{ lat: number; lng: number }>((resolve) => {
+    new Promise<{
+      lat: number
+      lng: number
+      sinyal?: { accuracy: number; altitude: number | null; speed: number | null; heading: number | null; timestamp: number }
+    }>((resolve) => {
       if (!navigator.geolocation) {
         resolve({ lat: NaN, lng: NaN })
         return
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        // Izin ditolak / gagal: kirim NaN supaya server mencatatnya sebagai
-        // presensi "tanpa lokasi" untuk ditinjau guru piket.
+        (pos) =>
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            sinyal: {
+              accuracy: pos.coords.accuracy,
+              altitude: pos.coords.altitude ?? null,
+              speed: pos.coords.speed ?? null,
+              heading: pos.coords.heading ?? null,
+              timestamp: pos.timestamp,
+            },
+          }),
         () => resolve({ lat: NaN, lng: NaN }),
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       )
     })
 
@@ -93,28 +112,37 @@ export function BerandaSiswa({ awal }: { awal: DataBerandaSiswa | null }) {
     if (isLoading || (attended && checkedOut)) return
     setIsLoading(true)
 
-    // Sebelumnya koordinat di-hardcode (-7.34, 109.34) dengan komentar
-    // "Simulate GPS fetch", sehingga geofence sekolah tidak pernah benar-benar
-    // menguji posisi siswa.
-    const { lat, lng } = await ambilKoordinat()
+    const { lat, lng, sinyal } = await ambilKoordinat()
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !sinyal) {
+      alert("GPS tidak aktif atau izin lokasi belum diberikan. Mohon aktifkan GPS perangkat Anda dan berikan izin akses lokasi untuk melakukan presensi.")
+      setIsLoading(false)
+      return
+    }
 
     if (!attended) {
-      const res = await submitAttendance(lat, lng)
+      const res = await submitAttendance(lat, lng, sinyal)
       if (res.success) {
         const now = new Date()
         const timeStr = jamLabelWIB(now)
         setAttended(true)
         setAttendanceTime(timeStr)
+        if (res.pesan) {
+          alert(res.pesan)
+        }
       } else {
         alert(res.error || "Gagal melakukan presensi")
       }
     } else if (!checkedOut) {
-      const res = await submitCheckOut(lat, lng)
+      const res = await submitCheckOut(lat, lng, sinyal)
       if (res.success) {
         const now = new Date()
         const timeStr = jamLabelWIB(now)
         setCheckedOut(true)
         setCheckOutTimeStr(timeStr)
+        if (res.pesan) {
+          alert(res.pesan)
+        }
       } else {
         alert(res.error || "Gagal melakukan presensi pulang")
       }

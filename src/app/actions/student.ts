@@ -6,6 +6,7 @@ import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
 import {
   hitungJarakMultiLokasi,
+  periksaSinyalGps,
   tentukanStatus,
   type LokasiSekolah,
 } from '@/lib/logic/attendance'
@@ -376,20 +377,23 @@ export async function submitAttendance(
       return { error: 'Anda sudah melakukan presensi hari ini.' }
     }
 
+    const galatGps = periksaSinyalGps(lat, lng, sinyal, 'Presensi')
+    if (galatGps) return { error: galatGps }
+
     const cfg = await pengaturanPresensi()
+    if (cfg.lokasi.length === 0) {
+      return { error: 'Titik koordinat sekolah belum diatur oleh admin.' }
+    }
 
-    let validasi = null
-    let distance: number | null = null
-    const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
+    const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+    if (!hasil) {
+      return { error: 'Gagal memvalidasi jarak ke lokasi sekolah.' }
+    }
+    const validasi = hasil.validasi
+    const distance = hasil.distance
 
-    if (adaKoordinat) {
-      // Sah bila berada di radius salah satu gedung; jarak yang dicatat
-      // adalah jarak ke gedung terdekat.
-      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
-      if (hasil) {
-        validasi = hasil.validasi
-        distance = hasil.distance
-      }
+    if (!validasi.ok) {
+      return { error: validasi.pesan }
     }
 
     // `tentukanStatus` memakai getHours() pada Date yang diterimanya, jadi
@@ -403,27 +407,29 @@ export async function submitAttendance(
 
     if (!keputusan.diterima) return { error: keputusan.pesan }
 
-    // Penilaian keaslian lokasi. Hasilnya TIDAK pernah menolak presensi -
-    // hanya menurunkan statusnya menjadi 'perlu_verifikasi' supaya guru
-    // meninjau. Menolak siswa jujur yang ponselnya kebetulan tidak
-    // melaporkan ketinggian jauh lebih merugikan daripada meloloskan satu
-    // siswa curang yang tetap muncul di daftar tinjauan.
-    let asli = null
-    if (adaKoordinat) {
-      asli = await nilaiKeaslianLokasi({
-        userId: session.uid,
-        lat,
-        lng,
-        sinyal,
-        dateKey,
-      })
-    }
+    // Penilaian keaslian lokasi
+    const asli = await nilaiKeaslianLokasi({
+      userId: session.uid,
+      lat,
+      lng,
+      sinyal,
+      dateKey,
+    })
 
-    const statusAkhir =
-      asli && perluDitinjau(asli) ? 'perlu_verifikasi' : keputusan.status
+    // Status kehadiran utama berdasarkan ketepatan waktu datang:
+    // hadir (dalam jendela waktu batas masuk) atau terlambat.
+    const statusKehadiran = keputusan.dalamJendela ? 'hadir' : 'terlambat'
+
+    // Kumpulkan catatan GPS & anomali lokasi untuk ditinjau guru
+    const catatanList: string[] = []
+    if (asli && perluDitinjau(asli)) {
+      catatanList.push(asli.keterangan)
+    }
+    const note = catatanList.length > 0 ? catatanList.join(' | ') : null
+
     const pesanAkhir =
-      asli && perluDitinjau(asli)
-        ? `${keputusan.pesan} Namun lokasimu ditandai untuk ditinjau guru piket.`
+      catatanList.length > 0
+        ? `${keputusan.pesan} Catatan lokasi Anda ditandai untuk ditinjau guru.`
         : keputusan.pesan
 
     await prisma.attendance.create({
@@ -434,15 +440,15 @@ export async function submitAttendance(
         dateKey,
         slotKey,
         kind: 'DAILY',
-        status: statusAkhir,
-        lat: adaKoordinat ? lat : null,
-        lng: adaKoordinat ? lng : null,
+        status: statusKehadiran,
+        lat,
+        lng,
         distance,
         accuracy: sinyal?.accuracy ?? null,
         altitude: sinyal?.altitude ?? null,
         mockScore: asli ? asli.skor : null,
         mockReasons: asli && asli.alasan.length ? JSON.stringify(asli.alasan) : null,
-        note: asli && perluDitinjau(asli) ? asli.keterangan : null,
+        note,
       },
     })
 
@@ -473,13 +479,22 @@ export async function submitCheckOut(
       return { error: 'Anda sudah melakukan presensi pulang hari ini.' }
     }
 
-    const cfg = await pengaturanPresensi()
+    const galatGps = periksaSinyalGps(lat, lng, sinyal, 'Presensi pulang')
+    if (galatGps) return { error: galatGps }
 
-    let validasi = null
-    const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
-    if (adaKoordinat) {
-      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
-      if (hasil) validasi = hasil.validasi
+    const cfg = await pengaturanPresensi()
+    if (cfg.lokasi.length === 0) {
+      return { error: 'Titik koordinat sekolah belum diatur oleh admin.' }
+    }
+
+    const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+    if (!hasil) {
+      return { error: 'Gagal memvalidasi jarak ke lokasi sekolah.' }
+    }
+    const validasi = hasil.validasi
+
+    if (!validasi.ok) {
+      return { error: validasi.pesan }
     }
 
     // Presensi pulang dibuka mengikuti jam pelajaran terakhir hari itu,
@@ -495,15 +510,13 @@ export async function submitCheckOut(
 
     if (!keputusan.diterima) return { error: keputusan.pesan }
 
-    const asli = adaKoordinat
-      ? await nilaiKeaslianLokasi({
-          userId: session.uid,
-          lat,
-          lng,
-          sinyal,
-          dateKey,
-        })
-      : null
+    const asli = await nilaiKeaslianLokasi({
+      userId: session.uid,
+      lat,
+      lng,
+      sinyal,
+      dateKey,
+    })
 
     await prisma.attendance.update({
       where: { id: existing.id },
@@ -577,7 +590,11 @@ export async function getMyAttendanceSummary() {
   for (const r of rows) {
     const n = r._count._all
     out.total += n
-    if (r.status in out) out[r.status as keyof typeof out] += n
+    let st = r.status
+    if (st === 'perlu_verifikasi' || st === 'tanpa_lokasi') {
+      st = 'hadir'
+    }
+    if (st in out) out[st as keyof typeof out] += n
   }
   const persen = out.total > 0
     ? Math.round(((out.hadir + out.terlambat) / out.total) * 100)

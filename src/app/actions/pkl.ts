@@ -14,7 +14,7 @@ import { prisma } from '@/lib/prisma'
 import type { AksiHasil } from '@/lib/types/aksi'
 import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
-import { hitungJarakGeofence, jarakMeter, tentukanStatus } from '@/lib/logic/attendance'
+import { hitungJarakGeofence, jarakMeter, periksaSinyalGps, tentukanStatus } from '@/lib/logic/attendance'
 import { dateKeyWIB, jamDindingWIB, rentangHariWIB } from '@/lib/logic/waktu'
 
 function gagal(err: unknown) {
@@ -308,7 +308,11 @@ export async function createPklJournal(data: {
 /**
  * Presensi PKL dengan geofence lokasi industri (bukan lokasi sekolah).
  */
-export async function submitPklAttendance(lat: number, lng: number): Promise<AksiHasil<{ pesan: string }>> {
+export async function submitPklAttendance(
+  lat: number,
+  lng: number,
+  sinyal?: { accuracy?: number | null; timestamp?: number | null }
+): Promise<AksiHasil<{ pesan: string }>> {
   try {
     const session = await requireSession('STUDENT')
 
@@ -324,14 +328,21 @@ export async function submitPklAttendance(lat: number, lng: number): Promise<Aks
     })
     if (existing) return { error: 'Kamu sudah presensi PKL hari ini.' }
 
-    const p = placement.partner
-    let validasi = null
-    let distance: number | null = null
-    const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
+    const galatGps = periksaSinyalGps(lat, lng, sinyal, 'Presensi PKL')
+    if (galatGps) return { error: galatGps }
 
-    if (p.lat !== null && p.lng !== null && adaKoordinat) {
-      distance = jarakMeter(lat, lng, p.lat, p.lng)
-      validasi = hitungJarakGeofence(lat, lng, p.lat, p.lng, p.radius)
+    const p = placement.partner
+    // Radius wajib: tanpa titik lokasi mitra, presensi tidak bisa divalidasi.
+    if (p.lat === null || p.lng === null) {
+      return {
+        error: 'Titik lokasi tempat PKL belum diatur. Hubungi admin atau guru pembimbing.',
+      }
+    }
+
+    const distance = jarakMeter(lat, lng, p.lat, p.lng)
+    const validasi = hitungJarakGeofence(lat, lng, p.lat, p.lng, p.radius)
+    if (!validasi.ok) {
+      return { error: validasi.pesan }
     }
 
     const keputusan = tentukanStatus({
@@ -348,8 +359,8 @@ export async function submitPklAttendance(lat: number, lng: number): Promise<Aks
         date: rentangHariWIB(dateKey).mulai,
         dateKey,
         status: keputusan.status,
-        lat: adaKoordinat ? lat : null,
-        lng: adaKoordinat ? lng : null,
+        lat,
+        lng,
         distance,
       },
     })

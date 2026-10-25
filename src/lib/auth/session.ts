@@ -19,7 +19,7 @@ import type { Role } from '@prisma/client'
 
 import {
   SESSION_COOKIE,
-  SESSION_MAX_AGE,
+  sessionMaxAgeFor,
   signSession,
   verifySession,
   type SessionPayload,
@@ -145,19 +145,23 @@ export async function setSessionCookie(data: {
   /** Wajib diisi pemanggil dan sudah tersimpan di `User.sesiId`. */
   sid: string
 }): Promise<void> {
-  const token = await signSession({
-    uid: data.uid,
-    role: data.role as SessionPayload['role'],
-    name: data.name,
-    sid: data.sid,
-  })
+  const maxAge = sessionMaxAgeFor(data.role as SessionPayload['role'])
+  const token = await signSession(
+    {
+      uid: data.uid,
+      role: data.role as SessionPayload['role'],
+      name: data.name,
+      sid: data.sid,
+    },
+    maxAge
+  )
   const store = await cookies()
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: SESSION_MAX_AGE,
+    maxAge,
   })
 }
 

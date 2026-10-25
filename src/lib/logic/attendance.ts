@@ -33,8 +33,18 @@ export function tentukanStatus(args: {
 }): KeputusanPresensi {
   const { jenis, waktu, jendela, validasi } = args;
 
-  if (validasi && !validasi.ok && validasi.alasan === "akurasi_buruk") {
-    return { diterima: false, pesan: validasi.pesan };
+  if (validasi === null) {
+    return {
+      diterima: false,
+      pesan: "Presensi gagal. GPS harus aktif dan izin lokasi harus diberikan.",
+    };
+  }
+
+  if (!validasi.ok) {
+    return {
+      diterima: false,
+      pesan: validasi.pesan,
+    };
   }
 
   const sebelumJendela = waktu.getHours() * 60 + waktu.getMinutes() < keMenit(jendela.mulai);
@@ -46,24 +56,6 @@ export function tentukanStatus(args: {
   }
 
   const tepatWaktu = dalamJendela(waktu, jendela.mulai, jendela.selesai);
-
-  if (validasi === null) {
-    return {
-      diterima: true,
-      status: "tanpa_lokasi",
-      dalamJendela: tepatWaktu,
-      pesan: "Presensi dicatat tanpa data lokasi karena izin lokasi tidak diberikan. Guru piket akan meninjau.",
-    };
-  }
-
-  if (!validasi.ok) {
-    return {
-      diterima: true,
-      status: "perlu_verifikasi",
-      dalamJendela: tepatWaktu,
-      pesan: validasi.pesan,
-    };
-  }
 
   if (jenis === "pulang") {
     return {
@@ -212,4 +204,44 @@ export function hitungJarakGeofence(
   }
 
   return { ok: true };
+}
+
+/**
+ * Batas akurasi (meter) agar lokasi dianggap berasal dari GPS yang aktif.
+ * Lokasi perkiraan WiFi/IP/menara seluler (saat GPS mati) biasanya
+ * berakurasi ratusan hingga ribuan meter, jadi ditolak.
+ */
+export const AKURASI_GPS_MAKS = 100;
+/** Umur maksimal data lokasi agar tidak memakai posisi cache. */
+export const UMUR_LOKASI_MAKS_MS = 2 * 60 * 1000;
+
+/**
+ * Pastikan koordinat berasal dari GPS yang aktif. Mengembalikan pesan galat
+ * atau `null` bila sah.
+ */
+export function periksaSinyalGps(
+  lat: number,
+  lng: number,
+  sinyal: { accuracy?: number | null; timestamp?: number | null } | undefined,
+  label: string
+): string | null {
+  const pesanGps = `${label} gagal. GPS harus aktif dan izin lokasi harus diberikan.`;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return pesanGps;
+  if (lat === 0 && lng === 0) return pesanGps;
+
+  const akurasi = sinyal?.accuracy;
+  if (typeof akurasi !== "number" || !Number.isFinite(akurasi) || akurasi <= 0) {
+    return pesanGps;
+  }
+  if (akurasi > AKURASI_GPS_MAKS) {
+    return `${label} gagal. Sinyal GPS tidak akurat (±${Math.round(akurasi)} m, maksimal ±${AKURASI_GPS_MAKS} m). Pastikan GPS/Lokasi akurasi tinggi menyala lalu coba lagi di area terbuka.`;
+  }
+
+  const ts = sinyal?.timestamp;
+  if (typeof ts === "number" && Number.isFinite(ts)) {
+    if (Math.abs(Date.now() - ts) > UMUR_LOKASI_MAKS_MS) {
+      return `${label} gagal. Data lokasi sudah kedaluwarsa, perbarui lokasi GPS lalu coba lagi.`;
+    }
+  }
+  return null;
 }

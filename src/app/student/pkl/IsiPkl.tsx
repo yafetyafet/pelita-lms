@@ -82,7 +82,8 @@ export function IsiPkl({ awal }: { awal: Awaited<ReturnType<typeof getMyPlacemen
       async (pos) => {
         const res = await submitPklAttendance(
           pos.coords.latitude,
-          pos.coords.longitude
+          pos.coords.longitude,
+          { accuracy: pos.coords.accuracy, timestamp: pos.timestamp }
         )
         setAbsen(false)
         if (res.error) setError(res.error)
@@ -92,17 +93,10 @@ export function IsiPkl({ awal }: { awal: Awaited<ReturnType<typeof getMyPlacemen
         }
       },
       async (err) => {
-        // Izin lokasi ditolak: tetap kirim agar tercatat "tanpa lokasi" dan
-        // bisa ditinjau pembimbing, sama seperti presensi sekolah.
-        const res = await submitPklAttendance(NaN, NaN)
         setAbsen(false)
-        if (res.error) setError(`${err.message}. ${res.error}`)
-        else {
-          beriToast(res.pesan || "Presensi tercatat tanpa data lokasi.")
-          await load()
-        }
+        setError("GPS tidak aktif atau izin lokasi ditolak. Aktifkan GPS dan izinkan lokasi untuk melakukan presensi PKL.")
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )
   }
 

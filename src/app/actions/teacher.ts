@@ -8,7 +8,7 @@ import { ForbiddenError } from '@/lib/logic/rbac'
 import { keNilaiAkhir, koreksiOtomatis,
   type TipeSoal,
 } from '@/lib/logic/exam'
-import { dateKeyWIB, rentangHariWIB, slotKeyPresensi } from '@/lib/logic/waktu'
+import { dateKeyWIB, rentangHariWIB, slotKeyPresensi, jamWIB } from '@/lib/logic/waktu'
 
 /** Status presensi yang boleh diinput manual oleh guru. */
 const STATUS_MANUAL = ['hadir', 'terlambat', 'sakit', 'izin', 'alfa'] as const
@@ -405,13 +405,24 @@ export async function getAttendanceSheet(input: {
       dateKey,
       rows: students.map((s) => {
         const rec = byUser.get(s.user.id)
+        let effectiveStatus = rec?.status ?? null
+        if (effectiveStatus === 'perlu_verifikasi' || effectiveStatus === 'tanpa_lokasi') {
+          // Jika status lama tersimpan sebagai perlu_verifikasi atau tanpa_lokasi,
+          // tentukan hadir atau terlambat berdasarkan jam kehadiran (batas 07:00)
+          const jamMenit = rec?.createdAt ? jamWIB(rec.createdAt) : '06:00'
+          effectiveStatus = jamMenit > '07:00' ? 'terlambat' : 'hadir'
+        }
         return {
           student: s.user,
           status: rec?.status ?? null,
+          effectiveStatus,
           note: rec?.note ?? null,
           lat: rec?.lat ?? null,
           lng: rec?.lng ?? null,
           distance: rec?.distance ?? null,
+          mockScore: rec?.mockScore ?? null,
+          isLuarRadius: rec?.distance != null && rec.distance > 100,
+          isTanpaLokasi: rec ? (rec.status === 'tanpa_lokasi' || (rec.lat == null && rec.recordedById == null)) : false,
           checkOutTime: rec?.checkOutTime ?? null,
           // Presensi mandiri siswa (recordedById null) ditandai agar guru
           // tahu mana yang hasil GPS dan mana yang input manual.
@@ -549,7 +560,11 @@ export async function getAttendanceRecap(input: {
     for (const r of records) {
       const row = per.get(r.userId)
       if (!row) continue
-      const key = r.status as keyof Hitung
+      let st = r.status
+      if (st === 'perlu_verifikasi' || st === 'tanpa_lokasi') {
+        st = 'hadir'
+      }
+      const key = st as keyof Hitung
       if (key in row && key !== 'total' && key !== 'lain') row[key]++
       else row.lain++
       row.total++
