@@ -19,6 +19,9 @@ import {
   deleteExamQuestion,
 } from "@/app/actions/teacher"
 import { normalisasiUrlGambar, peringatanUrlGambar } from "@/lib/logic/gambar-url"
+import { ImageWithZoom } from "@/components/ImageWithZoom"
+import { RichTextEditor } from "@/components/RichTextEditor"
+import { keTeksPolos } from "@/lib/logic/rich-text"
 
 /**
  * Penyunting soal untuk ujian yang sudah dibuat.
@@ -193,7 +196,7 @@ export function EditorSoal({
   }
 
   const hapus = async (q: Soal, no: number) => {
-    if (!confirm(`Hapus soal nomor ${no}?\n\n"${q.question.slice(0, 60)}..."`)) return
+    if (!confirm(`Hapus soal nomor ${no}?\n\n"${keTeksPolos(q.question).slice(0, 60)}..."`)) return
     setError("")
     setBusy(q.id)
     const res = await deleteExamQuestion(q.id)
@@ -386,7 +389,7 @@ export function EditorSoal({
                     )}
                   </div>
                   <p className="text-[11px] text-slate-800 mt-0.5 line-clamp-1">
-                    {q.question}
+                    {keTeksPolos(q.question)}
                   </p>
                 </div>
                 {terbuka ? (
@@ -525,12 +528,10 @@ function FormSoal({
         </label>
       </div>
 
-      <textarea
-        rows={3}
+      <RichTextEditor
         value={nilai.question}
-        onChange={(e) => setNilai({ question: e.target.value })}
+        onChange={(html) => setNilai({ question: html })}
         placeholder="Tulis pertanyaan..."
-        className="px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] resize-y"
       />
 
       <div className="flex items-center gap-2">
@@ -547,15 +548,12 @@ function FormSoal({
           {peringatanUrlGambar(nilai.imageUrl)}
         </p>
       )}
-      {nilai.imageUrl && !peringatanUrlGambar(nilai.imageUrl) && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={normalisasiUrlGambar(nilai.imageUrl)}
-          alt=""
-          className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
-        />
-      )}
+        {nilai.imageUrl && !peringatanUrlGambar(nilai.imageUrl) && (
+          <ImageWithZoom
+            src={normalisasiUrlGambar(nilai.imageUrl)}
+            className="max-h-28 rounded-lg border border-slate-200 object-contain self-start bg-white"
+          />
+        )}
 
       {!esai && (
         <div className="flex flex-col gap-1">

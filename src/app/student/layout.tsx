@@ -1,18 +1,23 @@
+import { jagaPerangkat } from "@/lib/auth/session"
 import { MobileShell } from "@/components/layout/MobileShell"
 import { StudentBottomNav } from "@/components/layout/StudentBottomNav"
 
-export default function StudentLayout({
+export default async function StudentLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Satu akun = satu perangkat: begitu akun dipakai masuk di tempat lain,
+  // sesi ini dialihkan ke halaman masuk berikut alasannya.
+  await jagaPerangkat()
+
   return (
     <MobileShell currentRole="student">
       {/* `min-h-0` wajib. Anak flex secara bawaan tidak boleh lebih pendek
           dari isinya (min-height: auto), sehingga `overflow-y-auto` tidak
           pernah aktif: kolom ini memanjang melewati cangkang 100dvh, seluruh
           halaman ikut bergulir, dan navigasi bawah ikut terbawa ke atas. */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar relative">
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar relative">
         {children}
       </div>
       <div className="flex-none">

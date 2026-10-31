@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import { PemuatData } from "@/components/PemuatData"
+import { DiskusiMateri } from "@/components/DiskusiMateri"
 import Link from "next/link"
 import { getStudentMaterials } from "@/app/actions/student"
 import { 
@@ -31,6 +32,28 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
 
   const isYouTube = (url: string) => url?.includes("youtube") || url?.includes("youtu.be")
   const isDrive = (url: string) => url?.includes("drive.google")
+
+  const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return ""
+    try {
+      const urlObj = new URL(url)
+      let videoId = ""
+      if (urlObj.hostname.includes("youtu.be")) {
+        videoId = urlObj.pathname.slice(1)
+      } else if (urlObj.hostname.includes("youtube.com")) {
+        if (urlObj.pathname === "/watch") {
+          videoId = urlObj.searchParams.get("v") || ""
+        } else if (urlObj.pathname.startsWith("/embed/")) {
+          videoId = urlObj.pathname.split("/")[2]
+        } else if (urlObj.pathname.startsWith("/shorts/")) {
+          videoId = urlObj.pathname.split("/")[2]
+        }
+      }
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : url
+    } catch (e) {
+      return url.replace("watch?v=", "embed/")
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -69,12 +92,13 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
         <>
           {/* Active Material Player */}
           {activeMaterial && (
-            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md overflow-hidden flex flex-col">
-              <div className="w-full bg-slate-950 relative aspect-video flex items-center justify-center text-white">
+            <div className="flex flex-col gap-4">
+              <div className="bg-white rounded-3xl border border-slate-200/90 shadow-md overflow-hidden flex flex-col">
+                <div className="w-full bg-slate-950 relative aspect-video flex items-center justify-center text-white">
                 {activeMaterial.url && isYouTube(activeMaterial.url) ? (
                   <iframe
                     className="w-full h-full"
-                    src={activeMaterial.url.replace("watch?v=", "embed/")}
+                    src={getYouTubeEmbedUrl(activeMaterial.url)}
                     title={activeMaterial.title}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
@@ -128,7 +152,10 @@ export function IsiMateri({ awal }: { awal: Awaited<ReturnType<typeof getStudent
                     {activeMaterial.description}
                   </p>
                 )}
+                </div>
               </div>
+
+              <DiskusiMateri materialId={activeMaterial.id} />
             </div>
           )}
 

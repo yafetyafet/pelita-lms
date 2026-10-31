@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
@@ -54,7 +54,18 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: Awaited<ReturnType<typeof getTodayAttendance>> } }) {
   const [loading, setLoading] = useState(false)
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  // Selain lat/lng, sinyal mentah lain ikut disimpan dan dikirim: server
+  // memakainya untuk menilai keaslian lokasi (GPS palsu umumnya tidak
+  // melaporkan ketinggian dan memberi akurasi yang terlalu rapi).
+  const [currentCoords, setCurrentCoords] = useState<{
+    lat: number
+    lng: number
+    accuracy: number
+    altitude: number | null
+    speed: number | null
+    heading: number | null
+    timestamp: number
+  } | null>(null)
   const [distance, setDistance] = useState<number | null>(null)
   const [gedungTerdekat, setGedungTerdekat] = useState<Lokasi | null>(null)
   const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null)
@@ -68,6 +79,12 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
   const [attended, setAttended] = useState(Boolean(p0))
   const [attendedTime, setAttendedTime] = useState<string | null>(
     p0 ? jamLabelWIB(p0.createdAt) : null
+  )
+  const [attendanceStatus, setAttendanceStatus] = useState<string | null>(
+    p0 ? p0.status : null
+  )
+  const [recordedBy, setRecordedBy] = useState<string | null>(
+    p0 ? p0.recordedById : null
   )
   const [checkedOut, setCheckedOut] = useState(Boolean(p0?.checkOutTime))
   const [checkOutTimeStr, setCheckOutTimeStr] = useState<string | null>(
@@ -86,6 +103,8 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
     setStatusMessage("Mendeteksi sinyal satelit GPS...")
 
     if (!navigator.geolocation) {
+      setCurrentCoords(null)
+      setIsWithinRadius(false)
       setStatusMessage("Browser Anda tidak mendukung deteksi lokasi.")
       setLoading(false)
       return
@@ -93,18 +112,23 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords
-        setCurrentCoords({ lat: latitude, lng: longitude, accuracy })
+        const { latitude, longitude, accuracy, altitude, speed, heading } = pos.coords
+        setCurrentCoords({
+          lat: latitude,
+          lng: longitude,
+          accuracy,
+          altitude: altitude ?? null,
+          speed: speed ?? null,
+          heading: heading ?? null,
+          timestamp: pos.timestamp,
+        })
 
-        // Kalau admin belum mengisi titik sekolah, tidak ada yang bisa
-        // dibandingkan. Presensi tetap boleh dikirim — server yang menandainya
-        // sebagai perlu ditinjau.
         if (!cfg?.terkonfigurasi || cfg.lokasi.length === 0) {
           setDistance(null)
           setGedungTerdekat(null)
-          setIsWithinRadius(true)
+          setIsWithinRadius(false)
           setStatusMessage(
-            "Titik sekolah belum diatur admin, jadi lokasi tidak divalidasi. Presensi akan ditandai untuk ditinjau guru."
+            "Titik sekolah belum diatur oleh admin. Silakan hubungi admin sekolah."
           )
           setLoading(false)
           return
@@ -124,14 +148,17 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
         setIsWithinRadius(Boolean(lolos))
         setStatusMessage(
           lolos
-            ? `Berada di area ${dipakai.l.nama} (${dipakai.jarak} meter)`
-            : `Di luar radius semua gedung. Terdekat: ${dipakai.l.nama} ${dipakai.jarak} meter (maksimal ${dipakai.l.radius} meter)`
+            ? `Berada di dalam radius ${dipakai.l.nama} (Jarak: ${dipakai.jarak} m, Maks: ${dipakai.l.radius} m)`
+            : `Di luar radius sekolah! Terdekat: ${dipakai.l.nama} (Jarak: ${dipakai.jarak} m, Maks: ${dipakai.l.radius} m)`
         )
         setLoading(false)
       },
       (err) => {
         console.error(err)
-        setStatusMessage("Izin GPS tidak diberikan atau GPS belum aktif. Pastikan izinkan lokasi di peramban Anda.")
+        setCurrentCoords(null)
+        setDistance(null)
+        setIsWithinRadius(false)
+        setStatusMessage("GPS belum aktif atau izin lokasi tidak diberikan. Harap aktifkan GPS dan izinkan lokasi di peramban Anda.")
         setLoading(false)
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -139,16 +166,25 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
   }
 
   const handlePresensi = async () => {
-    // Radius tidak lagi memblokir pengiriman di sisi klien: validasi
-    // sebenarnya ada di server, yang memakai pengaturan admin dan menandai
-    // presensi di luar radius sebagai "perlu verifikasi" alih-alih menolaknya.
-    // Pemblokiran sebelumnya membuat siswa terhalang bila koordinat di kode
-    // tidak sama dengan pengaturan sekolah.
-    if (!currentCoords || isSubmitting) return
+    if (!currentCoords) {
+      alert("Sinyal GPS belum aktif atau lokasi belum terdeteksi. Silakan aktifkan GPS dan refresh titik lokasi.")
+      return
+    }
+    if (!isWithinRadius) {
+      alert("Presensi ditolak. Anda berada di luar radius area sekolah. Presensi hanya dapat dilakukan di dalam area sekolah.")
+      return
+    }
+    if (isSubmitting) return
     setIsSubmitting(true)
     
     if (!attended) {
-      const res = await submitAttendance(currentCoords.lat, currentCoords.lng)
+      const res = await submitAttendance(currentCoords.lat, currentCoords.lng, {
+        accuracy: currentCoords.accuracy,
+        altitude: currentCoords.altitude,
+        speed: currentCoords.speed,
+        heading: currentCoords.heading,
+        timestamp: currentCoords.timestamp,
+      })
       if (res.success) {
         const now = new Date()
         setAttended(true)
@@ -157,7 +193,13 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
         alert(res.error || "Gagal melakukan presensi")
       }
     } else if (!checkedOut) {
-      const res = await submitCheckOut(currentCoords.lat, currentCoords.lng)
+      const res = await submitCheckOut(currentCoords.lat, currentCoords.lng, {
+        accuracy: currentCoords.accuracy,
+        altitude: currentCoords.altitude,
+        speed: currentCoords.speed,
+        heading: currentCoords.heading,
+        timestamp: currentCoords.timestamp,
+      })
       if (res.success) {
         const now = new Date()
         setCheckedOut(true)
@@ -244,11 +286,17 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
           <div className="text-right">
             <span className="text-[10px] text-blue-200 block">Status Validasi</span>
             <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full mt-1 ${
-              isWithinRadius
-                ? "bg-emerald-500 text-white shadow-sm"
-                : "bg-red-500/80 text-white"
+              !currentCoords
+                ? "bg-amber-500/80 text-white"
+                : isWithinRadius
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "bg-red-500/80 text-white"
             }`}>
-              {isWithinRadius ? (
+              {!currentCoords ? (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5" /> GPS Belum Aktif
+                </>
+              ) : isWithinRadius ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5" /> Dalam Area
                 </>
@@ -259,6 +307,12 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
               )}
             </span>
           </div>
+        </div>
+
+        {/* Status Message Info */}
+        <div className="text-[11px] text-blue-100 bg-white/10 rounded-xl p-2.5 flex items-center gap-2">
+          <Navigation className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+          <span className="leading-tight">{statusMessage}</span>
         </div>
 
         {/* Live Coordinates Detail */}
@@ -273,46 +327,58 @@ export function IsiPresensi({ awal }: { awal: { geo: Geofence | null; presensi: 
           {!attended ? (
             <button
               onClick={handlePresensi}
-              disabled={loading || isSubmitting || !currentCoords}
+              disabled={loading || isSubmitting || !currentCoords || !isWithinRadius}
               className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
-                isWithinRadius && !loading
-                  ? "bg-white text-blue-700 hover:bg-blue-50 active:scale-[0.98] shadow-white/20"
-                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700"
+                isWithinRadius && !loading && currentCoords
+                  ? "bg-white text-blue-700 hover:bg-blue-50 active:scale-[0.98] shadow-white/20 cursor-pointer"
+                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700 opacity-80"
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
               <span>
                 {isSubmitting
                   ? "Memproses..."
-                  : isWithinRadius
-                    ? "Kirim Presensi Hadir (1-Tap)"
-                    : "Kirim Presensi (di luar radius, akan ditinjau)"}
+                  : loading
+                    ? "Mencari Titik GPS..."
+                    : !currentCoords
+                      ? "GPS Belum Aktif / Izin Ditolak"
+                      : isWithinRadius
+                        ? "Kirim Presensi Hadir (1-Tap)"
+                        : `Di Luar Radius (${distance !== null ? `${distance}m` : ""})`}
               </span>
             </button>
           ) : (
             <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Masuk Berhasil: {attendedTime}</span>
+              <span>
+                {recordedBy
+                  ? `Status: ${attendanceStatus?.toUpperCase()} (Guru)`
+                  : `Masuk Berhasil: ${attendedTime}`}
+              </span>
             </div>
           )}
 
           {attended && !checkedOut && (
             <button
               onClick={handlePresensi}
-              disabled={loading || isSubmitting || !currentCoords}
+              disabled={loading || isSubmitting || !currentCoords || !isWithinRadius}
               className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
-                isWithinRadius && !loading
-                  ? "bg-rose-500 text-white hover:bg-rose-600 active:scale-[0.98] shadow-rose-500/30"
-                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700"
+                isWithinRadius && !loading && currentCoords
+                  ? "bg-rose-500 text-white hover:bg-rose-600 active:scale-[0.98] shadow-rose-500/30 cursor-pointer"
+                  : "bg-slate-800/80 text-slate-400 cursor-not-allowed border border-slate-700 opacity-80"
               }`}
             >
               <LogOut className="w-4 h-4" />
               <span>
                 {isSubmitting
                   ? "Memproses..."
-                  : isWithinRadius
-                    ? "Kirim Presensi Pulang (1-Tap)"
-                    : "Kirim Presensi Pulang (di luar radius, akan ditinjau)"}
+                  : loading
+                    ? "Mencari Titik GPS..."
+                    : !currentCoords
+                      ? "GPS Belum Aktif / Izin Ditolak"
+                      : isWithinRadius
+                        ? "Kirim Presensi Pulang (1-Tap)"
+                        : `Di Luar Radius (${distance !== null ? `${distance}m` : ""})`}
               </span>
             </button>
           )}

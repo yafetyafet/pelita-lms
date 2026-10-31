@@ -20,7 +20,8 @@ import {
   Filter,
   School,
   AlertTriangle,
-  KeyRound
+  KeyRound,
+  Smartphone,
 } from "lucide-react"
 import { muatXlsx } from "@/lib/xlsx"
 import {
@@ -32,6 +33,7 @@ import {
   setStudentClass,
   resetUserPassword
 } from "@/app/actions/admin"
+import { resetPerangkat } from "@/app/actions/auth"
 
 /**
  * Pencocokan nama rombel dibuat longgar terhadap huruf besar/kecil dan spasi
@@ -60,6 +62,7 @@ export default function AdminUsersPage() {
   // Rombel yang sedang disimpan, agar barisnya bisa menampilkan status.
   const [savingClassFor, setSavingClassFor] = useState<string | null>(null)
   const [resetFor, setResetFor] = useState<string | null>(null)
+  const [lepasFor, setLepasFor] = useState<string | null>(null)
   // Sandi hasil reset ditampilkan sekali supaya admin bisa menyerahkannya;
   // setelah ini tidak bisa dibaca lagi karena tersimpan sebagai hash.
   const [sandiBaru, setSandiBaru] = useState<{ nama: string; sandi: string } | null>(null)
@@ -220,6 +223,29 @@ export default function AdminUsersPage() {
       return
     }
     setSandiBaru({ nama, sandi: res.password || "123456" })
+  }
+
+  /**
+   * Lepaskan kunci satu-akun-satu-perangkat.
+   *
+   * Sebenarnya jarang perlu: login baru selalu menang, jadi tidak ada yang
+   * bisa terkunci permanen. Tombol ini untuk kasus lain - admin ingin
+   * memastikan sesi di perangkat yang hilang benar-benar mati sekarang juga,
+   * tanpa menunggu masa berlaku 7 hari habis.
+   */
+  const handleLepasPerangkat = async (id: string, nama: string) => {
+    if (!confirm(`Lepaskan kunci perangkat untuk ${nama}?
+
+Sesi yang sedang aktif di perangkat itu akan langsung keluar.`)) return
+    setLepasFor(id)
+    const res = await resetPerangkat(id)
+    setLepasFor(null)
+    if (res.error) {
+      showToast("error", res.error)
+      return
+    }
+    showToast("success", `Perangkat ${nama} dilepaskan.`)
+    await loadUsers()
   }
 
   // Delete User
@@ -675,6 +701,19 @@ export default function AdminUsersPage() {
                             {rombel ? rombel.name : "Tanpa Rombel"}
                           </span>
                         )}
+                        {/* Perangkat yang sedang memegang sesi akun ini.
+                            Ditampilkan supaya admin bisa langsung menjawab
+                            laporan "saya keluar sendiri" - biasanya karena
+                            akunnya dipakai orang lain. */}
+                        {u.sesiPerangkat && (
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-slate-50 text-slate-600 border-slate-200 flex items-center gap-1"
+                            title={`Aktif sejak ${u.sesiSejak ? new Date(u.sesiSejak).toLocaleString("id-ID") : "-"}`}
+                          >
+                            <Smartphone className="w-2.5 h-2.5" />
+                            {u.sesiPerangkat}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -703,6 +742,21 @@ export default function AdminUsersPage() {
                           <Loader2 className="w-3 h-3 animate-spin text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
                         )}
                       </div>
+                    )}
+
+                    {u.sesiPerangkat && (
+                      <button
+                        onClick={() => handleLepasPerangkat(u.id, u.name)}
+                        disabled={lepasFor === u.id}
+                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition disabled:opacity-50"
+                        title="Lepaskan kunci perangkat"
+                      >
+                        {lepasFor === u.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Smartphone className="w-4 h-4" />
+                        )}
+                      </button>
                     )}
 
                     <button

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { login } from "@/app/actions/auth"
@@ -14,6 +14,7 @@ import {
   Timer,
   BookOpen,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react"
 
 /**
@@ -54,9 +55,24 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [catatan, setCatatan] = useState("")
+  const [perangkatAktif, setPerangkatAktif] = useState<string | null>(null)
+  const [bisaAmbilAlih, setBisaAmbilAlih] = useState(false)
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Penjaga perangkat mengarahkan ke sini dengan ?alasan=perangkat-lain.
+  // Tanpa keterangan, pengguna yang tiba-tiba terlempar keluar akan mengira
+  // aplikasinya rusak - padahal akunnya memang baru dipakai di tempat lain.
+  useEffect(() => {
+    const alasan = new URLSearchParams(window.location.search).get("alasan")
+    if (alasan === "perangkat-lain") {
+      setCatatan(
+        "Kamu keluar otomatis karena akun ini baru dipakai masuk di perangkat lain. Satu akun hanya boleh aktif di satu perangkat."
+      )
+    }
+  }, [])
+
+  const handleLogin = async (e?: React.FormEvent, force = false) => {
+    if (e) e.preventDefault()
     if (!identifier || !password) {
       setError("Username dan Password harus diisi")
       return
@@ -64,13 +80,32 @@ export default function LoginPage() {
 
     setIsLoading(true)
     setError("")
+    setPerangkatAktif(null)
+    setBisaAmbilAlih(false)
 
     try {
-      const res = await login(identifier, password)
+      const res = await login(identifier, password, { force })
       if (res?.error) {
         setError(res.error)
+        if (res.perangkatAktif) {
+          setPerangkatAktif(res.perangkatAktif)
+        }
+        if (res.bisaAmbilAlih) {
+          setBisaAmbilAlih(true)
+        }
         setIsLoading(false)
         return
+      }
+
+      // Akun ternyata masih aktif di tempat lain saat kita masuk. Sesi itu
+      // sudah dibatalkan, tapi pemiliknya perlu tahu - ini sinyal paling awal
+      // kalau sandinya dipakai orang lain.
+      if (res?.perangkatSebelumnya) {
+        try {
+          sessionStorage.setItem("pelita_sesi_tergeser", res.perangkatSebelumnya)
+        } catch {
+          // Mode penyamaran memblokir sessionStorage; bukan alasan gagal masuk.
+        }
       }
 
       // Kembalikan ke halaman yang tadi dijaga proxy, kalau ada.
@@ -96,12 +131,19 @@ export default function LoginPage() {
             {/* Logo lengkap di layar lebar, lambang saja di ponsel supaya
                 formulir tetap terlihat tanpa menggulir. */}
             <div className="hidden md:block">
+              {/* `unoptimized`: lambang sekolah adalah PNG statis 45 KB yang
+                  dilihat setiap pengunjung. Melewatkannya ke pengoptimal
+                  gambar Next tidak menghemat apa pun - ia justru memaksa satu
+                  penyandian ulang per permintaan. Terukur pada ujian 122
+                  siswa: 282 kegagalan tulis cache dan satu sambungan putus
+                  tepat pada berkas ini. */}
               <Image
                 src="/logo-pelita-full.png"
                 alt="PELITA — Platform Edukasi, Layanan Informasi, dan Tata Kelola Akademik"
                 width={420}
                 height={389}
                 priority
+                unoptimized
                 className="w-[380px] lg:w-[420px] h-auto"
               />
             </div>
@@ -112,6 +154,7 @@ export default function LoginPage() {
                 width={64}
                 height={64}
                 priority
+                unoptimized
               />
               <div className="text-left">
                 <h1 className="text-2xl font-black text-blue-900 leading-none tracking-tight">
@@ -163,13 +206,44 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+              <form onSubmit={(e) => handleLogin(e, false)} className="flex flex-col gap-4">
+                {catatan && !error && (
+                  <div
+                    role="status"
+                    className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left font-medium flex items-start gap-2.5"
+                  >
+                    <Smartphone className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <p className="font-bold text-amber-950 mb-0.5">Sesi Berpindah</p>
+                      <p>{catatan}</p>
+                    </div>
+                  </div>
+                )}
+
                 {error && (
                   <div
                     role="alert"
-                    className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs text-center font-medium"
+                    className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs text-left font-medium flex flex-col gap-2"
                   >
-                    {error}
+                    <div className="flex items-start gap-2.5">
+                      <Smartphone className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 leading-relaxed">
+                        <p className="font-bold text-red-950 mb-0.5">
+                          {perangkatAktif ? "Akun Sedang Digunakan" : "Gagal Masuk"}
+                        </p>
+                        <p>{error}</p>
+                      </div>
+                    </div>
+                    {bisaAmbilAlih && (
+                      <button
+                        type="button"
+                        onClick={() => handleLogin(undefined, true)}
+                        disabled={isLoading}
+                        className="mt-1 w-full py-2.5 px-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-bold text-xs transition shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        {isLoading ? "Memproses..." : "Ambil Alih Sesi (Khusus Admin)"}
+                      </button>
+                    )}
                   </div>
                 )}
 

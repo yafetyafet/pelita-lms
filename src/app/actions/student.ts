@@ -6,10 +6,17 @@ import { optionalSession, requireSession } from '@/lib/auth/session'
 import { ForbiddenError } from '@/lib/logic/rbac'
 import {
   hitungJarakMultiLokasi,
+  periksaSinyalGps,
   tentukanStatus,
   type LokasiSekolah,
 } from '@/lib/logic/attendance'
 import { normalisasiUrlGambar } from '@/lib/logic/gambar-url'
+import { bacaRincian, totalPelanggaran } from '@/lib/logic/pengawas-ujian'
+import {
+  kunciKoordinat,
+  periksaLokasiPalsu,
+  perluDitinjau,
+} from '@/lib/logic/lokasi-palsu'
 import {
   acakPG,
   kelayakanUjian,
@@ -289,7 +296,71 @@ export async function getStudentHome() {
 // PRESENSI
 // ==========================================
 
-export async function submitAttendance(lat: number, lng: number): Promise<AksiHasil<{ pesan: string }>> {
+/**
+ * Sinyal mentah dari Geolocation API yang ikut dikirim klien.
+ * Semuanya opsional supaya perangkat lama yang tidak melaporkan sebagiannya
+ * tetap bisa presensi.
+ */
+export type SinyalPerangkat = {
+  accuracy?: number | null
+  altitude?: number | null
+  speed?: number | null
+  heading?: number | null
+  timestamp?: number | null
+}
+
+/**
+ * Nilai keaslian lokasi dengan dua pembanding yang butuh basis data:
+ * presensi terakhir siswa ini, dan koordinat siswa lain hari ini.
+ *
+ * Dipisah ke sini karena `periksaLokasiPalsu` sengaja dibuat murni agar bisa
+ * diuji tanpa basis data.
+ */
+async function nilaiKeaslianLokasi(args: {
+  userId: string
+  lat: number
+  lng: number
+  sinyal: SinyalPerangkat | undefined
+  dateKey: string
+}) {
+  const { userId, lat, lng, sinyal, dateKey } = args
+
+  // Presensi terakhir siswa ini, untuk uji perpindahan mustahil.
+  const sebelum = await prisma.attendance.findFirst({
+    where: { userId, lat: { not: null }, lng: { not: null } },
+    orderBy: { date: 'desc' },
+    select: { lat: true, lng: true, date: true },
+  })
+
+  // Koordinat yang persis sama dengan siswa LAIN pada hari yang sama.
+  // Dua ponsel sungguhan tidak pernah menghasilkan angka identik sampai 5
+  // desimal, jadi kecocokan di sini berarti angkanya disalin - ciri khas
+  // satu orang yang mengisi presensi untuk beberapa temannya.
+  const kunci = kunciKoordinat(lat, lng)
+  const hariIni = await prisma.attendance.findMany({
+    where: { dateKey, userId: { not: userId }, lat: { not: null }, lng: { not: null } },
+    select: { lat: true, lng: true },
+  })
+  const kembar = hariIni.some(
+    (a) => a.lat != null && a.lng != null && kunciKoordinat(a.lat, a.lng) === kunci
+  )
+
+  return periksaLokasiPalsu({
+    sinyal: { lat, lng, ...sinyal },
+    sebelumnya:
+      sebelum?.lat != null && sebelum?.lng != null
+        ? { lat: sebelum.lat, lng: sebelum.lng, waktu: sebelum.date }
+        : null,
+    kembarDenganLain: kembar,
+    sekarang: new Date(),
+  })
+}
+
+export async function submitAttendance(
+  lat: number,
+  lng: number,
+  sinyal?: SinyalPerangkat
+): Promise<AksiHasil<{ pesan: string }>> {
   try {
     const session = await requireSession('STUDENT')
 
@@ -306,20 +377,23 @@ export async function submitAttendance(lat: number, lng: number): Promise<AksiHa
       return { error: 'Anda sudah melakukan presensi hari ini.' }
     }
 
+    const galatGps = periksaSinyalGps(lat, lng, sinyal, 'Presensi')
+    if (galatGps) return { error: galatGps }
+
     const cfg = await pengaturanPresensi()
+    if (cfg.lokasi.length === 0) {
+      return { error: 'Titik koordinat sekolah belum diatur oleh admin.' }
+    }
 
-    let validasi = null
-    let distance: number | null = null
-    const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
+    const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+    if (!hasil) {
+      return { error: 'Gagal memvalidasi jarak ke lokasi sekolah.' }
+    }
+    const validasi = hasil.validasi
+    const distance = hasil.distance
 
-    if (adaKoordinat) {
-      // Sah bila berada di radius salah satu gedung; jarak yang dicatat
-      // adalah jarak ke gedung terdekat.
-      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
-      if (hasil) {
-        validasi = hasil.validasi
-        distance = hasil.distance
-      }
+    if (!validasi.ok) {
+      return { error: validasi.pesan }
     }
 
     // `tentukanStatus` memakai getHours() pada Date yang diterimanya, jadi
@@ -333,6 +407,31 @@ export async function submitAttendance(lat: number, lng: number): Promise<AksiHa
 
     if (!keputusan.diterima) return { error: keputusan.pesan }
 
+    // Penilaian keaslian lokasi
+    const asli = await nilaiKeaslianLokasi({
+      userId: session.uid,
+      lat,
+      lng,
+      sinyal,
+      dateKey,
+    })
+
+    // Status kehadiran utama berdasarkan ketepatan waktu datang:
+    // hadir (dalam jendela waktu batas masuk) atau terlambat.
+    const statusKehadiran = keputusan.dalamJendela ? 'hadir' : 'terlambat'
+
+    // Kumpulkan catatan GPS & anomali lokasi untuk ditinjau guru
+    const catatanList: string[] = []
+    if (asli && perluDitinjau(asli)) {
+      catatanList.push(asli.keterangan)
+    }
+    const note = catatanList.length > 0 ? catatanList.join(' | ') : null
+
+    const pesanAkhir =
+      catatanList.length > 0
+        ? `${keputusan.pesan} Catatan lokasi Anda ditandai untuk ditinjau guru.`
+        : keputusan.pesan
+
     await prisma.attendance.create({
       data: {
         userId: session.uid,
@@ -341,20 +440,29 @@ export async function submitAttendance(lat: number, lng: number): Promise<AksiHa
         dateKey,
         slotKey,
         kind: 'DAILY',
-        status: keputusan.status,
-        lat: adaKoordinat ? lat : null,
-        lng: adaKoordinat ? lng : null,
+        status: statusKehadiran,
+        lat,
+        lng,
         distance,
+        accuracy: sinyal?.accuracy ?? null,
+        altitude: sinyal?.altitude ?? null,
+        mockScore: asli ? asli.skor : null,
+        mockReasons: asli && asli.alasan.length ? JSON.stringify(asli.alasan) : null,
+        note,
       },
     })
 
-    return { success: true, pesan: keputusan.pesan }
+    return { success: true, pesan: pesanAkhir }
   } catch (err) {
     return gagal(err)
   }
 }
 
-export async function submitCheckOut(lat: number, lng: number): Promise<AksiHasil<{ pesan: string }>> {
+export async function submitCheckOut(
+  lat: number,
+  lng: number,
+  sinyal?: SinyalPerangkat
+): Promise<AksiHasil<{ pesan: string }>> {
   try {
     const session = await requireSession('STUDENT')
 
@@ -371,13 +479,22 @@ export async function submitCheckOut(lat: number, lng: number): Promise<AksiHasi
       return { error: 'Anda sudah melakukan presensi pulang hari ini.' }
     }
 
-    const cfg = await pengaturanPresensi()
+    const galatGps = periksaSinyalGps(lat, lng, sinyal, 'Presensi pulang')
+    if (galatGps) return { error: galatGps }
 
-    let validasi = null
-    const adaKoordinat = Number.isFinite(lat) && Number.isFinite(lng)
-    if (adaKoordinat) {
-      const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
-      if (hasil) validasi = hasil.validasi
+    const cfg = await pengaturanPresensi()
+    if (cfg.lokasi.length === 0) {
+      return { error: 'Titik koordinat sekolah belum diatur oleh admin.' }
+    }
+
+    const hasil = hitungJarakMultiLokasi(lat, lng, cfg.lokasi)
+    if (!hasil) {
+      return { error: 'Gagal memvalidasi jarak ke lokasi sekolah.' }
+    }
+    const validasi = hasil.validasi
+
+    if (!validasi.ok) {
+      return { error: validasi.pesan }
     }
 
     // Presensi pulang dibuka mengikuti jam pelajaran terakhir hari itu,
@@ -393,14 +510,40 @@ export async function submitCheckOut(lat: number, lng: number): Promise<AksiHasi
 
     if (!keputusan.diterima) return { error: keputusan.pesan }
 
+    const asli = await nilaiKeaslianLokasi({
+      userId: session.uid,
+      lat,
+      lng,
+      sinyal,
+      dateKey,
+    })
+
     await prisma.attendance.update({
       where: { id: existing.id },
       // Status presensi masuk tidak diubah — riwayat "terlambat" harus tetap
-      // terbaca setelah siswa pulang.
-      data: { checkOutTime: new Date() },
+      // terbaca setelah siswa pulang. Yang dicatat hanya jam pulang dan,
+      // bila ada, alasan lokasinya perlu ditinjau.
+      data: {
+        checkOutTime: new Date(),
+        ...(asli && perluDitinjau(asli)
+          ? {
+              mockScore: asli.skor,
+              mockReasons: JSON.stringify(asli.alasan),
+              note: [existing.note, `Pulang: ${asli.keterangan}`]
+                .filter(Boolean)
+                .join(' | '),
+            }
+          : {}),
+      },
     })
 
-    return { success: true, pesan: keputusan.pesan }
+    return {
+      success: true,
+      pesan:
+        asli && perluDitinjau(asli)
+          ? `${keputusan.pesan} Namun lokasimu ditandai untuk ditinjau guru piket.`
+          : keputusan.pesan,
+    }
   } catch (err) {
     return gagal(err)
   }
@@ -447,7 +590,11 @@ export async function getMyAttendanceSummary() {
   for (const r of rows) {
     const n = r._count._all
     out.total += n
-    if (r.status in out) out[r.status as keyof typeof out] += n
+    let st = r.status
+    if (st === 'perlu_verifikasi' || st === 'tanpa_lokasi') {
+      st = 'hadir'
+    }
+    if (st in out) out[st as keyof typeof out] += n
   }
   const persen = out.total > 0
     ? Math.round(((out.hadir + out.terlambat) / out.total) * 100)
@@ -742,10 +889,15 @@ export async function getStudentExams() {
   const exams = await prisma.exam.findMany({
     // Hanya ujian yang sudah diterbitkan gurunya. Sebelumnya setiap ujian
     // langsung tampil dan bisa dikerjakan begitu dibuat.
-    where: { classId, isPublished: true },
+    // Satu ujian kini bisa dipakai beberapa rombel, jadi penyaringnya lewat
+    // tabel peserta - bukan lagi kolom classId tunggal.
+    where: { isPublished: true, classes: { some: { classId } } },
     include: {
       subject: { select: { name: true } },
-      classInfo: { select: { name: true } },
+      classes: {
+        where: { classId },
+        include: { classInfo: { select: { name: true } } },
+      },
       _count: { select: { questions: true } },
       submissions: { where: { userId: session.uid } },
     },
@@ -783,7 +935,7 @@ export async function getStudentExams() {
       passingScore: exam.passingScore,
       showResult: exam.showResult,
       subject: exam.subject,
-      classInfo: exam.classInfo,
+      classInfo: exam.classes[0]?.classInfo ?? null,
       jumlahSoal: exam._count.questions,
       kelayakan,
       mySubmission: mySubmission
@@ -828,9 +980,12 @@ export async function getExamPaper(
     const classId = await kelasSaya(session.uid)
     const exam = await prisma.exam.findUnique({
       where: { id: examId },
-      include: { questions: { orderBy: { order: 'asc' } } },
+      include: {
+        questions: { orderBy: { order: 'asc' } },
+        classes: { select: { classId: true } },
+      },
     })
-    if (!exam || !exam.isPublished || exam.classId !== classId) {
+    if (!exam || !exam.isPublished || !exam.classes.some((c) => c.classId === classId)) {
       return { error: 'Ujian tidak tersedia untuk kelasmu.' }
     }
     if (exam.questions.length === 0) {
@@ -911,7 +1066,8 @@ function parseOptions(raw: string | null): string[] | null {
 export async function submitExam(
   examId: string,
   answersJson: string,
-  violationCount = 0
+  violationCount = 0,
+  violationDetailJson?: string
 ): Promise<AksiHasil<{ score: number | null; scoreMax: number | null; menungguKoreksi: boolean }>> {
   try {
     const session = await requireSession('STUDENT')
@@ -919,9 +1075,12 @@ export async function submitExam(
     const classId = await kelasSaya(session.uid)
     const exam = await prisma.exam.findUnique({
       where: { id: examId },
-      include: { questions: true },
+      include: {
+        questions: true,
+        classes: { select: { classId: true } },
+      },
     })
-    if (!exam || !exam.isPublished || exam.classId !== classId) {
+    if (!exam || !exam.isPublished || !exam.classes.some((c) => c.classId === classId)) {
       return { error: 'Ujian tidak tersedia untuk kelasmu.' }
     }
 
@@ -962,6 +1121,14 @@ export async function submitExam(
         ? keNilaiAkhir(skorOtomatis, skorMaksOtomatis, 100)
         : null
 
+    // Rincian datang dari klien, jadi dibersihkan lewat `bacaRincian` dulu -
+    // bentuknya dipaksa ke kunci yang dikenal dan angka bulat positif. Total
+    // dihitung ulang dari rincian yang sudah bersih supaya siswa tidak bisa
+    // mengirim total 0 sambil rinciannya berisi pelanggaran.
+    const rincian = bacaRincian(violationDetailJson)
+    const totalLanggar = Math.max(violationCount, totalPelanggaran(rincian))
+    const detail = Object.keys(rincian).length ? JSON.stringify(rincian) : null
+
     await prisma.examSubmission.upsert({
       where: { examId_userId: { examId, userId: session.uid } },
       update: {
@@ -972,7 +1139,8 @@ export async function submitExam(
         finalScore,
         submittedAt: new Date(),
         status: 'FINISHED',
-        violationCount,
+        violationCount: totalLanggar,
+        violationDetail: detail,
       },
       create: {
         examId,
@@ -984,7 +1152,8 @@ export async function submitExam(
         finalScore,
         submittedAt: new Date(),
         status: 'FINISHED',
-        violationCount,
+        violationCount: totalLanggar,
+        violationDetail: detail,
       },
     })
 

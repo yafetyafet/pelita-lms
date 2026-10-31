@@ -7,18 +7,16 @@ interface MobileShellProps {
   currentRole?: "student" | "teacher" | "dudi" | "admin"
 }
 
-export function MobileShell({ children, currentRole }: MobileShellProps) {
-  // Jika role adalah student, tetap paksa tampilan mobile (max-w-md).
-  // Jika role lain (teacher, admin, dudi), izinkan melebar hingga max-w-5xl di layar besar.
-  const isDesktopEnabled = currentRole && currentRole !== "student"
-
+/**
+ * Kerangka tata letak adaptif:
+ * - Di ponsel (<md): tampilan aplikasi seluler yang rapi dan pas layar.
+ * - Di laptop / desktop (>=md): aplikasi web desktop penuh (w-full, melebar luas
+ *   tanpa kungkungan bingkai HP di tengah layar).
+ */
+export function MobileShell({ children }: MobileShellProps) {
   return (
-    // `print:` melepas tinggi tetap dan batas lebar saat mencetak; tanpa itu
-    // hasil cetak hanya berupa satu layar terpotong selebar ponsel.
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-start antialiased selection:bg-blue-600 selection:text-white print:min-h-0 print:bg-white print:block">
-      <div className={`w-full h-[100dvh] overflow-hidden bg-white text-slate-900 shadow-2xl flex flex-col relative sm:border-x sm:border-slate-200 print:h-auto print:overflow-visible print:max-w-none print:shadow-none print:border-0 print:block ${
-        isDesktopEnabled ? "max-w-md md:max-w-5xl md:mx-auto md:border-x md:shadow-slate-300/30" : "max-w-md"
-      }`}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased selection:bg-blue-600 selection:text-white print:min-h-0 print:bg-white print:block">
+      <div className="w-full flex-1 flex flex-col min-h-[100dvh] md:min-h-screen bg-white md:bg-transparent text-slate-900 relative print:h-auto print:overflow-visible print:max-w-none print:shadow-none print:border-0 print:block">
         {children}
       </div>
     </div>

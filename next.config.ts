@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
    * sendiri dan mengabaikan berkas standalone ini.
    */
   output: "standalone",
+  // Izinkan akses dari jaringan lokal (HP/tablet di WiFi yang sama).
+  // Tanpa ini Next.js 16 memblokir server action dari origin selain localhost.
+  allowedDevOrigins: ["192.168.1.235", "192.168.0.115"],
 };
 
 export default nextConfig;

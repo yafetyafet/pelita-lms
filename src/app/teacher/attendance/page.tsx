@@ -14,6 +14,7 @@ import {
   Users,
   ClipboardCheck,
   BarChart3,
+  MapPinOff,
 } from "lucide-react"
 import {
   getPenugasanSaya,
@@ -92,7 +93,14 @@ export default function TeacherAttendancePage() {
     setRows(res.rows)
     setDraft(
       Object.fromEntries(
-        res.rows.filter((r: any) => r.status).map((r: any) => [r.student.id, r.status])
+        res.rows
+          .filter((r: any) => r.status)
+          .map((r: any) => [
+            r.student.id,
+            (r.status === 'perlu_verifikasi' || r.status === 'tanpa_lokasi')
+              ? (r.effectiveStatus || 'hadir')
+              : r.status,
+          ])
       )
     )
     setNotes(
@@ -463,27 +471,62 @@ export default function TeacherAttendancePage() {
                         </p>
                       </div>
 
-                      {/* Bedakan presensi mandiri GPS dari input guru. */}
-                      {r.mandiri && (
-                        <span
-                          className="text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
-                          title={
-                            r.distance != null
-                              ? `Presensi mandiri, ${r.distance} m dari titik sekolah`
-                              : "Presensi mandiri siswa"
-                          }
-                        >
-                          <MapPin className="w-2.5 h-2.5" />
-                          GPS
-                          {r.distance != null && ` ${r.distance}m`}
-                        </span>
-                      )}
-                      {!r.mandiri && r.recordedBy && (
-                        <span className="text-[9px] text-slate-400 shrink-0">
-                          oleh {r.recordedBy}
-                        </span>
-                      )}
+                      {/* Indikator status presensi mandiri GPS / input manual */}
+                      <div className="flex flex-wrap items-center gap-1 justify-end shrink-0">
+                        {r.mandiri && (
+                          <>
+                            {r.isTanpaLokasi ? (
+                              <span
+                                className="text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                                title="Presensi mandiri tanpa data GPS (izin lokasi peramban belum aktif / timeout)"
+                              >
+                                <MapPinOff className="w-2.5 h-2.5 text-slate-500" />
+                                Tanpa GPS
+                              </span>
+                            ) : r.isLuarRadius ? (
+                              <span
+                                className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                                title={`Presensi mandiri di luar radius 100m (${r.distance}m dari titik sekolah)`}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                GPS {r.distance}m (Luar 100m)
+                              </span>
+                            ) : r.mockScore && r.mockScore >= 70 ? (
+                              <span
+                                className="text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                                title={`Indikasi fake GPS (skor kecurigaan ${r.mockScore})`}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                GPS Curiga ({r.mockScore})
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                                title={
+                                  r.distance != null
+                                    ? `Presensi mandiri dalam radius 100m (${r.distance}m dari sekolah)`
+                                    : "Presensi mandiri siswa"
+                                }
+                              >
+                                <MapPin className="w-2.5 h-2.5 text-emerald-600" />
+                                GPS {r.distance != null ? `${r.distance}m` : ""}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {!r.mandiri && r.recordedBy && (
+                          <span className="text-[9px] text-slate-400 shrink-0">
+                            oleh {r.recordedBy}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {r.note && (
+                      <p className="text-[10px] text-slate-600 bg-amber-50/60 border border-amber-200/60 rounded-xl px-2.5 py-1 leading-snug">
+                        <span className="font-bold text-amber-800">Catatan GPS:</span> {r.note}
+                      </p>
+                    )}
 
                     <div className="flex gap-1.5">
                       {STATUS.map((s) => (

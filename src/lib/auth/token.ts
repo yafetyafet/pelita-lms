@@ -14,8 +14,20 @@
 
 export const SESSION_COOKIE = 'pelita_session'
 
-/** Umur sesi: 7 hari. */
-export const SESSION_MAX_AGE = 60 * 60 * 24 * 7
+/** Umur sesi bawaan: 2 jam. */
+export const SESSION_MAX_AGE = 60 * 60 * 2
+
+/** Umur sesi (detik) per role. Ubah di sini bila tiap role perlu berbeda. */
+export const SESSION_MAX_AGE_BY_ROLE: Record<SessionPayload['role'], number> = {
+  ADMIN: 60 * 60 * 2,
+  TEACHER: 60 * 60 * 2,
+  DUDI: 60 * 60 * 2,
+  STUDENT: 60 * 60 * 2,
+}
+
+export function sessionMaxAgeFor(role: SessionPayload['role']): number {
+  return SESSION_MAX_AGE_BY_ROLE[role] ?? SESSION_MAX_AGE
+}
 
 export type SessionPayload = {
   /** User.id */
@@ -24,6 +36,17 @@ export type SessionPayload = {
   role: 'STUDENT' | 'TEACHER' | 'ADMIN' | 'DUDI'
   /** Nama tampilan, supaya header tidak perlu query DB. */
   name: string
+  /**
+   * Id sesi. Dicocokkan dengan `User.sesiId` supaya satu akun hanya sah di
+   * satu perangkat: begitu akun dipakai login di tempat lain, `sesiId` di
+   * basis data berganti dan token lama - meski tanda tangannya masih benar
+   * dan belum kedaluwarsa - tidak lagi diterima.
+   *
+   * Opsional supaya token yang terbit sebelum fitur ini ada tidak serentak
+   * membuat semua orang keluar; token tanpa `sid` diperlakukan sebagai sesi
+   * warisan dan diminta login ulang sekali.
+   */
+  sid?: string
   /** Kedaluwarsa, epoch detik. */
   exp: number
 }
